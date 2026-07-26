@@ -1,0 +1,27 @@
+@use '../../../../assets/scss/variables' as *;
+
+:host {
+  display: block;
+}
+
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: $space-8;
+  padding: $space-24;
+  border-radius: $radius-14;
+  background: $color-red-tint;
+  color: $color-red;
+}
+
+.error-state__title {
+  margin: 0;
+  font-size: $font-size-18;
+  color: inherit;
+}
+
+.error-state__description {
+  margin: 0;
+  color: inherit;
+}

@@ -1,0 +1,84 @@
+@use '../../../../assets/scss/variables' as *;
+@use '../../../../assets/scss/mixins' as *;
+
+:host {
+  display: block;
+}
+
+.card {
+  @include card-surface;
+  display: flex;
+  flex-direction: column;
+  gap: $space-16;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  cursor: pointer;
+  position: relative;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+}
+
+.card--elevated {
+  box-shadow: $shadow-md;
+}
+
+.badge {
+  position: absolute;
+  right: 24px;
+}
+
+.badge p {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  background: $color-teal-tint;
+  color: $color-teal;
+}
+
+.card--hero {
+  background: $color-hero-bg;
+  color: $color-hero-text;
+  border-color: transparent;
+}
+
+.card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: $space-16;
+}
+
+.card__title {
+  margin: 0;
+  font-size: $font-size-18;
+  font-weight: $font-weight-600;
+  color: inherit;
+}
+
+.card__subtitle {
+  margin: $space-6 0 0;
+  font-size: $font-size-13;
+  color: inherit;
+  opacity: 0.86;
+}
+
+.card__body {
+  display: flex;
+  flex-direction: column;
+  gap: $space-12;
+}
+
+.svg {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  background: $color-accent-tint;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}

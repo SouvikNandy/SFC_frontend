@@ -1,0 +1,27 @@
+@use '../../../../assets/scss/variables' as *;
+
+:host {
+  display: block;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: $space-8;
+  padding: $space-24;
+  border: 1px dashed $color-border;
+  border-radius: $radius-14;
+  background: $color-panel;
+}
+
+.empty-state__title {
+  margin: 0;
+  font-size: $font-size-18;
+  color: $color-ink;
+}
+
+.empty-state__description {
+  margin: 0;
+  color: $color-muted;
+}

@@ -1,0 +1,27 @@
+@use '../../../../assets/scss/variables' as *;
+
+:host {
+  display: inline-flex;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-6;
+  padding: $space-6 $space-10;
+  border-radius: $radius-full;
+  background: $color-panel-alt;
+  color: $color-ink-soft;
+  font-size: $font-size-12;
+  font-weight: $font-weight-600;
+}
+
+.badge--accent {
+  background: $color-accent-tint;
+  color: $color-accent-dark;
+}
+
+.badge--soft {
+  background: $color-teal-tint;
+  color: $color-teal-dark;
+}

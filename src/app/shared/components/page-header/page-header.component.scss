@@ -1,0 +1,46 @@
+@use '../../../../assets/scss/variables' as *;
+
+:host {
+  display: block;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: $space-16;
+  padding: $space-24 0;
+}
+
+.page-header__content {
+  display: flex;
+  flex-direction: column;
+  gap: $space-8;
+}
+
+.page-header__eyebrow {
+  margin: 0;
+  font-size: $font-size-12;
+  font-weight: $font-weight-600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: $color-accent;
+}
+
+.page-header__title {
+  margin: 0;
+  font-size: $font-size-28;
+  color: $color-ink;
+}
+
+.page-header__description {
+  margin: 0;
+  color: $color-muted;
+  max-width: 42rem;
+}
+
+.page-header__actions {
+  display: flex;
+  align-items: center;
+  gap: $space-12;
+}

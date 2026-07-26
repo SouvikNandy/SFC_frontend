@@ -1,0 +1,58 @@
+@use 'variables' as *;
+
+:root {
+  color-scheme: light;
+  --color-bg: #{$color-bg};
+  --color-panel: #{$color-panel};
+  --color-panel-alt: #{$color-panel-alt};
+  --color-head-bg: #{$color-head-bg};
+  --color-border: #{$color-border};
+  --color-input-border: #{$color-input-border};
+  --color-ink: #{$color-ink};
+  --color-ink-soft: #{$color-ink-soft};
+  --color-muted: #{$color-muted};
+  --color-muted-2: #{$color-muted-2};
+  --color-accent: #{$color-accent};
+  --color-accent-dark: #{$color-accent-dark};
+  --color-accent-tint: #{$color-accent-tint};
+  --color-accent-ink: #{$color-accent-ink};
+  --color-teal: #{$color-teal};
+  --color-teal-dark: #{$color-teal-dark};
+  --color-teal-tint: #{$color-teal-tint};
+  --color-red: #{$color-red};
+  --color-red-tint: #{$color-red-tint};
+  --color-hero-bg: #{$color-hero-bg};
+  --color-hero-text: #{$color-hero-text};
+  --color-hero-muted: #{$color-hero-muted};
+  --color-placeholder: #{$color-placeholder};
+  --font-display: #{$font-display};
+  --font-body: #{$font-body};
+  --font-mono: #{$font-mono};
+  --radius-8: #{$radius-8};
+  --radius-9: #{$radius-9};
+  --radius-14: #{$radius-14};
+  --radius-full: #{$radius-full};
+  --shadow-sm: #{$shadow-sm};
+  --shadow-md: #{$shadow-md};
+  --shadow-lg: #{$shadow-lg};
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+}
+
+::selection {
+  background: var(--color-accent-tint);
+  color: var(--color-ink);
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--color-accent-dark);
+  text-decoration: underline;
+}

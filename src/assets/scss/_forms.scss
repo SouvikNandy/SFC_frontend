@@ -1,0 +1,52 @@
+@use 'variables' as *;
+@use 'mixins' as *;
+
+label,
+.form-label {
+  display: block;
+  margin-bottom: $space-8;
+  font-size: $font-size-13;
+  font-weight: $font-weight-600;
+  color: $color-ink-soft;
+}
+
+input,
+select,
+textarea {
+  @include form-control;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: $color-placeholder;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: $color-accent;
+  box-shadow: 0 0 0 3px $color-accent-tint;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  @include focus-ring;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: $space-8;
+  margin-bottom: $space-16;
+}
+
+.form-error {
+  margin-top: $space-6;
+  font-size: $font-size-12;
+  color: $color-red;
+}
+
+.is-invalid {
+  border-color: $color-red;
+}

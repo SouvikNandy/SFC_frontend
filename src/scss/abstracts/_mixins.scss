@@ -1,0 +1,44 @@
+@use 'variables' as vars;
+
+@mixin respond-up($breakpoint) {
+  @media (min-width: map-get(vars.$breakpoints, $breakpoint)) {
+    @content;
+  }
+}
+
+@mixin respond-down($breakpoint) {
+  @media (max-width: map-get(vars.$breakpoints, $breakpoint) - 0.0625rem) {
+    @content;
+  }
+}
+
+@mixin focus-ring($color: vars.$color-accent) {
+  outline: 2px solid $color;
+  outline-offset: 2px;
+}
+
+@mixin card-surface($elevation: 1) {
+  background-color: vars.$color-panel;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-lg;
+
+  @if $elevation == 2 {
+    box-shadow: vars.$shadow-md;
+  } @else if $elevation == 3 {
+    box-shadow: vars.$shadow-lg;
+  } @else {
+    box-shadow: vars.$shadow-sm;
+  }
+}
+
+@mixin sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

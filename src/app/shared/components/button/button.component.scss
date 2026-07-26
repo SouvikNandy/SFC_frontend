@@ -1,0 +1,71 @@
+@use '../../../../assets/scss/variables' as *;
+@use '../../../../assets/scss/mixins' as *;
+
+:host {
+  display: inline-block;
+}
+
+.btn {
+  @include button-base;
+  min-height: 2.75rem;
+}
+
+.btn--primary {
+  background: $color-accent;
+  color: $color-accent-ink;
+}
+
+.btn--secondary {
+  background: $color-panel;
+  color: $color-ink-soft;
+  border-color: $color-input-border;
+}
+
+.btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: $color-muted;
+}
+
+.btn--danger {
+  background: $color-red;
+  color: $color-accent-ink;
+}
+
+.btn--pill {
+  border-radius: $radius-full;
+}
+
+.btn--sm {
+  min-height: 2.25rem;
+  padding: $space-8 $space-12;
+  font-size: $font-size-12;
+}
+
+.btn--lg {
+  min-height: 3.25rem;
+  padding: $space-12 $space-24;
+  font-size: $font-size-15;
+}
+
+.btn__spinner {
+  width: 0.9rem;
+  height: 0.9rem;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  display: inline-block;
+  animation: spin 0.7s linear infinite;
+}
+
+.btn__content {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-8;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

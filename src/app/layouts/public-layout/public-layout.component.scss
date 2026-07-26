@@ -1,0 +1,43 @@
+@use '../../../assets/scss/variables' as *;
+
+:host {
+  display: block;
+  min-height: 100vh;
+}
+
+.layout-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: $color-bg;
+}
+
+.layout-main {
+  flex: 1;
+
+}
+
+.layout-container {
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.layout-footer {
+  padding: $space-16 $space-24 $space-24;
+  border-top: 1px solid $color-border;
+  color: $color-muted;
+  font-size: $font-size-13;
+  background: $color-panel;
+}
+
+.brand {
+  font-weight: $font-weight-700;
+}
+
+@media (max-width: 880px) {
+
+
+  .layout-footer {
+    padding: $space-16;
+  }
+}

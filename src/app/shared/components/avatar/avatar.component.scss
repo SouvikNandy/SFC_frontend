@@ -1,0 +1,34 @@
+@use '../../../../assets/scss/variables' as *;
+
+:host {
+  display: inline-flex;
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: $color-panel-alt;
+  color: $color-accent-dark;
+  font-weight: $font-weight-700;
+}
+
+.avatar--sm {
+  width: 2.2rem;
+  height: 2.2rem;
+  font-size: $font-size-12;
+}
+
+.avatar--lg {
+  width: 3.5rem;
+  height: 3.5rem;
+  font-size: $font-size-18;
+}
+
+.avatar__initials,
+.avatar__fallback {
+  line-height: 1;
+}

@@ -1,0 +1,60 @@
+@use 'variables' as *;
+@use 'mixins' as *;
+
+.btn {
+  @include button-base;
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+
+  &:disabled {
+    opacity: 0.75;
+    cursor: not-allowed;
+  }
+}
+
+.btn--primary {
+  background-color: $color-accent;
+  color: $color-accent-ink;
+  border-color: $color-accent;
+
+  &:hover {
+    background-color: $color-accent-dark;
+  }
+}
+
+.btn--secondary {
+  background-color: $color-panel;
+  color: $color-ink-soft;
+  border-color: $color-input-border;
+
+  &:hover {
+    background-color: $color-panel-alt;
+  }
+}
+
+.btn--ghost {
+  background-color: transparent;
+  border-color: transparent;
+  color: $color-muted;
+  padding-inline: 0;
+
+  &:hover {
+    color: $color-accent;
+  }
+}
+
+.btn--danger {
+  background-color: $color-red;
+  color: $color-accent-ink;
+  border-color: $color-red;
+
+  &:hover {
+    background-color: darken($color-red, 6%);
+  }
+}
+
+.btn--pill {
+  border-radius: $radius-full;
+}

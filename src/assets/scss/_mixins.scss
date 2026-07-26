@@ -1,0 +1,58 @@
+@use 'variables' as *;
+@use 'breakpoints' as *;
+
+@mixin focus-ring($color: $color-accent) {
+  outline: 2px solid $color;
+  outline-offset: 1px;
+}
+
+@mixin transition($property: all, $duration: $transition-base) {
+  transition: $property $duration ease;
+}
+
+@mixin card-surface($padding: $card-padding, $shadow: $shadow-md) {
+  background-color: $color-panel;
+  border: 1px solid $color-border;
+  border-radius: $card-radius;
+  box-shadow: $shadow;
+  padding: $padding;
+}
+
+@mixin button-base($padding-y: 0.75rem, $padding-x: 1rem) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: $space-8;
+  border: 1px solid transparent;
+  border-radius: $radius-9;
+  padding: $padding-y $padding-x;
+  font-family: inherit;
+  font-size: $font-size-14;
+  font-weight: $font-weight-600;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+@mixin form-control {
+  width: 100%;
+  border: 1px solid $color-input-border;
+  border-radius: $radius-8;
+  background-color: $color-panel;
+  color: $color-ink;
+  padding: $space-10 $space-12;
+  font: inherit;
+  transition: border-color $transition-base, box-shadow $transition-base;
+}
+
+@mixin respond-up($name) {
+  @media (min-width: map-get($breakpoints, $name)) {
+    @content;
+  }
+}
+
+@mixin respond-down($name) {
+  @media (max-width: #{map-get($breakpoints, $name) - 1px}) {
+    @content;
+  }
+}

@@ -1,0 +1,38 @@
+@use 'variables' as *;
+
+:where(body) {
+  font-family: $font-body;
+  font-weight: $font-weight-500;
+  color: $color-ink;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0 0 $space-12;
+  font-family: $font-display;
+  font-weight: $font-weight-700;
+  color: $color-ink;
+  letter-spacing: -0.02em;
+}
+
+p {
+  margin: 0 0 $space-16;
+  color: $color-ink-soft;
+}
+
+code,
+pre {
+  font-family: $font-mono;
+}
+
+.num {
+  font-family: $font-mono;
+  font-variant-numeric: tabular-nums;
+}

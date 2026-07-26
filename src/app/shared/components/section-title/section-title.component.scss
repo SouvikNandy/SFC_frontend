@@ -1,0 +1,22 @@
+@use '../../../../assets/scss/variables' as *;
+
+:host {
+  display: block;
+}
+
+.section-title {
+  display: flex;
+  flex-direction: column;
+  gap: $space-6;
+}
+
+.section-title__title {
+  margin: 0;
+  font-size: $font-size-20;
+  color: $color-ink;
+}
+
+.section-title__subtitle {
+  margin: 0;
+  color: $color-muted;
+}

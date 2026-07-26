@@ -1,0 +1,14 @@
+@use 'variables' as *;
+
+:where(.sfc-stack-xs) { gap: $space-8; }
+:where(.sfc-stack-sm) { gap: $space-12; }
+:where(.sfc-stack-md) { gap: $space-16; }
+:where(.sfc-stack-lg) { gap: $space-24; }
+
+:where(.sfc-pad-sm) { padding: $space-16; }
+:where(.sfc-pad-md) { padding: $space-24; }
+:where(.sfc-pad-lg) { padding: $space-32; }
+
+:where(.sfc-mb-sm) { margin-bottom: $space-12; }
+:where(.sfc-mb-md) { margin-bottom: $space-16; }
+:where(.sfc-mb-lg) { margin-bottom: $space-24; }

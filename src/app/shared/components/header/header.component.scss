@@ -1,0 +1,123 @@
+@use '../../../../assets/scss/variables' as *;
+
+
+:host {
+  display: block;
+  position: sticky;
+  top: 0;
+  z-index: $z-index-sidebar;
+  background-color: $color-panel;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: left;
+  gap: $space-16;
+  padding: $space-16 $space-30;
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom: 1px solid $color-border;
+  backdrop-filter: blur(12px);
+}
+
+.header__brand {
+  display: flex;
+  align-items: center;
+  gap: $space-12;
+  font-family: $font-display;
+  font-size: $font-size-18;
+  font-weight: $font-weight-700;
+  color: $color-ink;
+}
+
+.header__brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.2rem;
+}
+
+.header__brand-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.header__nav {
+  display: flex;
+  align-items: center;
+  gap: $space-12;
+}
+
+.header__link {
+  padding: $space-8 $space-12;
+  border-radius: $radius-8;
+  color: $color-ink-soft;
+  font-size: $font-size-13-5;
+  font-weight: $font-weight-500;
+  text-decoration: none;
+  transition: background-color $transition-base, color $transition-base;
+}
+
+.header__link:hover {
+  background: $color-panel-alt;
+  color: $color-ink;
+}
+
+.header__link.active {
+  background: $color-panel-alt;
+  color: $color-ink;
+}
+
+.header__mobile-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid $color-border;
+  border-radius: $radius-8;
+  background: $color-panel;
+  color: $color-ink;
+  cursor: pointer;
+}
+
+@media (max-width: 880px) {
+  .header {
+    padding: $space-14 $space-16;
+  }
+
+  .header__nav {
+    display: none;
+  }
+
+  .header__mobile-toggle {
+    display: inline-flex;
+    margin-left: auto;
+  }
+}
+
+.mobile-nav {
+
+  flex-direction: column;
+  gap: $space-8;
+  padding: $space-16 $space-24 $space-24;
+  background: $color-panel;
+}
+
+.mobile-nav__link {
+  padding: $space-10 $space-12;
+  border-radius: $radius-8;
+  color: $color-ink-soft;
+  text-decoration: none;
+  font-weight: $font-weight-600;
+  display: inline-block;
+  text-align: center;
+  width: 50%;
+  float: left;
+}
+
+.mobile-nav__link:hover {
+  background: $color-panel-alt;
+  color: $color-ink;
+}

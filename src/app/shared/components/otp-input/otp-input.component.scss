@@ -1,0 +1,28 @@
+@use '../../../../assets/scss/variables' as *;
+
+:host {
+  display: block;
+}
+
+.otp-input {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(2.6rem, 1fr));
+  gap: $space-8;
+}
+
+.otp-input__field {
+  width: 100%;
+  min-height: 3rem;
+  text-align: center;
+  border: 1px solid $color-input-border;
+  border-radius: $radius-8;
+  font-family: $font-mono;
+  font-size: $font-size-16;
+  color: $color-ink;
+}
+
+.otp-input__field:focus {
+  border-color: $color-accent;
+  box-shadow: 0 0 0 3px $color-accent-tint;
+  outline: none;
+}

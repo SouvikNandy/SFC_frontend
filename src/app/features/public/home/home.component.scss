@@ -1,0 +1,493 @@
+@use '../../../../assets/scss/variables' as *;
+@use '../../../../assets/scss/mixins' as *;
+
+:host {
+  display: block;
+}
+
+.home {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==========================================================================
+   Hero Section
+   ========================================================================== */
+.home__hero {
+  position: relative;
+  overflow: hidden;
+  padding: $space-56 $space-36 $space-48;
+  background: linear-gradient(135deg, #315214 0%, $color-hero-bg 50%, #223a0c 100%);
+  color: $color-hero-text;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+  gap: $space-56;
+  align-items: center;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+    padding: $space-40 $space-24 $space-32;
+    gap: $space-32;
+  }
+
+  @media (max-width: 640px) {
+    padding: $space-32 $space-20 $space-28;
+  }
+}
+
+.home__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-8;
+  margin-bottom: $space-24;
+  font-family: $font-mono;
+  font-size: $font-size-11;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: $color-hero-muted;
+
+  &::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: $color-accent;
+    box-shadow: 0 0 0 4px rgba(127, 167, 106, 0.2);
+  }
+}
+
+.home__hero-content {
+  h1 {
+    margin: 0 0 $space-20;
+    font-family: $font-display;
+    font-size: clamp(2.1rem, 4vw, 3.4rem);
+    line-height: 1.05;
+    font-weight: $font-weight-800;
+    letter-spacing: -0.03em;
+
+    span {
+      color: $color-accent;
+    }
+  }
+}
+
+.home__hero-copy {
+  max-width: 34rem;
+  margin: 0 0 $space-32;
+  font-size: $font-size-16-5;
+  line-height: 1.7;
+  color: $color-hero-muted;
+}
+
+.card {
+  background-color: #ffffff;
+  border: 1px solid #dde7d8;
+  border-radius: 14px;
+  box-shadow: 0 10px 26px -14px rgba(20, 50, 15, 0.12);
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card__subtitle {
+  font-size: 20px;
+  font-weight: 600;
+  color: $color-ink;
+}
+
+.card__title {
+  font-size: 11px;
+  color: $color-muted-2;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 6px;
+}
+
+.home__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $space-12;
+  margin-bottom: $space-40;
+
+  @media (max-width: 640px) {
+    flex-direction: column;
+    align-items: stretch;
+
+    app-button {
+      width: 100%;
+    }
+  }
+}
+
+.home__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $space-24;
+  padding-top: $space-24;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+
+  @media (max-width: 640px) {
+    flex-direction: column;
+    gap: $space-16;
+  }
+}
+
+.home__stat {
+  max-width: 9.5rem;
+
+  strong {
+    display: block;
+    font-family: $font-display;
+    font-size: $font-size-30;
+    font-weight: $font-weight-700;
+    letter-spacing: -0.03em;
+  }
+
+  span {
+    display: block;
+    margin-top: $space-4;
+    font-size: $font-size-12;
+    line-height: 1.4;
+    color: $color-hero-stat-muted;
+  }
+}
+
+.home__hero-card {
+  padding: $space-22;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: $radius-20;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 40px 70px -30px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+}
+
+.home__hero-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: $space-16;
+}
+
+.home__hero-card-title {
+  font-family: $font-display;
+  font-size: $font-size-15;
+  font-weight: $font-weight-700;
+}
+
+.home__hero-card-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-6;
+  margin-top: $space-6;
+  padding: $space-2 $space-8;
+  border-radius: $radius-full;
+  background: rgba(127, 167, 106, 0.18);
+  font-family: $font-mono;
+  font-size: $font-size-10;
+  letter-spacing: 0.06em;
+  color: $color-hero-muted;
+  text-transform: uppercase;
+}
+
+.home__hero-card-trend {
+  padding: $space-4 $space-8;
+  border-radius: $radius-8;
+  background: rgba(127, 167, 106, 0.16);
+  color: $color-accent;
+  font-size: $font-size-12-5;
+  font-weight: $font-weight-700;
+}
+
+.home__price {
+  margin-top: $space-6;
+  font-family: $font-display;
+  font-size: $font-size-26;
+  font-weight: $font-weight-700;
+  letter-spacing: -0.02em;
+}
+
+.home__chart {
+  display: block;
+  width: 100%;
+  height: 64px;
+  margin: $space-16 0;
+}
+
+.home__table-head,
+.home__table-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: $space-12;
+  align-items: center;
+  font-family: $font-mono;
+  font-size: $font-size-12;
+}
+
+.home__table-head {
+  padding-bottom: $space-8;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: $color-hero-stat-muted;
+  text-transform: uppercase;
+}
+
+.home__table-row {
+  padding: $space-8 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.home__table-row--up {
+  color: $color-accent;
+  font-weight: $font-weight-600;
+}
+
+.home__table-row--down {
+  color: #e7a59e;
+  font-weight: $font-weight-600;
+}
+
+/* ==========================================================================
+   Common Section Styles
+   ========================================================================== */
+.home__section-heading {
+  margin-bottom: $space-32;
+}
+
+.home__section-label {
+  display: flex;
+  align-items: center;
+  gap: $space-8;
+  font-size: $font-size-11 !important;
+  font-weight: $font-weight-700;
+  color: $color-muted-2 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin: 0 0 $space-12 !important;
+
+  &::before {
+    content: '';
+    width: 24px;
+    height: 3px;
+    background: $color-accent;
+    border-radius: 2px;
+  }
+}
+
+.home__section-heading h2 {
+  font-family: $font-display;
+  font-size: clamp(1.4rem, 2.5vw, 2.1rem);
+  font-weight: $font-weight-700;
+  color: $color-ink;
+  margin: 0;
+  letter-spacing: -0.3px;
+  line-height: 1.3;
+  font-size: 27px;
+}
+
+/* ==========================================================================
+   About Section
+   ========================================================================== */
+.home__about {
+  padding: $space-60 $space-36;
+  max-width: 100%;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+
+  @media (max-width: 900px) {
+    padding: $space-40 $space-24;
+  }
+}
+
+.home__about-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: $space-48;
+  align-items: start;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+    gap: $space-32;
+  }
+}
+
+.home__about-copy p {
+  font-size: $font-size-14-5;
+  color: $color-ink-soft;
+  line-height: 1.8;
+  margin: 0 0 $space-16;
+  font-weight: 500;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.home__about-cards {
+  display: flex;
+  flex-direction: column;
+  gap: $space-16;
+}
+
+// .home__mini-card {
+//   border-left: 3px solid $color-accent;
+// }
+
+/* ==========================================================================
+   Services Section
+   ========================================================================== */
+.home__services {
+  padding: 0 $space-36 $space-60;
+  max-width: 100%;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+
+  @media (max-width: 900px) {
+    padding: 0 $space-24 $space-40;
+  }
+}
+
+.home__services-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: $space-20;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.home__service-card p {
+  margin: 0;
+  font-size: $font-size-13;
+  color: $color-muted;
+  line-height: 1.6;
+}
+
+/* ==========================================================================
+   Testimonial Section
+   ========================================================================== */
+.home__testimonial {
+  padding: 0 $space-36 $space-60;
+  max-width: 100%;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+
+  @media (max-width: 900px) {
+    padding: 0 $space-24 $space-40;
+  }
+}
+
+.home__testimonial-card {
+  @include card-surface;
+  background: $color-hero-bg;
+  border-color: $color-hero-bg;
+  color: $color-hero-text;
+  padding: $space-40;
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '“';
+    font-family: $font-display;
+    font-size: 70px;
+    line-height: 1;
+    color: $color-accent;
+    opacity: 0.55;
+    position: absolute;
+    top: 12px;
+    left: 24px;
+  }
+}
+
+.home__testimonial-quote {
+  position: relative;
+  font-size: clamp(1rem, 2vw, 1.2rem);
+  color: $color-hero-text;
+  line-height: 1.65;
+  font-weight: $font-weight-500;
+  margin: 0 0 $space-16;
+  padding-left: $space-24;
+}
+
+.home__testimonial-author {
+  position: relative;
+  margin: 0;
+  font-size: $font-size-13;
+  font-weight: $font-weight-600;
+  color: $color-hero-muted;
+  padding-left: $space-24;
+}
+
+/* ==========================================================================
+   Highlights Section
+   ========================================================================== */
+.home__highlights {
+  padding: 0 $space-36 $space-60;
+  max-width: 100%;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+
+  @media (max-width: 900px) {
+    padding: 0 $space-24 $space-40;
+  }
+}
+
+.home__highlights-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: $space-20;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.home__highlight-card p {
+  margin: 0;
+  font-size: $font-size-13;
+  color: $color-muted;
+  line-height: 1.55;
+}
+
+/* ==========================================================================
+   CTA Section
+   ========================================================================== */
+.home__cta {
+  padding: 0 $space-36 $space-60;
+  max-width: 100%;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+
+  @media (max-width: 900px) {
+    padding: 0 $space-24 $space-40;
+  }
+
+  @include card-surface;
+  background: $color-accent-tint;
+  border-color: $color-border;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: $space-20;
+  padding: $space-32 $space-40;
+
+  h2 {
+    font-family: $font-display;
+    font-size: $font-size-20;
+    font-weight: $font-weight-700;
+    color: $color-ink;
+    margin: 0 0 $space-6;
+  }
+
+  p {
+    font-size: $font-size-13;
+    color: $color-ink-soft;
+    margin: 0;
+  }
+}

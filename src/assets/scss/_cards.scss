@@ -1,0 +1,44 @@
+@use 'variables' as *;
+@use 'mixins' as *;
+
+.card {
+  @include card-surface;
+  background-color: $color-panel;
+  border-radius: $card-radius;
+}
+
+.card--elevated {
+  box-shadow: $shadow-md;
+}
+
+.card--hero {
+  background-color: $color-hero-bg;
+  color: $color-hero-text;
+  border-color: transparent;
+}
+
+.card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $space-16;
+  margin-bottom: $space-16;
+}
+
+.card__title {
+  margin: 0;
+  font-size: $font-size-18;
+  font-weight: $font-weight-600;
+  color: $color-ink;
+}
+
+.card--hero .card__title,
+.card--hero .card__subtitle {
+  color: inherit;
+}
+
+.card__subtitle {
+  margin: 0;
+  font-size: $font-size-13;
+  color: $color-muted;
+}
