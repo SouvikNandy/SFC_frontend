@@ -1,0 +1,72 @@
+<section class="auth-card" aria-labelledby="register-title">
+    <div class="auth-tabs" role="tablist">
+        <a class="auth-tab" routerLink="/login">Log in</a>
+        <a class="auth-tab is-active" routerLink="/register">Register</a>
+    </div>
+
+    <div class="auth-card__header">
+        <h2 id="register-title">Create your account</h2>
+        <p>Start tracking F&amp;O with real analytics.</p>
+    </div>
+
+    <form class="auth-form" [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
+        <div class="auth-form__field" [class.is-invalid]="fullNameControl.touched && fullNameControl.invalid">
+            <label for="register-name">Full name</label>
+            <input id="register-name" formControlName="fullName" type="text" autocomplete="name"
+                placeholder="Anjali Mehta" [attr.aria-invalid]="fullNameControl.touched && fullNameControl.invalid"
+                [attr.aria-describedby]="fullNameControl.touched && fullNameControl.invalid ? 'register-name-error' : null" />
+            @if (fullNameControl.touched && fullNameControl.invalid) {
+            <div id="register-name-error" class="auth-form__message" role="alert">{{ getFullNameErrorMessage()
+                }}</div>
+            }
+        </div>
+
+        <div class="auth-form__field" [class.is-invalid]="emailControl.touched && emailControl.invalid">
+            <label for="register-email">Email</label>
+            <input id="register-email" formControlName="email" type="email" autocomplete="email"
+                placeholder="you@example.com" [attr.aria-invalid]="emailControl.touched && emailControl.invalid"
+                [attr.aria-describedby]="emailControl.touched && emailControl.invalid ? 'register-email-error' : null" />
+            @if (emailControl.touched && emailControl.invalid) {
+            <div id="register-email-error" class="auth-form__message" role="alert">{{ getEmailErrorMessage() }}</div>
+            }
+        </div>
+
+        <div class="auth-form__field" [class.is-invalid]="phoneControl.touched && phoneControl.invalid">
+            <label for="register-phone">Phone number</label>
+            <input id="register-phone" formControlName="phone" type="text" autocomplete="tel"
+                placeholder="+91 98765 43210" [attr.aria-invalid]="phoneControl.touched && phoneControl.invalid"
+                [attr.aria-describedby]="phoneControl.touched && phoneControl.invalid ? 'register-phone-error' : null" />
+            @if (phoneControl.touched && phoneControl.invalid) {
+            <div id="register-phone-error" class="auth-form__message" role="alert">{{ getPhoneErrorMessage() }}</div>
+            }
+        </div>
+
+        <div class="auth-form__field" [class.is-invalid]="passwordControl.touched && passwordControl.invalid">
+            <label for="register-password">Password</label>
+            <div class="auth-form__password">
+                <input id="register-password" formControlName="password" [type]="showPassword() ? 'text' : 'password'"
+                    autocomplete="new-password" placeholder="Min. 8 characters"
+                    [attr.aria-invalid]="passwordControl.touched && passwordControl.invalid"
+                    [attr.aria-describedby]="passwordControl.touched && passwordControl.invalid ? 'register-password-error' : null" />
+                <button type="button" class="auth-form__toggle" (click)="togglePasswordVisibility()"
+                    [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'">
+                    {{ showPassword() ? 'Hide' : 'Show' }}
+                </button>
+            </div>
+            @if (passwordControl.touched && passwordControl.invalid) {
+            <div id="register-password-error" class="auth-form__message" role="alert">{{ getPasswordErrorMessage()
+                }}</div>
+            }
+        </div>
+
+        <button class="auth-form__submit" type="submit" [disabled]="form.invalid || isSubmitting()">
+            @if (isSubmitting()) {
+            <span class="auth-form__spinner" aria-hidden="true"></span>
+            }
+            <span>{{ isSubmitting() ? 'Sending codes…' : 'Create account' }}</span>
+        </button>
+    </form>
+
+    <p class="auth-footnote auth-footnote--compact">By continuing you agree to our <a
+            routerLink="/terms-conditions">Terms</a> and <a routerLink="/privacy-policy">Privacy Policy</a>.</p>
+</section>

@@ -1,0 +1,136 @@
+@use '../../../../assets/scss/variables' as *;
+@use '../../../../assets/scss/mixins' as *;
+
+:host {
+  display: block;
+}
+
+.not-found {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 200px);
+  padding: $space-40 $space-36;
+
+  @media (max-width: 900px) {
+    padding: $space-32 $space-24;
+  }
+
+  @media (max-width: 640px) {
+    padding: $space-24 $space-20;
+  }
+}
+
+.not-found__content {
+  text-align: center;
+  max-width: 600px;
+}
+
+.not-found__code {
+  font-family: $font-display;
+  font-size: 144px;
+  font-weight: $font-weight-800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, $color-accent 0%, $color-accent-dark 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: $space-16;
+
+  @media (max-width: 900px) {
+    font-size: 80px;
+    margin-bottom: $space-12;
+  }
+}
+
+.not-found__title {
+  margin: 0 0 $space-12;
+  font-family: $font-display;
+  font-size: $font-size-38;
+  font-weight: $font-weight-700;
+  color: $color-ink;
+
+  @media (max-width: 900px) {
+    font-size: $font-size-28;
+  }
+}
+
+.not-found__subtitle {
+  margin: 0 0 $space-40;
+  font-size: $font-size-16;
+  color: $color-muted;
+  line-height: 1.6;
+
+  @media (max-width: 900px) {
+    margin-bottom: $space-32;
+    font-size: $font-size-14-5;
+  }
+}
+
+.not-found__actions {
+  display: flex;
+  gap: $space-12;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: $space-48;
+
+  @media (max-width: 640px) {
+    flex-direction: column;
+    margin-bottom: $space-40;
+
+    app-button {
+      width: 100%;
+    }
+  }
+}
+
+.not-found__links {
+  padding-top: $space-36;
+  border-top: 1px solid $color-border;
+}
+
+.not-found__links-title {
+  margin: 0 0 $space-16;
+  font-size: $font-size-12;
+  font-weight: $font-weight-700;
+  color: $color-muted-2;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.not-found__links-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: $space-12;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  @media (max-width: 640px) {
+    grid-template-columns: repeat(2, 1fr);
+    gap: $space-8;
+  }
+}
+
+.not-found__link {
+  display: inline-block;
+  padding: $space-10 $space-12;
+  border: 1px solid $color-border;
+  border-radius: $radius-8;
+  background: $color-panel;
+  color: $color-accent;
+  font-size: $font-size-13;
+  font-weight: $font-weight-600;
+  text-decoration: none;
+  transition: all $transition-base;
+
+  &:hover {
+    border-color: $color-accent;
+    background: $color-accent-tint;
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+}

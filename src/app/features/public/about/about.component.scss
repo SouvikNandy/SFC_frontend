@@ -1,0 +1,315 @@
+@use '../../../../assets/scss/variables' as *;
+@use '../../../../assets/scss/mixins' as *;
+
+:host {
+  display: block;
+}
+
+.about {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==========================================================================
+   Hero Section
+   ========================================================================== */
+.about__hero {
+  position: relative;
+  overflow: hidden;
+  padding: $space-64 $space-56;
+  background: linear-gradient(135deg, #315214 0%, $color-hero-bg 50%, #223a0c 100%);
+  color: $color-hero-text;
+  display: flex;
+  align-items: center;
+
+  @media (max-width: 900px) {
+    padding: $space-44 $space-24;
+  }
+
+  @media (max-width: 640px) {
+    padding: $space-32 $space-20;
+  }
+}
+
+.about__hero-content {
+  position: relative;
+  z-index: 1;
+  max-width: 680px;
+}
+
+.about__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-8;
+  margin-bottom: $space-16;
+  font-family: $font-mono;
+  font-size: $font-size-11;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: $color-hero-muted;
+
+  &::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: $color-accent;
+    box-shadow: 0 0 0 3px rgba(127, 167, 106, 0.22);
+  }
+}
+
+.about__hero-title {
+  margin: 0 0 $space-14;
+  font-family: $font-display;
+  font-size: clamp(1.75rem, 5vw, 2.4rem);
+  line-height: 1.15;
+  font-weight: $font-weight-700;
+  letter-spacing: -0.02em;
+}
+
+.about__hero-subtitle {
+  margin: 0;
+  max-width: 540px;
+  font-size: $font-size-15;
+  line-height: 1.65;
+  color: $color-hero-muted;
+}
+
+/* ==========================================================================
+   Content Section
+   ========================================================================== */
+.about__content {
+  padding: $space-44 $space-36;
+
+  @media (max-width: 900px) {
+    padding: $space-40 $space-24;
+  }
+
+  @media (max-width: 640px) {
+    padding: $space-32 $space-20;
+  }
+}
+
+.about__intro {
+  max-width: 800px;
+  margin-bottom: $space-36;
+
+  p {
+    margin: 0;
+    font-size: $font-size-14-5;
+    color: $color-ink-soft;
+    line-height: 1.8;
+  }
+}
+
+/* ==========================================================================
+   Stats Grid
+   ========================================================================== */
+.about__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: $space-14;
+  margin-bottom: $space-48;
+  max-width: 800px;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+    margin-bottom: $space-44;
+  }
+}
+
+.about__stat-tile {
+  padding: $space-22 $space-24;
+  background: $color-panel;
+  border: 1px solid $color-border;
+  border-radius: $radius-18;
+  box-shadow: $shadow-sm, $shadow-md;
+  display: flex;
+  flex-direction: column;
+  gap: $space-6;
+}
+
+.about__stat-title {
+  margin: 0;
+  font-size: $font-size-11;
+  font-weight: $font-weight-700;
+  color: $color-muted-2;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.about__stat-value {
+  margin: 0;
+  font-family: 'Sora', sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: #2b2b2b;
+}
+
+/* ==========================================================================
+   Section Styles
+   ========================================================================== */
+.about__section {
+  margin-bottom: $space-48;
+
+  @media (max-width: 900px) {
+    margin-bottom: $space-44;
+  }
+}
+
+.about__section-header {
+  display: flex;
+  align-items: center;
+  gap: $space-10;
+  margin-bottom: $space-18;
+}
+
+.about__divider {
+  width: 24px;
+  height: 3px;
+  background: $color-accent;
+  border-radius: $radius-4;
+  flex: none;
+}
+
+.about__section-label {
+  font-size: $font-size-11;
+  font-weight: $font-weight-700;
+  color: $color-muted-2;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ==========================================================================
+   Values Grid
+   ========================================================================== */
+.about__values {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: $space-14;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.about__value-card {
+  padding: $space-22 $space-24;
+  background: $color-panel;
+  border: 1px solid $color-border;
+  border-radius: $radius-18;
+  box-shadow: $shadow-sm, $shadow-md;
+  display: flex;
+  flex-direction: column;
+  gap: $space-14;
+  cursor: default;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease;
+
+  &:hover {
+    border-color: $color-accent;
+    transform: translateY(-4px);
+  }
+}
+
+.about__value-icon {
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: $radius-6;
+  background: $color-accent-tint;
+  color: $color-accent-dark;
+  flex: none;
+
+  svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+.about__value-title {
+  margin: 0;
+  font-size: $font-size-14-5;
+  font-weight: $font-weight-700;
+  color: $color-ink;
+}
+
+.about__value-description {
+  margin: 0;
+  font-size: $font-size-12-5;
+  color: $color-muted;
+  line-height: 1.6;
+}
+
+/* ==========================================================================
+   Team Section
+   ========================================================================== */
+.about__team {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: $space-14;
+}
+
+.about__team-card {
+  padding: $space-22 $space-24;
+  padding-top: $space-24;
+  background: $color-panel;
+  border: 3px solid $color-accent;
+  border-top: none;
+  border-radius: $radius-18;
+  box-shadow: $shadow-sm, $shadow-md;
+  display: flex;
+  flex-direction: column;
+  gap: $space-14;
+  cursor: default;
+}
+
+.about__team-header {
+  display: flex;
+  align-items: center;
+  gap: $space-14;
+  margin-bottom: $space-6;
+}
+
+.about__team-icon {
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: $radius-8;
+  background: $color-accent-tint;
+  color: $color-accent-dark;
+  flex: none;
+
+  svg {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+.about__team-role {
+  margin: 0;
+  font-size: $font-size-14-5;
+  font-weight: $font-weight-700;
+  color: $color-ink;
+}
+
+.about__team-label {
+  display: inline-block;
+  margin-top: $space-2;
+  font-size: $font-size-11-5;
+  font-weight: $font-weight-600;
+  color: $color-accent-dark;
+}
+
+.about__team-description {
+  margin: 0;
+  font-size: $font-size-12-5;
+  color: $color-muted;
+  line-height: 1.65;
+}

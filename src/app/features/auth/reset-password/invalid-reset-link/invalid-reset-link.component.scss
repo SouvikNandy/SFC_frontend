@@ -1,0 +1,46 @@
+:host {
+    display: block;
+}
+
+.auth-card {
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 1.25rem;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
+    padding: 2rem;
+}
+
+.auth-card__header {
+    margin-bottom: 1.5rem;
+}
+
+.auth-card__eyebrow {
+    color: #2563eb;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    margin: 0 0 0.4rem;
+    text-transform: uppercase;
+}
+
+.auth-card__header h1 {
+    color: #0f172a;
+    font-size: 1.75rem;
+    margin: 0 0 0.5rem;
+}
+
+.auth-card__header p,
+.auth-card__footer {
+    color: #475569;
+    margin: 0;
+}
+
+.auth-card__footer {
+    margin-top: 1.25rem;
+}
+
+.auth-card__footer a {
+    color: #2563eb;
+    font-weight: 600;
+    text-decoration: none;
+}

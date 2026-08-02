@@ -1,9 +1,12 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 @Component({
   selector: 'app-verify-otp',
   standalone: true,
-  template: '<section><h1>Verify OTP</h1></section>',
+  imports: [RouterLink],
+  templateUrl: './verify-otp.component.html',
+  styleUrls: ['./verify-otp.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class VerifyOtpComponent {}
+export class VerifyOtpComponent { }

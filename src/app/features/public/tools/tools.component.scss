@@ -1,0 +1,113 @@
+@use '../../../../assets/scss/variables' as *;
+@use '../../../../assets/scss/mixins' as *;
+
+:host {
+  display: block;
+}
+
+.tools {
+  display: flex;
+  flex-direction: column;
+}
+
+.tools__content {
+  padding: $space-44 $space-36;
+
+  @media (max-width: 900px) {
+    padding: $space-40 $space-24;
+  }
+
+  @media (max-width: 640px) {
+    padding: $space-32 $space-20;
+  }
+}
+
+.tools__title {
+  margin: 0 0 $space-8;
+  font-family: $font-display;
+  font-size: $font-size-26;
+  font-weight: $font-weight-700;
+  color: $color-ink;
+}
+
+.tools__subtitle {
+  margin: 0 0 $space-28;
+  font-size: $font-size-14;
+  color: $color-muted;
+}
+
+.tools__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(550px, 1fr));
+  gap: $space-14;
+
+  @media (max-width: 900px) {
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  }
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tools__card {
+  padding: $space-22 $space-24;
+  background: $color-panel;
+  border: 1px solid $color-border;
+  border-radius: $radius-14;
+  box-shadow: $shadow-sm, $shadow-md;
+  cursor: pointer;
+  transition: border-color $transition-base;
+
+  &:hover {
+    border-color: $color-accent;
+  }
+}
+
+.tools__card--free {
+  &:hover {
+    border-color: $color-accent;
+  }
+}
+
+.tools__card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: $space-8;
+  gap: $space-8;
+}
+
+.tools__card-title {
+  font-size: $font-size-14-5;
+  font-weight: $font-weight-700;
+  color: $color-ink;
+}
+
+.tools__badge {
+  font-size: $font-size-10;
+  font-weight: $font-weight-700;
+  padding: $space-2 $space-7;
+  border-radius: $radius-5;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  flex: none;
+  white-space: nowrap;
+}
+
+.tools__badge--free {
+  background: $color-teal-tint;
+  color: $color-teal;
+}
+
+.tools__badge--login {
+  background: $color-panel-alt;
+  color: $color-muted;
+}
+
+.tools__card-description {
+  margin: 0;
+  font-size: $font-size-12-5;
+  color: $color-muted;
+  line-height: 1.55;
+}

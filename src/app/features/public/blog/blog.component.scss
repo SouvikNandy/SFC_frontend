@@ -1,0 +1,230 @@
+@use '../../../../assets/scss/variables' as *;
+@use '../../../../assets/scss/mixins' as *;
+
+:host {
+  display: block;
+}
+
+.blog {
+  display: flex;
+  flex-direction: column;
+}
+
+.blog__content {
+  padding: $space-44 $space-36;
+
+  @media (max-width: 900px) {
+    padding: $space-40 $space-24;
+  }
+
+  @media (max-width: 640px) {
+    padding: $space-32 $space-20;
+  }
+}
+
+.blog__title {
+  margin: 0 0 $space-8;
+  font-family: $font-display;
+  font-size: $font-size-26;
+  font-weight: $font-weight-700;
+  color: $color-ink;
+}
+
+.blog__subtitle {
+  margin: 0 0 $space-28;
+  font-size: $font-size-14;
+  color: $color-muted;
+}
+
+.blog__grid {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: $space-24;
+  align-items: start;
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ==========================================================================
+   Posts Section
+   ========================================================================== */
+.blog__posts {
+  display: flex;
+  flex-direction: column;
+  gap: $space-14;
+}
+
+.blog__post-card {
+  padding: $space-22 $space-24;
+  background: $color-panel;
+  border: 1px solid $color-border;
+  border-radius: $radius-14;
+  box-shadow: $shadow-sm, $shadow-md;
+  display: flex;
+  flex-direction: column;
+  gap: $space-14;
+  margin-bottom: $space-14;
+
+  @media (max-width: 900px) {
+    margin-bottom: 0;
+  }
+}
+
+.blog__post-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: $space-8;
+  gap: $space-8;
+}
+
+.blog__post-tag {
+  font-size: $font-size-10-5;
+  font-weight: $font-weight-700;
+  color: $color-accent;
+  background: $color-accent-tint;
+  padding: $space-2 $space-8;
+  border-radius: $radius-5;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex: none;
+}
+
+.blog__post-date {
+  font-family: $font-mono;
+  font-size: $font-size-11-5;
+  color: $color-muted-2;
+  flex: none;
+}
+
+.blog__post-title {
+  margin: 0 0 $space-8;
+  font-size: $font-size-16;
+  font-weight: $font-weight-700;
+  color: $color-ink;
+  line-height: 1.4;
+}
+
+.blog__post-excerpt {
+  margin: 0 0 $space-14;
+  font-size: $font-size-13-5;
+  color: $color-muted;
+  line-height: 1.6;
+}
+
+.blog__download-btn {
+  padding: $space-8 $space-16;
+  border: 1.5px solid $color-input-border;
+  border-radius: $radius-8;
+  background: $color-panel;
+  font-size: $font-size-12-5;
+  font-weight: $font-weight-600;
+  color: $color-ink-soft;
+  cursor: pointer;
+  transition: border-color $transition-base;
+  font-family: inherit;
+
+  &:hover {
+    border-color: $color-accent;
+    color: $color-accent;
+  }
+}
+
+/* ==========================================================================
+   Sidebar Section
+   ========================================================================== */
+.blog__sidebar {
+  display: flex;
+  flex-direction: column;
+
+  @media (max-width: 900px) {
+    position: static;
+  }
+
+  @media (max-width: 900px) {
+    .blog__sidebar {
+      display: block;
+    }
+  }
+}
+
+.blog__subscribe-card {
+  padding: $space-22 $space-24;
+  background: $color-panel;
+  border: 1px solid $color-border;
+  border-radius: $radius-14;
+  box-shadow: $shadow-sm, $shadow-md;
+  position: sticky;
+  top: $space-20;
+
+  @media (max-width: 900px) {
+    position: static;
+  }
+}
+
+.blog__subscribe-title {
+  margin: 0 0 $space-8;
+  font-size: $font-size-14;
+  font-weight: $font-weight-700;
+  color: $color-ink;
+}
+
+.blog__subscribe-subtitle {
+  margin: 0 0 $space-14;
+  font-size: $font-size-12-5;
+  color: $color-muted;
+  line-height: 1.55;
+}
+
+.blog__subscribed-message {
+  font-size: $font-size-13;
+  font-weight: $font-weight-600;
+  color: $color-teal;
+}
+
+.blog__subscribe-form {
+  display: flex;
+  flex-direction: column;
+  gap: $space-10;
+}
+
+.blog__subscribe-input {
+  padding: $space-10 $space-12;
+  border: 1px solid $color-input-border;
+  border-radius: $radius-8;
+  background: $color-panel;
+  color: $color-ink;
+  font-family: $font-body;
+  font-size: $font-size-13;
+  transition: border-color $transition-base;
+
+  &::placeholder {
+    color: $color-placeholder;
+  }
+
+  &:focus {
+    outline: 2px solid $color-accent;
+    outline-offset: 1px;
+    border-color: $color-accent;
+  }
+}
+
+.blog__subscribe-btn {
+  width: 100%;
+  padding: $space-10;
+  border: none;
+  border-radius: $radius-9;
+  background: $color-accent;
+  color: $color-accent-ink;
+  font-size: $font-size-13;
+  font-weight: $font-weight-600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background-color $transition-base;
+
+  &:hover {
+    background: $color-accent-dark;
+  }
+}

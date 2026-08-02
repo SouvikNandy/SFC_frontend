@@ -1,0 +1,90 @@
+<section class="auth-card" aria-labelledby="login-title">
+    <div class="auth-tabs" role="tablist">
+        <a class="auth-tab is-active" routerLink="/login" routerLinkActive="is-active">Log in</a>
+        <a class="auth-tab" routerLink="/register" routerLinkActive="is-active">Register</a>
+    </div>
+
+    <div class="auth-card__header">
+        <h2 id="login-title">Welcome back</h2>
+        <p>Log in to your QuantSFC account.</p>
+    </div>
+
+    <form class="auth-form" [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
+        <div class="auth-form__field" [class.is-invalid]="emailControl.touched && emailControl.invalid">
+            <label for="login-email">Email or phone</label>
+            <input id="login-email" formControlName="email" type="email" autocomplete="email"
+                placeholder="you@example.com" [attr.aria-invalid]="emailControl.touched && emailControl.invalid"
+                [attr.aria-describedby]="emailControl.touched && emailControl.invalid ? 'login-email-error' : null" />
+            @if (emailControl.touched && emailControl.invalid) {
+            <div id="login-email-error" class="auth-form__message" role="alert">{{ getEmailErrorMessage() }}</div>
+            }
+        </div>
+
+        <div class="auth-form__field" [class.is-invalid]="passwordControl.touched && passwordControl.invalid">
+            <label for="login-password">Password</label>
+            <div class="auth-form__password">
+                <input id="login-password" formControlName="password" [type]="showPassword() ? 'text' : 'password'"
+                    autocomplete="current-password" placeholder="••••••••"
+                    [attr.aria-invalid]="passwordControl.touched && passwordControl.invalid"
+                    [attr.aria-describedby]="passwordControl.touched && passwordControl.invalid ? 'login-password-error' : null" />
+                <button type="button" class="auth-form__toggle" (click)="togglePasswordVisibility()"
+                    [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'">
+                    {{ showPassword() ? 'Hide' : 'Show' }}
+                </button>
+            </div>
+            @if (passwordControl.touched && passwordControl.invalid) {
+            <div id="login-password-error" class="auth-form__message" role="alert">{{ getPasswordErrorMessage()
+                }}</div>
+            }
+        </div>
+
+        <div class="auth-form__actions">
+            <button type="button" class="auth-form__link" (click)="requestPasswordReset()">Forgot password?</button>
+        </div>
+
+        @if (forgotPasswordMessage()) {
+        <p class="auth-form__toast">{{ forgotPasswordMessage() }}</p>
+        }
+
+        <button class="auth-form__submit" type="submit" [disabled]="form.invalid || isSubmitting()">
+            @if (isSubmitting()) {
+            <span class="auth-form__spinner" aria-hidden="true"></span>
+            }
+            <span>{{ isSubmitting() ? 'Signing in…' : 'Log in' }}</span>
+        </button>
+    </form>
+
+    <div class="auth-divider">
+        <div></div>
+        <span>or continue with</span>
+        <div></div>
+    </div>
+
+    <div class="auth-socials">
+        <button type="button" class="auth-socials__button">
+            <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden="true">
+                <path fill="#FFC107"
+                    d="M43.6 20.1H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l6-6C34.5 5.5 29.5 3.5 24 3.5 12.7 3.5 3.5 12.7 3.5 24S12.7 44.5 24 44.5 44.5 35.3 44.5 24c0-1.3-.1-2.7-.4-3.9z" />
+                <path fill="#FF3D00"
+                    d="M6.3 14.7l6.6 4.8C14.5 16 18.9 13 24 13c3.1 0 5.9 1.2 8 3.1l6-6C34.5 5.5 29.5 3.5 24 3.5c-7.5 0-14 4.3-17.3 10.5z" />
+                <path fill="#4CAF50"
+                    d="M24 44.5c5.4 0 10.3-1.9 14.1-5.1l-6.5-5.5c-2 1.5-4.6 2.4-7.6 2.4-5.2 0-9.6-3.3-11.3-8l-6.6 5.1C9.9 40.1 16.4 44.5 24 44.5z" />
+                <path fill="#1976D2"
+                    d="M43.6 20.1H42V20H24v8h11.3c-.8 2.3-2.2 4.2-4.1 5.5l6.5 5.5C41.4 35.9 44.5 30.4 44.5 24c0-1.3-.1-2.7-.9-3.9z" />
+            </svg>
+            Google
+        </button>
+        <button type="button" class="auth-socials__button">
+            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="#1877F2"
+                    d="M24 12.07C24 5.4 18.63 0 12 0S0 5.4 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.05V9.41c0-3.02 1.79-4.7 4.53-4.7 1.31 0 2.68.24 2.68.24v2.95h-1.5c-1.5 0-1.96.93-1.96 1.89v2.28h3.32l-.53 3.49h-2.79V24C19.61 23.1 24 18.1 24 12.07z" />
+            </svg>
+            Facebook
+        </button>
+    </div>
+
+    <div class="auth-footnote">
+        <p>New to QuantSFC? <a routerLink="/register">Create an account</a></p>
+        <p>Just browsing? <a routerLink="/">Back to the public site</a> — EOD data is free, no login required.</p>
+    </div>
+</section>

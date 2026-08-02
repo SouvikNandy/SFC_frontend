@@ -1,0 +1,46 @@
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, inject, signal } from '@angular/core';
+import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+
+import { AuthService } from '../../../../core/services/auth.service';
+
+@Component({
+    selector: 'app-forgot-password-dialog',
+    standalone: true,
+    imports: [ReactiveFormsModule],
+    templateUrl: './forgot-password-dialog.component.html',
+    styleUrls: ['./forgot-password-dialog.component.scss'],
+    changeDetection: ChangeDetectionStrategy.OnPush
+})
+export class ForgotPasswordDialogComponent {
+    private readonly authService = inject(AuthService);
+
+    @Input() isOpen = false;
+    @Output() closed = new EventEmitter<void>();
+
+    readonly form = new FormGroup({
+        email: new FormControl('', [Validators.required, Validators.email])
+    });
+
+    readonly isSubmitted = signal(false);
+    readonly isSubmitting = signal(false);
+
+    onSubmit(): void {
+        if (this.form.invalid) {
+            this.form.markAllAsTouched();
+            return;
+        }
+
+        this.isSubmitting.set(true);
+
+        this.authService.forgotPassword().subscribe(() => {
+            this.isSubmitting.set(false);
+            this.isSubmitted.set(true);
+        });
+    }
+
+    close(): void {
+        this.closed.emit();
+        this.isSubmitted.set(false);
+        this.form.reset({ email: '' });
+    }
+}

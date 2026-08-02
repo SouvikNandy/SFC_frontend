@@ -39,8 +39,16 @@ export const routes: Routes = [
         loadComponent: () => import('./features/public/tools/tools.component').then((m) => m.ToolsComponent)
       },
       {
-        path: 'login',
-        loadComponent: () => import('./features/auth/login/login.component').then((m) => m.LoginComponent)
+        path: 'privacy-policy',
+        loadComponent: () => import('./features/public/privacy-policy/privacy-policy.component').then((m) => m.PrivacyPolicyComponent)
+      },
+      {
+        path: 'terms-conditions',
+        loadComponent: () => import('./features/public/terms-conditions/terms-conditions.component').then((m) => m.TermsConditionsComponent)
+      },
+      {
+        path: 'faq',
+        loadComponent: () => import('./features/public/faq/faq.component').then((m) => m.FaqComponent)
       }
     ]
   },
@@ -49,8 +57,12 @@ export const routes: Routes = [
     component: AuthLayoutComponent,
     children: [
       {
-        path: 'forgot-password',
-        loadComponent: () => import('./features/auth/forgot-password/forgot-password.component').then((m) => m.ForgotPasswordComponent)
+        path: 'login',
+        loadComponent: () => import('./features/auth/login/login.component').then((m) => m.LoginComponent)
+      },
+      {
+        path: 'register',
+        loadComponent: () => import('./features/auth/register/register.component').then((m) => m.RegisterComponent)
       },
       {
         path: 'reset-password',
@@ -59,6 +71,14 @@ export const routes: Routes = [
       {
         path: 'verify-otp',
         loadComponent: () => import('./features/auth/verify-otp/verify-otp.component').then((m) => m.VerifyOtpComponent)
+      },
+      {
+        path: 'verify-email-success',
+        loadComponent: () => import('./features/auth/verify-otp/verify-otp.component').then((m) => m.VerifyOtpComponent)
+      },
+      {
+        path: 'invalid-reset-link',
+        loadComponent: () => import('./features/auth/reset-password/invalid-reset-link/invalid-reset-link.component').then((m) => m.InvalidResetLinkComponent)
       }
     ]
   },
@@ -102,7 +122,11 @@ export const routes: Routes = [
     ]
   },
   {
+    path: '404',
+    loadComponent: () => import('./features/public/not-found/not-found.component').then((m) => m.NotFoundComponent)
+  },
+  {
     path: '**',
-    redirectTo: ''
+    redirectTo: '404'
   }
 ];
