@@ -87,38 +87,19 @@ export const routes: Routes = [
     component: DashboardLayoutComponent,
     canActivate: [authGuard],
     children: [
-      {
-        path: '',
-        loadComponent: () => import('./features/dashboard/dashboard-home/dashboard-home.component').then((m) => m.DashboardHomeComponent)
-      },
-      {
-        path: 'profile',
-        loadComponent: () => import('./features/dashboard/profile/profile.component').then((m) => m.ProfileComponent)
-      },
-      {
-        path: 'settings',
-        loadComponent: () => import('./features/dashboard/settings/settings.component').then((m) => m.SettingsComponent)
-      },
-      {
-        path: 'subscription',
-        loadComponent: () => import('./features/dashboard/subscription/subscription.component').then((m) => m.SubscriptionComponent)
-      },
-      {
-        path: 'analytics',
-        loadComponent: () => import('./features/dashboard/analytics/analytics.component').then((m) => m.AnalyticsComponent)
-      },
-      {
-        path: 'reports',
-        loadComponent: () => import('./features/dashboard/reports/reports.component').then((m) => m.ReportsComponent)
-      },
-      {
-        path: 'data',
-        loadComponent: () => import('./features/dashboard/data/data.component').then((m) => m.DashboardDataComponent)
-      },
-      {
-        path: 'tools',
-        loadComponent: () => import('./features/dashboard/tools/tools.component').then((m) => m.DashboardToolsComponent)
-      }
+      { path: '', redirectTo: 'home', pathMatch: 'full' },
+      { path: 'home', loadComponent: () => import('./features/dashboard/dashboard-home/dashboard-home.component').then((m) => m.DashboardHomeComponent) },
+      { path: 'portfolio', loadComponent: () => import('./features/dashboard/portfolio/portfolio.component').then((m) => m.PortfolioComponent) },
+      { path: 'options-chain', loadComponent: () => import('./features/dashboard/options-chain/options-chain.component').then((m) => m.OptionsChainComponent) },
+      { path: 'eod', loadComponent: () => import('./features/dashboard/eod/eod.component').then((m) => m.EodComponent) },
+      { path: 'closed-trades', loadComponent: () => import('./features/dashboard/closed-trades/closed-trades.component').then((m) => m.ClosedTradesComponent) },
+      { path: 'greeks', loadComponent: () => import('./features/dashboard/greeks/greeks.component').then((m) => m.GreeksComponent) },
+      { path: 'probability', loadComponent: () => import('./features/dashboard/probability/probability.component').then((m) => m.ProbabilityComponent) },
+      { path: 'historical-volatility', loadComponent: () => import('./features/dashboard/historical-volatility/historical-volatility.component').then((m) => m.HistoricalVolatilityComponent) },
+      { path: 'implied-volatility', loadComponent: () => import('./features/dashboard/implied-volatility/implied-volatility.component').then((m) => m.ImpliedVolatilityComponent) },
+      { path: 'payoff', loadComponent: () => import('./features/dashboard/payoff/payoff.component').then((m) => m.PayoffComponent) },
+      { path: 'blog-reports', loadComponent: () => import('./features/dashboard/blog-reports/blog-reports.component').then((m) => m.BlogReportsComponent) },
+      { path: 'price-alerts', loadComponent: () => import('./features/dashboard/price-alerts/price-alerts.component').then((m) => m.PriceAlertsComponent) }
     ]
   },
   {

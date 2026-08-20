@@ -1,25 +1,25 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 
 import { SidebarComponent } from '../../shared/components/sidebar/sidebar.component';
-
+import { TopbarComponent } from '../../shared/components/topbar/topbar.component';
+import { TickerTapeComponent } from '../../shared/components/ticker-tape/ticker-tape.component';
+import { SidebarService } from '../../shared/services/sidebar.service';
 @Component({
   selector: 'app-dashboard-layout',
   standalone: true,
-  imports: [RouterOutlet, SidebarComponent],
+  imports: [RouterOutlet, SidebarComponent, TopbarComponent, TickerTapeComponent],
   template: `
-    <div class="dashboard-layout">
-      <app-sidebar>
-        <p class="sidebar-title">Dashboard</p>
-      </app-sidebar>
-      <div class="dashboard-content">
-        <header class="topbar">
-          <span>Workspace</span>
-        </header>
-        <main class="dashboard-main">
+    <div class="sfc-shell">
+      <app-sidebar></app-sidebar>
+      <div class="sfc-main">
+        <app-topbar></app-topbar>
+        <app-ticker-tape></app-ticker-tape>
+        <main class="sfc-page-pad">
           <router-outlet />
         </main>
       </div>
+      <div class="sfc-sidebar-backdrop" [class.open]="sidebar.isOpen()" (click)="sidebar.close()"></div>
     </div>
   `,
   styles: [
@@ -29,32 +29,15 @@ import { SidebarComponent } from '../../shared/components/sidebar/sidebar.compon
         min-height: 100vh;
       }
 
-      .dashboard-layout {
-        min-height: 100vh;
-        display: flex;
-      }
-
-      .dashboard-content {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-      }
-
-      .topbar {
-        padding: 1rem 1.5rem;
-        border-bottom: 1px solid var(--color-border, #e5e7eb);
-      }
-
-      .dashboard-main {
-        flex: 1;
-        padding: 1.5rem;
-      }
-
-      .sidebar-title {
-        font-weight: 700;
-      }
+      .sfc-shell{ display:flex; min-height:100vh; }
+      .sfc-main{ flex:1; min-width:0; }
+      .sfc-page-pad{ padding:24px 36px; }
+      .sfc-sidebar-backdrop{ display:none; }
+      .sfc-sidebar-backdrop.open{ display:block; position:fixed; inset:0; background:rgba(18,20,26,0.4); z-index:390; }
     `
   ],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class DashboardLayoutComponent {}
+export class DashboardLayoutComponent {
+  readonly sidebar = inject(SidebarService);
+}

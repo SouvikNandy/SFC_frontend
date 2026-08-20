@@ -1,0 +1,65 @@
+/* Authoritative dashboard design tokens derived from prototype/approved-design.html */
+:root {
+    --bg: #F8FAF7;
+    --panel: #FFFFFF;
+    --panel-2: #FFFFFF;
+    --border: #DDE7D8;
+    --input-border: #C9D8C0;
+    --panel-alt: #EAF4E4;
+    --head-bg: #F1F7EC;
+    --ink: #2B2B2B;
+    --ink-soft: #3A4434;
+    --muted: #5C6B55;
+    --muted-2: #8B9884;
+    --teal: #178A4C;
+    --teal-dark: #12703C;
+    --teal-tint: rgba(23, 138, 76, 0.10);
+    --teal-glow: rgba(23, 138, 76, 0.14);
+    --red: #C0342A;
+    --red-tint: rgba(192, 52, 42, 0.10);
+    --accent: #7FA76A;
+    --accent-dark: #6E9759;
+    --accent-tint: rgba(127, 167, 106, 0.12);
+    --accent-tint-14: rgba(127, 167, 106, 0.14);
+    --accent-ink: #FFFFFF;
+    --hero-bg: #2E4D12;
+    --hero-text: #F5F8F2;
+    --hero-muted: #C7DBB9;
+    --hero-stat-muted: #8FAE7C;
+    --green-dot: #178A4C;
+    --radius: 14px;
+    --font-display: 'Sora', sans-serif;
+    --font-body: 'Work Sans', sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+}
+
+/* Backwards-compatible aliases used across the project */
+:root {
+    --color-bg: var(--bg);
+    --color-panel: var(--panel);
+    --color-panel-alt: var(--panel-alt);
+    --color-head-bg: var(--head-bg);
+    --color-border: var(--border);
+    --color-input-border: var(--input-border);
+    --color-ink: var(--ink);
+    --color-ink-soft: var(--ink-soft);
+    --color-muted: var(--muted);
+    --color-muted-2: var(--muted-2);
+    --color-accent: var(--accent);
+    --color-accent-dark: var(--accent-dark);
+    --color-accent-tint: var(--accent-tint);
+    --color-accent-ink: var(--accent-ink);
+    --color-teal: var(--teal);
+    --color-teal-dark: var(--teal-dark);
+    --color-teal-tint: var(--teal-tint);
+    --color-red: var(--red);
+    --color-red-tint: var(--red-tint);
+    --color-hero-bg: var(--hero-bg);
+    --color-hero-text: var(--hero-text);
+    --color-hero-muted: var(--hero-muted);
+    /* Additional legacy aliases used in component styles */
+    --danger: var(--red);
+    --link: #2563eb;
+    --radius-lg: 0.875rem;
+    --radius-14: var(--radius);
+}

@@ -1,0 +1,128 @@
+.dashboard-home {}
+
+.sfc-page-pad.dashboard-home {
+    padding: 28px 36px 60px
+}
+
+.dh-welcome {
+    margin-bottom: 26px
+}
+
+.dh-title {
+    font-family: var(--font-display);
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 0 0 4px
+}
+
+.dh-date {
+    font-size: 12.5px;
+    color: var(--muted);
+    margin: 0
+}
+
+.dh-section-heading {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--muted-2);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px
+}
+
+.dh-summary-grid {
+    margin-bottom: 28px
+}
+
+.summary-card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    min-height: 64px;
+    display: flex;
+    flex-direction: column
+}
+
+.summary-card.placeholder {
+    background: linear-gradient(135deg, #fff, var(--head-bg));
+}
+
+.summary-card__symbol {
+    font-size: 11px;
+    color: var(--muted-2);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 8px
+}
+
+.summary-card__value {
+    font-size: 19px;
+    font-weight: 600;
+    color: var(--ink)
+}
+
+.summary-card__pnl {
+    font-size: 12px;
+    font-weight: 600;
+    margin-top: 4px
+}
+
+.summary-card__pnl.pnl-positive {
+    color: var(--teal)
+}
+
+.summary-card__pnl.pnl-negative {
+    color: var(--red)
+}
+
+.dh-quicklinks {
+    margin-bottom: 28px
+}
+
+.quick-link-card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    cursor: pointer;
+    transition: border-color .12s ease
+}
+
+.quick-link-card__title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between
+}
+
+.quick-link-card__desc {
+    font-size: 12.5px;
+    color: var(--muted);
+    line-height: 1.5
+}
+
+.platform-overview {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px
+}
+
+.platform-overview p {
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    line-height: 1.7;
+    margin: 0 0 12px
+}
+
+.platform-overview p:last-child {
+    font-size: 12px;
+    color: var(--muted-2);
+    line-height: 1.6;
+    margin: 0
+}
