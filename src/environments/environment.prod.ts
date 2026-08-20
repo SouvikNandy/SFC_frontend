@@ -1,6 +1,6 @@
 export const environment = {
   production: true,
   appName: 'SFC Frontend',
-  apiBaseUrl: 'https://api.example.com',
+  apiBaseUrl: 'http://13.205.99.59/api/api/v1',
   webSocketUrl: 'wss://ws.example.com'
 } as const;

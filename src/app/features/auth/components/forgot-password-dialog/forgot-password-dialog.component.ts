@@ -30,9 +30,12 @@ export class ForgotPasswordDialogComponent {
             return;
         }
 
+        const { email } = this.form.getRawValue();
+        const emailValue = email ?? '';
+
         this.isSubmitting.set(true);
 
-        this.authService.forgotPassword().subscribe(() => {
+        this.authService.forgotPassword(emailValue).subscribe(() => {
             this.isSubmitting.set(false);
             this.isSubmitted.set(true);
         });

@@ -44,8 +44,10 @@ export class ResetPasswordComponent {
     }
 
     const { password, confirmPassword } = this.form.getRawValue();
+    const passwordValue = password ?? '';
+    const confirmPasswordValue = confirmPassword ?? '';
 
-    if (password !== confirmPassword) {
+    if (passwordValue !== confirmPasswordValue) {
       this.confirmPasswordControl.setErrors({ mismatch: true });
       this.confirmPasswordControl.markAsTouched();
       return;
@@ -53,7 +55,7 @@ export class ResetPasswordComponent {
 
     this.isSubmitting.set(true);
 
-    this.authService.resetPassword(this.token).subscribe({
+    this.authService.resetPassword({ token: this.token, password: passwordValue }).subscribe({
       next: () => {
         this.isSubmitting.set(false);
         this.isSuccess.set(true);

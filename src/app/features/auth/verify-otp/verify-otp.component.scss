@@ -2,6 +2,129 @@
     display: block;
 }
 
+.verify-otp {
+    display: block;
+    max-width: 30rem;
+    width: 100%;
+}
+
+.verify-otp__back {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    color: var(--muted, #5c6b55);
+    cursor: pointer;
+    display: inline-flex;
+    font: inherit;
+    gap: 0.4rem;
+    margin: 0 0 1.5rem;
+    padding: 0;
+}
+
+.verify-otp__title {
+    color: var(--ink, #2b2b2b);
+    font-family: var(--font-display, 'Sora', sans-serif);
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin: 0 0 0.5rem;
+}
+
+.verify-otp__description {
+    color: var(--muted, #5c6b55);
+    font-size: 0.94rem;
+    line-height: 1.6;
+    margin: 0 0 1.75rem;
+}
+
+.verify-otp__form {
+    display: grid;
+    gap: 1rem;
+}
+
+.verify-otp__field {
+    display: grid;
+    gap: 0.45rem;
+}
+
+.verify-otp__label {
+    color: var(--ink-soft, #3f3f46);
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.verify-otp__input {
+    background: var(--panel, #fff);
+    border: 1px solid var(--input-border, #c9d8c0);
+    border-radius: 10px;
+    box-sizing: border-box;
+    color: var(--ink, #2b2b2b);
+    font-family: var(--font-mono, 'SFMono-Regular', monospace);
+    font-size: 1.1rem;
+    letter-spacing: 0.42rem;
+    padding: 0.9rem 0.8rem;
+    text-align: center;
+    width: 100%;
+}
+
+.verify-otp__input[aria-invalid='true'] {
+    border-color: var(--danger, #dc2626);
+}
+
+.verify-otp__error {
+    color: var(--danger, #dc2626);
+    font-size: 0.75rem;
+    margin-top: -0.25rem;
+}
+
+.verify-otp__submit {
+    align-items: center;
+    background: linear-gradient(135deg, var(--teal, #178a4c), var(--teal-dark, #12703c));
+    border: 0;
+    border-radius: 999px;
+    color: #fff;
+    cursor: pointer;
+    display: inline-flex;
+    font: inherit;
+    font-weight: 700;
+    justify-content: center;
+    min-height: 3rem;
+    padding: 0.8rem 1rem;
+    width: 100%;
+}
+
+.verify-otp__submit:disabled {
+    cursor: not-allowed;
+    opacity: 0.75;
+}
+
+.verify-otp__spinner {
+    animation: spin 0.7s linear infinite;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-radius: 50%;
+    border-top-color: #fff;
+    display: inline-block;
+    height: 1rem;
+    margin-right: 0.5rem;
+    width: 1rem;
+}
+
+.verify-otp__resend {
+    color: var(--muted, #5c6b55);
+    font-size: 0.82rem;
+    margin: 1.1rem 0 0;
+    text-align: center;
+}
+
+.verify-otp__resend-link {
+    background: transparent;
+    border: 0;
+    color: var(--link, #2563eb);
+    cursor: pointer;
+    font: inherit;
+    font-weight: 600;
+    padding: 0;
+}
+
 .auth-card {
     background: rgba(255, 255, 255, 0.96);
     border: 1px solid rgba(15, 23, 42, 0.08);
@@ -43,4 +166,10 @@
     color: #2563eb;
     font-weight: 600;
     text-decoration: none;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
 }

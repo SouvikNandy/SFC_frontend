@@ -1,7 +1,52 @@
-<section class="auth-card" aria-labelledby="verify-title">
+@if (!isSuccess()) {
+<section class="verify-otp" aria-labelledby="verify-title">
+    <button type="button" class="verify-otp__back" routerLink="/register" aria-label="Go back to registration">
+        ← Back
+    </button>
+
+    <h2 id="verify-title" class="verify-otp__title">Verify your details</h2>
+    <p class="verify-otp__description">
+        We sent 6-digit codes to <strong>{{ registerEmail }}</strong> and your phone. Enter both to activate your
+        account.
+    </p>
+
+    <form class="verify-otp__form" [formGroup]="form" (ngSubmit)="verifyOtp()" novalidate>
+        <div class="verify-otp__field">
+            <label for="email-otp" class="verify-otp__label">Email OTP</label>
+            <input id="email-otp" class="verify-otp__input" type="text" inputmode="numeric" maxlength="6"
+                placeholder="000000" formControlName="emailOtp"
+                (input)="normalizeOtp('emailOtp', $any($event.target).value)"
+                [attr.aria-invalid]="emailOtpControl.touched && emailOtpControl.invalid" />
+        </div>
+
+        <div class="verify-otp__field">
+            <label for="phone-otp" class="verify-otp__label">Phone OTP</label>
+            <input id="phone-otp" class="verify-otp__input" type="text" inputmode="numeric" maxlength="6"
+                placeholder="000000" formControlName="phoneOtp"
+                (input)="normalizeOtp('phoneOtp', $any($event.target).value)"
+                [attr.aria-invalid]="phoneOtpControl.touched && phoneOtpControl.invalid" />
+        </div>
+
+        @if (otpError()) {
+        <div class="verify-otp__error" role="alert">{{ otpError() }}</div>
+        }
+
+        <button class="verify-otp__submit" type="submit" [disabled]="isSubmitting()">
+            @if (isSubmitting()) {
+            <span class="verify-otp__spinner" aria-hidden="true"></span>
+            }
+            <span>{{ isSubmitting() ? 'Verifying…' : 'Verify & activate account' }}</span>
+        </button>
+    </form>
+
+    <p class="verify-otp__resend">Didn't get a code? <button type="button" class="verify-otp__resend-link"
+            (click)="resendCode()">Resend</button></p>
+</section>
+} @else {
+<section class="auth-card" aria-labelledby="verify-title-success">
     <div class="auth-card__header">
         <p class="auth-card__eyebrow">Email verified</p>
-        <h1 id="verify-title">Your account is ready</h1>
+        <h1 id="verify-title-success">Your account is ready</h1>
         <p>We’ve prepared your login experience for the next step.</p>
     </div>
 
@@ -9,3 +54,4 @@
         <a routerLink="/login">Continue to sign in</a>
     </p>
 </section>
+}

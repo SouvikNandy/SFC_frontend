@@ -33,8 +33,8 @@
 
         <div class="auth-form__field" [class.is-invalid]="phoneControl.touched && phoneControl.invalid">
             <label for="register-phone">Phone number</label>
-            <input id="register-phone" formControlName="phone" type="text" autocomplete="tel"
-                placeholder="+91 98765 43210" [attr.aria-invalid]="phoneControl.touched && phoneControl.invalid"
+            <input id="register-phone" formControlName="phone" type="text" autocomplete="tel" placeholder="98765 43210"
+                [attr.aria-invalid]="phoneControl.touched && phoneControl.invalid"
                 [attr.aria-describedby]="phoneControl.touched && phoneControl.invalid ? 'register-phone-error' : null" />
             @if (phoneControl.touched && phoneControl.invalid) {
             <div id="register-phone-error" class="auth-form__message" role="alert">{{ getPhoneErrorMessage() }}</div>

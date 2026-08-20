@@ -19,7 +19,7 @@ export class RegisterComponent {
     readonly form = new FormGroup({
         fullName: new FormControl('', [Validators.required, Validators.minLength(2)]),
         email: new FormControl('', [Validators.required, Validators.email]),
-        phone: new FormControl('', [Validators.required, Validators.minLength(6)]),
+        phone: new FormControl('', [Validators.required, Validators.minLength(6), Validators.maxLength(10)]),
         password: new FormControl('', [Validators.required, Validators.minLength(8), Validators.maxLength(32)])
     });
 
@@ -48,13 +48,24 @@ export class RegisterComponent {
             return;
         }
 
+        const { fullName, email, phone, password } = this.form.getRawValue();
+        const fullNameValue = fullName ?? '';
+        const emailValue = email ?? '';
+        const phoneValue = phone ?? '';
+        const passwordValue = password ?? '';
+
         this.isSubmitting.set(true);
 
-        this.authService.register().subscribe({
+        this.authService.register({ fullName: fullNameValue, email: emailValue, phone: phoneValue, password: passwordValue }).subscribe({
             next: () => {
                 window.setTimeout(() => {
                     this.isSubmitting.set(false);
-                    this.router.navigateByUrl('/verify-otp');
+                    this.router.navigate(['/verify-otp'], {
+                        queryParams: {
+                            email: emailValue,
+                            phone: phoneValue
+                        }
+                    });
                 }, 700);
             },
             error: () => {
@@ -99,7 +110,9 @@ export class RegisterComponent {
         if (this.phoneControl.hasError('minlength')) {
             return 'Phone number must be at least 6 characters.';
         }
-
+        if (this.phoneControl.hasError('maxlength')) {
+            return 'Phone number must not exceed 10 characters.';
+        }
         return null;
     }
 

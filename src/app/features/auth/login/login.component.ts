@@ -2,12 +2,13 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { AbstractControl, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 
+import { ForgotPasswordDialogComponent } from '../components/forgot-password-dialog/forgot-password-dialog.component';
 import { AuthService } from '../../../core/services/auth.service';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, RouterLinkActive],
+  imports: [ReactiveFormsModule, RouterLink, RouterLinkActive, ForgotPasswordDialogComponent],
   templateUrl: './login.component.html',
   styleUrls: ['./login.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -24,6 +25,7 @@ export class LoginComponent {
   readonly isSubmitting = signal(false);
   readonly showPassword = signal(false);
   readonly forgotPasswordMessage = signal<string | null>(null);
+  readonly forgotPasswordDialogOpen = signal(false);
 
   get emailControl(): AbstractControl {
     return this.form.controls.email;
@@ -39,9 +41,13 @@ export class LoginComponent {
       return;
     }
 
+    const { email, password } = this.form.getRawValue();
+    const emailValue = email ?? '';
+    const passwordValue = password ?? '';
+
     this.isSubmitting.set(true);
 
-    this.authService.login().subscribe({
+    this.authService.login({ email: emailValue, password: passwordValue, method: 'direct' }).subscribe({
       next: () => {
         window.setTimeout(() => {
           this.isSubmitting.set(false);
@@ -54,10 +60,12 @@ export class LoginComponent {
     });
   }
 
-  requestPasswordReset(): void {
-    this.authService.forgotPassword().subscribe(() => {
-      this.forgotPasswordMessage.set('Password reset link sent (demo)');
-    });
+  openForgotPasswordDialog(): void {
+    this.forgotPasswordDialogOpen.set(true);
+  }
+
+  closeForgotPasswordDialog(): void {
+    this.forgotPasswordDialogOpen.set(false);
   }
 
   togglePasswordVisibility(): void {

@@ -39,7 +39,7 @@
         </div>
 
         <div class="auth-form__actions">
-            <button type="button" class="auth-form__link" (click)="requestPasswordReset()">Forgot password?</button>
+            <button type="button" class="auth-form__link" (click)="openForgotPasswordDialog()">Forgot password?</button>
         </div>
 
         @if (forgotPasswordMessage()) {
@@ -88,3 +88,6 @@
         <p>Just browsing? <a routerLink="/">Back to the public site</a> — EOD data is free, no login required.</p>
     </div>
 </section>
+
+<app-forgot-password-dialog [isOpen]="forgotPasswordDialogOpen()"
+    (closed)="closeForgotPasswordDialog()"></app-forgot-password-dialog>
