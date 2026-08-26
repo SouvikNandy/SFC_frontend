@@ -1,0 +1,76 @@
+<div class="data-table__wrap" [attr.aria-busy]="loading()">
+    <table class="data-table">
+        <thead>
+            <tr>
+                @if (selectable()) {
+                <th class="data-table__selection" scope="col">
+                    <span class="sr-only">Select row</span>
+                </th>
+                }
+                @for (column of columns(); track trackColumn($index, column)) {
+                <th scope="col" [class]="'data-table__align--' + alignClass(column)">{{ column.label }}</th>
+                }
+                @if (actions().length > 0) {
+                <th class="data-table__align--right" scope="col">Actions</th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @if (data().length > 0) {
+            @for (row of data(); track row) {
+            <tr [class.data-table__row--clickable]="rowClickable()" [class]="rowClass(row)"
+                (click)="rowClickable() && emitRowClick(row)">
+                @if (selectable()) {
+                <td class="data-table__selection">
+                    <input type="checkbox" [checked]="hasSelection(row)"
+                        [attr.aria-label]="'Select row ' + ($index + 1)" (click)="$event.stopPropagation()"
+                        (change)="toggleSelection(row)">
+                </td>
+                }
+                @for (column of columns(); track trackColumn($index, column)) {
+                @let value = getCellValue(row, column);
+                <td [class]="'data-table__align--' + alignClass(column) + ' data-table__type--' + cellType(column)"
+                    [class.data-table__change--positive]="cellType(column) === 'change' && numericValueForClass(value) > 0"
+                    [class.data-table__change--negative]="cellType(column) === 'change' && numericValueForClass(value) < 0"
+                    [class.data-table__change--neutral]="cellType(column) === 'change' && numericValueForClass(value) === 0">
+                    @if (column.secondaryFormatter) {
+                    <div class="data-table__cell-primary">{{ formatCell(value, row, column) }}</div>
+                    <div class="data-table__cell-secondary">{{ column.secondaryFormatter(row) }}</div>
+                    } @else if (cellType(column) === 'badge') {
+                    <span class="data-table__badge">{{ formatCell(value, row, column) }}</span>
+                    } @else {
+                    {{ formatCell(value, row, column) }}
+                    }
+                </td>
+                }
+                @if (actions().length > 0) {
+                <td class="data-table__actions data-table__align--right">
+                    @for (action of visibleActions(row); track action.id) {
+                    <button type="button"
+                        [class]="'data-table__action data-table__action--' + (action.variant ?? 'default')"
+                        [disabled]="isActionDisabled(action, row)" [attr.aria-label]="action.label"
+                        (click)="emitAction(action, row, $event)">
+                        @if (action.icon) { <span aria-hidden="true">{{ action.icon }}</span> }
+                        {{ action.label }}
+                    </button>
+                    }
+                </td>
+                }
+            </tr>
+            }
+            } @else if (loading()) {
+            <tr>
+                <td class="data-table__state"
+                    [attr.colspan]="columns().length + (selectable() ? 1 : 0) + (actions().length > 0 ? 1 : 0)">
+                    Loading...</td>
+            </tr>
+            } @else if (data().length === 0) {
+            <tr>
+                <td class="data-table__state"
+                    [attr.colspan]="columns().length + (selectable() ? 1 : 0) + (actions().length > 0 ? 1 : 0)">{{
+                    emptyMessage() }}</td>
+            </tr>
+            }
+        </tbody>
+    </table>
+</div>

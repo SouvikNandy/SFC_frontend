@@ -25,7 +25,7 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
         <a class="header__link" routerLink="/services" routerLinkActive="active">Services</a>
         <a class="header__link" routerLink="/blog" routerLinkActive="active">Blog</a>
         <a class="header__link" routerLink="/contact" routerLinkActive="active">Contact</a>
-        <a class="header__link" routerLink="/data" routerLinkActive="active">Data</a>
+        <!-- <a class="header__link" routerLink="/data" routerLinkActive="active">Data</a> -->
         <a class="header__link" routerLink="/tools" routerLinkActive="active">Tools</a>
         <a class="header__link header__login-btn" routerLink="/login" routerLinkActive="active">Log in</a>
       </nav>
@@ -71,13 +71,13 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
           (click)="toggleMobileNav()"
           >Blog</a
         >
-        <a
+        <!-- <a
           class="mobile-nav__link"
           routerLink="/data"
           routerLinkActive="active"
           (click)="toggleMobileNav()"
           >Data</a
-        >
+        > -->
 
         <a
           class="mobile-nav__link"

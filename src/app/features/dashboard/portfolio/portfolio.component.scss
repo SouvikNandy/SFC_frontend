@@ -1,9 +1,3 @@
-.portfolio-page {}
-
-.sfc-page-pad.portfolio-page {
-    padding: 28px 36px 60px
-}
-
 .portfolio-stats {
     margin-bottom: 26px
 }
@@ -86,73 +80,6 @@
     font-size: 12.5px;
     font-weight: 600;
     cursor: pointer
-}
-
-.sfc-table-wrap {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    max-width: 100%;
-}
-
-.positions-table {
-    width: 100%;
-    min-width: 680px;
-    border-collapse: collapse
-}
-
-.positions-table thead tr {
-    background: var(--head-bg);
-    border-bottom: 1px solid var(--border)
-}
-
-.positions-table th {
-    text-align: left;
-    font-size: 11px;
-    color: var(--muted-2);
-    font-weight: 600;
-    white-space: nowrap;
-    padding: 13px 20px
-}
-
-.positions-table td {
-    padding: 13px 20px
-}
-
-.align-right {
-    text-align: right
-}
-
-.inst-symbol {
-    font-family: var(--font-mono);
-    font-weight: 600;
-    font-size: 13px
-}
-
-.inst-sub {
-    font-size: 11px;
-    color: var(--muted-2);
-    margin-top: 3px
-}
-
-.btn-exit {
-    border: 1px solid var(--input-border);
-    background: var(--panel);
-    border-radius: 6px;
-    padding: 5px 12px;
-    color: var(--ink-soft);
-    cursor: pointer;
-    font-size: 12px;
-    font-weight: 600
-}
-
-.pnl-positive {
-    color: var(--teal);
-    font-weight: 600
-}
-
-.pnl-negative {
-    color: var(--red);
-    font-weight: 600
 }
 
 @media (max-width:880px) {

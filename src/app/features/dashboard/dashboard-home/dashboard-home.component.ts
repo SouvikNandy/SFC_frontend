@@ -1,15 +1,16 @@
 import { ChangeDetectionStrategy, Component, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
+import { ToastService } from '../../../core/services/toast.service';
 import { HomeService } from './home.service';
 import { MarketCard } from './models/home.model';
 import { AuthService } from '../../../core/services/auth.service';
 
 @Component({
-    selector: 'app-dashboard-home',
-    standalone: true,
-    imports: [CommonModule],
-    template: `
+  selector: 'app-dashboard-home',
+  standalone: true,
+  imports: [CommonModule],
+  template: `
     <section class="sfc-page-pad dashboard-home">
       <div class="dh-welcome">
         <h2 class="dh-title">Welcome back, {{ userName }}</h2>
@@ -52,55 +53,56 @@ import { AuthService } from '../../../core/services/auth.service';
       </div>
     </section>
   `,
-    styleUrls: ['./dashboard-home.component.scss'],
-    changeDetection: ChangeDetectionStrategy.OnPush
+  styleUrls: ['./dashboard-home.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class DashboardHomeComponent {
-    private readonly home = inject(HomeService);
-    private readonly auth = inject(AuthService);
-    private readonly router = inject(Router);
+  private readonly home = inject(HomeService);
+  private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
+  private readonly toast = inject(ToastService);
 
-    readonly loading = signal(true);
-    readonly error = signal<string | null>(null);
-    cards: MarketCard[] = [];
-    quickLinks: { key: string; title: string; desc: string }[] = [];
+  readonly loading = signal(true);
+  readonly error = signal<string | null>(null);
+  cards: MarketCard[] = [];
+  quickLinks: { key: string; title: string; desc: string }[] = [];
 
-    constructor() {
-        this.load();
-    }
+  constructor() {
+    this.load();
+  }
 
-    get userName(): string {
-        const u = this.auth.currentUser();
-        return u?.name ?? u?.email ?? 'Trader';
-    }
+  get userName(): string {
+    const u = this.auth.currentUser();
+    return u?.name ?? u?.email ?? 'Trader';
+  }
 
-    get today(): string {
-        return new Date().toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
-    }
+  get today(): string {
+    return new Date().toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+  }
 
-    private load(): void {
-        this.loading.set(true);
-        this.home.getMarketSummary().subscribe({
-            next: (cards) => {
-                this.cards = cards;
-                this.home.getQuickLinks().subscribe({ next: (q) => { this.quickLinks = q; this.loading.set(false); }, error: () => { this.error.set('Failed to load quick links'); this.loading.set(false); } });
-            },
-            error: () => { this.error.set('Failed to load market summary'); this.loading.set(false); }
-        });
-    }
+  private load(): void {
+    this.loading.set(true);
+    this.home.getMarketSummary().subscribe({
+      next: (cards) => {
+        this.cards = cards;
+        this.home.getQuickLinks().subscribe({ next: (q) => { this.quickLinks = q; this.loading.set(false); }, error: () => { this.error.set('Failed to load quick links'); this.toast.error('Unable to load dashboard quick links.'); this.loading.set(false); } });
+      },
+      error: () => { this.error.set('Failed to load market summary'); this.toast.error('Unable to load the market summary.'); this.loading.set(false); }
+    });
+  }
 
-    go(key: string): void {
-        // map quicklink keys to existing app routes
-        const routeMap: Record<string, string> = {
-            portfolio: '/dashboard/portfolio',
-            chain: '/dashboard/options-chain',
-            greeks: '/dashboard/greeks',
-            payoff: '/dashboard/payoff',
-            eod: '/dashboard/eod',
-            alerts: '/dashboard/price-alerts'
-        };
+  go(key: string): void {
+    // map quicklink keys to existing app routes
+    const routeMap: Record<string, string> = {
+      portfolio: '/dashboard/portfolio',
+      chain: '/dashboard/options-chain',
+      greeks: '/dashboard/greeks',
+      payoff: '/dashboard/payoff',
+      eod: '/dashboard/eod',
+      alerts: '/dashboard/price-alerts'
+    };
 
-        const path = routeMap[key] ?? '/dashboard';
-        this.router.navigateByUrl(path);
-    }
+    const path = routeMap[key] ?? '/dashboard';
+    this.router.navigateByUrl(path);
+  }
 }

@@ -1,0 +1,221 @@
+<section class="sfc-page-pad greeks-page">
+
+    <div class="head">
+        <h1>Option Greek Calculator</h1>
+        <p class="sub">Price a call and put and see how each Greek reacts, using live inputs or a prefilled index /
+            stock.</p>
+    </div>
+
+    <form class="panel" [formGroup]="form" (ngSubmit)="onCalcClick()">
+        <p class="panel-title">Inputs</p>
+        <p class="panel-hint">Choose where your data comes from, then auto-fill from an instrument or enter every field
+            yourself.</p>
+
+        <div class="source-tabs" role="tablist" aria-label="Data source">
+            <button class="source-tab" [class.active]="form.value.sourceMode==='custom'"
+                (click)="onSourceTabClick('custom')" type="button" role="tab"
+                [attr.aria-selected]="form.value.sourceMode==='custom'">
+                <i class="ti ti-edit" aria-hidden="true"></i>
+                <span>Custom</span>
+            </button>
+            <button class="source-tab" [class.active]="form.value.sourceMode==='eod'" (click)="onSourceTabClick('eod')"
+                type="button" role="tab" [attr.aria-selected]="form.value.sourceMode==='eod'">
+                <i class="ti ti-file-spreadsheet" aria-hidden="true"></i>
+                <span>EOD data <em>from BhavCopy</em></span>
+            </button>
+            <button class="source-tab" [class.active]="form.value.sourceMode==='live'"
+                (click)="onSourceTabClick('live')" type="button" role="tab"
+                [attr.aria-selected]="form.value.sourceMode==='live'">
+                <i class="ti ti-lock" aria-hidden="true"></i>
+                <span>Live data <em>Premium</em></span>
+            </button>
+        </div>
+
+        <div class="mode-note" *ngIf="form.value.sourceMode==='custom'">
+            Enter every value below by hand. Nothing is pulled from a data feed in this mode.
+        </div>
+
+        <div class="preset-row" *ngIf="form.value.sourceMode==='eod'">
+            <div class="field-block preset-field">
+                <label for="preset">Prefilled instrument</label>
+                <select id="preset" [value]="form.value.presetKey" (change)="onPresetChange($any($event.target).value)">
+                    <option *ngFor="let k of presetKeys" [value]="k">{{ presets[k]?.label || 'Custom' }}</option>
+                </select>
+            </div>
+            <div class="badge" id="presetBadge">{{ badgeText || (presetLabel(form.value.presetKey) ?
+                (presetLabel(form.value.presetKey) + ' · EOD close, BhavCopy') : 'Manual entry — edit any field below')
+                }}</div>
+        </div>
+
+        <div class="live-lock" *ngIf="form.value.sourceMode==='live'">
+            <div class="live-lock-icon"><i class="ti ti-lock" aria-hidden="true"></i></div>
+            <div class="live-lock-copy">
+                <p class="live-lock-title">Live data is a Premium feature</p>
+                <p class="live-lock-desc">Stream real-time spot, strike chains and volatility from the live market feed
+                    instead of the previous close. Upgrade to enable this for your account.</p>
+            </div>
+            <button class="calc" type="button" (click)="onLiveUpgrade()">Upgrade to Premium</button>
+        </div>
+
+        <div class="grid-inputs" id="gridInputs">
+            <div class="field-block strike-pair">
+                <label for="spotSelect">Price of the underlying</label>
+                <div class="row2">
+                    <select *ngIf="form.value.sourceMode!=='custom'" id="spotSelect" [value]="form.value.spotKey"
+                        (change)="onSpotSelect($any($event.target).value)">
+                        <option *ngFor="let s of spotOptions" [value]="s.key">{{ s.label }}</option>
+                    </select>
+                    <div class="unit-wrap"><input type="number" formControlName="spot"><span class="unit">₹</span></div>
+                </div>
+            </div>
+
+            <div class="field-block strike-pair">
+                <label for="strikeSelect">Strike price</label>
+                <div class="row2">
+                    <select *ngIf="form.value.sourceMode!=='custom'" id="strikeSelect" [value]="form.value.strikeKey"
+                        (change)="onStrikeSelectChange($any($event.target).value)">
+                        <option *ngFor="let s of strikeOptions" [value]="s">₹{{ s.toLocaleString('en-IN') }}</option>
+                        <option value="custom">Custom strike…</option>
+                    </select>
+                    <div class="unit-wrap"><input type="number" formControlName="strike"><span class="unit">₹</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="field-block">
+                <label for="rate">Risk-free interest rate</label>
+                <div class="unit-wrap"><input type="number" formControlName="rate"><span class="unit">%</span></div>
+            </div>
+            <div class="field-block">
+                <label for="vol">Annual volatility</label>
+                <div class="unit-wrap"><input type="number" formControlName="vol"><span class="unit">%</span></div>
+            </div>
+            <div class="field-block">
+                <label for="expiry">Time to expiration</label>
+                <div class="unit-wrap"><input type="number" formControlName="expiry"><span class="unit">days</span>
+                </div>
+            </div>
+            <div class="field-block">
+                <label for="dividend">Dividend yield</label>
+                <div class="unit-wrap"><input type="number" formControlName="dividend"><span class="unit">%</span></div>
+            </div>
+        </div>
+
+        <p class="input-error" *ngIf="inputError">{{ inputError }}</p>
+
+        <div class="iv-panel" id="ivPanel">
+            <div class="iv-head">
+                <p class="panel-title">Implied volatility</p>
+                <p class="panel-hint">Have a market price instead of a volatility guess? Solve for the volatility the
+                    market is pricing in.</p>
+            </div>
+            <div class="iv-row">
+                <div class="field-block">
+                    <label for="ivType">Option type</label>
+                    <select id="ivType" formControlName="ivType">
+                        <option value="call">Call</option>
+                        <option value="put">Put</option>
+                    </select>
+                </div>
+                <div class="field-block">
+                    <label for="ivPrice">Market price</label>
+                    <div class="src-toggle" id="ivSrcToggle">
+                        <button type="button" class="src-btn" [class.active]="form.value.ivSource==='auto'"
+                            (click)="onIvSrcClick('auto')">Auto</button>
+                        <button type="button" class="src-btn" [class.active]="form.value.ivSource==='custom'"
+                            (click)="onIvSrcClick('custom')">Custom</button>
+                    </div>
+                    <div class="unit-wrap"><input type="number" formControlName="ivPrice" step="0.05"
+                            placeholder="e.g. 142.50"><span class="unit">₹</span></div>
+                    <span class="iv-source-hint">{{ form.value.ivSource === 'auto' ? (form.value.sourceMode==='eod' ?
+                        'Auto-filled from BhavCopy EOD' : 'Streamed from live market feed (Premium)') : 'Custom price —
+                        auto-fill paused' }}</span>
+                </div>
+                <button class="calc secondary" type="button" (click)="solveIv()">Solve IV</button>
+            </div>
+            <div class="iv-result" *ngIf="ivResultVisible">
+                <span id="ivResultText">{{ ivResultText }}</span>
+                <button class="link-btn" type="button" (click)="applyIv()">Use this volatility</button>
+            </div>
+        </div>
+
+        <div class="moneyness">
+            <div class="moneyness-label">
+                <span>Put favoured</span>
+                <span id="moneynessTag">{{ results.moneynessText || 'At the money' }}</span>
+                <span>Call favoured</span>
+            </div>
+            <div class="track">
+                <div class="marker" id="marker" [style.left.%]="results.markerLeft || 50"></div>
+            </div>
+            <div class="track-ticks"><span>Deep OTM call</span><span>Strike</span><span>Deep ITM call</span></div>
+        </div>
+
+        <div class="actions">
+            <span class="live-note"><span class="live-dot"></span>Results update as you change any value</span>
+            <button class="calc" id="calcBtn" type="button" (click)="onCalcClick()">Recalculate</button>
+        </div>
+    </form>
+
+    <div class="panel">
+        <div class="results-head">
+            <div>
+                <p class="panel-title">Results</p>
+                <p class="panel-hint">Theoretical price and Greeks, calculated with Black-Scholes.</p>
+            </div>
+        </div>
+
+        <div class="price-cards">
+            <div class="price-card call">
+                <div class="tag">Call premium</div>
+                <div class="val" id="callPrice">{{ results.callPrice ? ('₹' + svc.fmt(results.callPrice,2)) : '₹0.00' }}
+                </div>
+            </div>
+            <div class="price-card put">
+                <div class="tag">Put premium</div>
+                <div class="val" id="putPrice">{{ results.putPrice ? ('₹' + svc.fmt(results.putPrice,2)) : '₹0.00' }}
+                </div>
+            </div>
+        </div>
+
+        <table class="greeks">
+            <thead>
+                <tr>
+                    <th>Greek</th>
+                    <th class="num">Call</th>
+                    <th class="num">Put</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="label">Delta<span class="greek-desc">Price change per ₹1 move in the underlying</span>
+                    </td>
+                    <td class="num" id="deltaCall">{{ results.deltaCall ? svc.fmt(results.deltaCall) : '–' }}</td>
+                    <td class="num" id="deltaPut">{{ results.deltaPut ? svc.fmt(results.deltaPut) : '–' }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Gamma<span class="greek-desc">Rate of change of delta</span></td>
+                    <td class="num" id="gammaCall">{{ results.gamma ? svc.fmt(results.gamma) : '–' }}</td>
+                    <td class="num" id="gammaPut">{{ results.gamma ? svc.fmt(results.gamma) : '–' }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Theta<span class="greek-desc">Price decay per calendar day</span></td>
+                    <td class="num" id="thetaCall">{{ results.thetaCall ? svc.fmt(results.thetaCall) : '–' }}</td>
+                    <td class="num" id="thetaPut">{{ results.thetaPut ? svc.fmt(results.thetaPut) : '–' }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Vega<span class="greek-desc">Price change per 1pt move in volatility</span></td>
+                    <td class="num" id="vegaCall">{{ results.vega ? svc.fmt(results.vega) : '–' }}</td>
+                    <td class="num" id="vegaPut">{{ results.vega ? svc.fmt(results.vega) : '–' }}</td>
+                </tr>
+                <tr>
+                    <td class="label">Rho<span class="greek-desc">Price change per 1pt move in interest rate</span></td>
+                    <td class="num" id="rhoCall">{{ results.rhoCall ? svc.fmt(results.rhoCall) : '–' }}</td>
+                    <td class="num" id="rhoPut">{{ results.rhoPut ? svc.fmt(results.rhoPut) : '–' }}</td>
+                </tr>
+            </tbody>
+        </table>
+
+    </div>
+
+</section>

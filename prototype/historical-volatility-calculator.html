@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Historical Volatility Calculator</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css">
+<style>
+  :root{
+    --ink:#1c231b; --ink-soft:#5b6459; --ink-faint:#8b9285;
+    --line:#e2e4dc; --line-soft:#edefe8; --paper:#ffffff; --field:#fbfbf8;
+    --moss:#5f7d43; --moss-dark:#425b2c; --moss-tint:#eef3e6;
+    --call:#3f7a5a; --call-tint:#e7f3ec; --put:#b3592f; --put-tint:#faece3;
+    --radius:10px; --radius-lg:16px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:#f4f5f0;font-family:'Inter',-apple-system,sans-serif;color:var(--ink);padding:32px 20px 64px;}
+  .wrap{max-width:980px;margin:0 auto;}
+  .head{margin-bottom:28px;}
+  h1{font-family:'Sora',sans-serif;font-size:28px;font-weight:700;margin:0 0 4px;letter-spacing:-.01em;}
+  .sub{color:var(--ink-soft);font-size:14.5px;margin:0;}
+  .panel{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius-lg);padding:26px 28px 28px;margin-bottom:20px;}
+  .panel-title{font-family:'Sora',sans-serif;font-size:15px;font-weight:600;margin:0 0 3px;}
+  .panel-hint{font-size:13px;color:var(--ink-faint);margin:0 0 20px;}
+
+  .source-tabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;}
+  .source-tab{display:flex;align-items:center;gap:7px;font-family:'Inter',sans-serif;font-size:13px;font-weight:500;color:var(--ink-soft);background:var(--field);border:1px solid var(--line);border-radius:999px;padding:8px 14px;cursor:pointer;}
+  .source-tab i{font-size:15px;}
+  .source-tab em{font-style:normal;font-size:11px;color:var(--ink-faint);margin-left:2px;}
+  .source-tab.active{background:var(--moss);border-color:var(--moss);color:#fff;}
+  .source-tab.active em{color:rgba(255,255,255,.75);}
+  .source-tab[data-mode="live"].active{background:var(--moss-dark);border-color:var(--moss-dark);}
+
+  .field-block{display:flex;flex-direction:column;gap:6px;}
+  .field-block label{font-size:12px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;}
+  select, input[type=number], input[type=date], textarea{
+    font-family:'IBM Plex Mono',monospace;font-size:14px;background:var(--field);
+    border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;color:var(--ink);outline:none;width:100%;
+  }
+  select{font-family:'Inter',sans-serif;font-weight:500;cursor:pointer;}
+  select:focus, input:focus, textarea:focus{border-color:var(--moss);box-shadow:0 0 0 3px var(--moss-tint);}
+  textarea{min-height:110px;resize:vertical;line-height:1.5;}
+
+  .row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:18px;}
+  .row .field-block{flex:1;min-width:200px;}
+
+  .badge{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--moss-dark);background:var(--moss-tint);border-radius:6px;padding:9px 10px;display:inline-flex;align-items:center;}
+
+  .mode-note{font-size:13.5px;color:var(--ink-soft);background:var(--field);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;margin-bottom:18px;}
+  .live-lock{display:flex;align-items:center;gap:16px;background:var(--moss-tint);border:1px solid #d7e3cb;border-radius:var(--radius-lg);padding:18px 20px;margin-bottom:18px;}
+  .live-lock-icon{width:40px;height:40px;border-radius:50%;background:#fff;border:1px solid #d7e3cb;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;color:var(--moss-dark);}
+  .live-lock-title{font-family:'Sora',sans-serif;font-weight:600;font-size:14.5px;margin:0 0 3px;color:var(--moss-dark);}
+  .live-lock-desc{font-size:13px;color:var(--ink-soft);margin:0;line-height:1.5;}
+  button.calc{font-family:'Inter',sans-serif;font-weight:600;font-size:14px;background:var(--moss);color:#fff;border:none;border-radius:var(--radius);padding:11px 20px;cursor:pointer;flex-shrink:0;white-space:nowrap;}
+  button.calc:hover{background:var(--moss-dark);}
+
+  #gridInputs.locked{opacity:.45;pointer-events:none;filter:grayscale(.4);}
+
+  .hv-cards{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px;}
+  .hv-card{border-radius:var(--radius);padding:16px 18px;border:1px solid var(--line);background:var(--field);}
+  .hv-card .tag{font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:600;color:var(--ink-faint);}
+  .hv-card .val{font-family:'Sora',sans-serif;font-size:28px;font-weight:700;margin-top:6px;}
+  .hv-card.hv10 .tag{color:var(--call);}
+  .hv-card.hv10 .val{color:var(--call);}
+  .hv-card.hv20 .tag{color:var(--put);}
+  .hv-card.hv20 .val{color:var(--put);}
+  .hv-card .meta{font-size:11.5px;color:var(--ink-faint);margin-top:4px;}
+
+  .chart-wrap{background:var(--field);border:1px solid var(--line);border-radius:var(--radius);padding:12px;margin-bottom:22px;}
+  .chart-wrap svg{width:100%;height:auto;display:block;}
+  .chart-legend{display:flex;gap:18px;margin-bottom:10px;font-size:12px;color:var(--ink-soft);}
+  .chart-legend span{display:flex;align-items:center;gap:6px;}
+  .chart-legend i{width:14px;height:0;border-top:2.5px solid;display:inline-block;}
+
+  table.hv-table{width:100%;border-collapse:collapse;font-size:13px;}
+  table.hv-table th{text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);font-weight:600;padding:0 10px 10px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--paper);}
+  table.hv-table th:first-child, table.hv-table td:first-child{text-align:left;}
+  table.hv-table td{padding:9px 10px;border-bottom:1px solid var(--line-soft);font-family:'IBM Plex Mono',monospace;text-align:right;}
+  table.hv-table tr.as-of{background:var(--moss-tint);}
+  .table-scroll{max-height:340px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--radius);}
+  .table-scroll table{margin:0;}
+  .table-scroll thead th{background:var(--field);}
+
+  .input-error{font-size:13px;color:#8a2c1a;background:var(--put-tint);border:1px solid #f0d3bf;border-radius:var(--radius);padding:10px 14px;margin-bottom:18px;}
+
+  @media (max-width:640px){
+    .hv-cards{grid-template-columns:1fr;}
+    .row{flex-direction:column;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="head">
+    <h1>Historical Volatility Calculator</h1>
+    <p class="sub">HV-10 and HV-20 — annualized volatility from realised daily returns, with a rolling chart and full return table.</p>
+  </div>
+
+  <div class="panel">
+    <p class="panel-title">Price data</p>
+    <p class="panel-hint">Choose where the historical closing prices come from.</p>
+
+    <div class="source-tabs" role="tablist" aria-label="Data source">
+      <button class="source-tab active" data-mode="eod" type="button" role="tab" aria-selected="true">
+        <i class="ti ti-file-spreadsheet" aria-hidden="true"></i><span>EOD data <em>from BhavCopy</em></span>
+      </button>
+      <button class="source-tab" data-mode="live" type="button" role="tab" aria-selected="false">
+        <i class="ti ti-lock" aria-hidden="true"></i><span>Live data <em>Premium</em></span>
+      </button>
+    </div>
+
+    <div id="eodModeContent" style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
+      <div class="field-block" style="min-width:220px;flex:1;">
+        <label for="instrument">Instrument</label>
+        <select id="instrument">
+          <option value="nifty" selected>NIFTY 50 index</option>
+          <option value="banknifty">BANK NIFTY index</option>
+          <option value="sensex">SENSEX index</option>
+          <option value="reliance">Reliance Industries</option>
+          <option value="tcs">TCS</option>
+          <option value="hdfcbank">HDFC Bank</option>
+          <option value="infosys">Infosys</option>
+        </select>
+      </div>
+      <div class="badge" id="eodBadge">60 trading days of EOD closes</div>
+    </div>
+
+    <div class="live-lock" id="liveModeLock" style="display:none;">
+      <div class="live-lock-icon"><i class="ti ti-lock" aria-hidden="true"></i></div>
+      <div class="live-lock-copy">
+        <p class="live-lock-title">Live historical data is a Premium feature</p>
+        <p class="live-lock-desc">Get a continuously updating series that includes today's live tick, instead of only yesterday's official close. Upgrade to enable this for your account.</p>
+      </div>
+      <button class="calc" id="liveUpgradeBtn" type="button">Upgrade to Premium</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <p class="panel-title">Date selection</p>
+    <p class="panel-hint">Pick the "as of" date — HV-10 and HV-20 are calculated using the 10 / 20 trading days ending on this date.</p>
+    <div class="row" style="margin-bottom:0;">
+      <div class="field-block" style="max-width:260px;">
+        <label for="asOfDate">As of date</label>
+        <select id="asOfDate"></select>
+      </div>
+    </div>
+    <p class="input-error" id="dataError" style="display:none;" role="alert"></p>
+  </div>
+
+  <div class="panel">
+    <p class="panel-title">Results</p>
+    <p class="panel-hint" style="margin-bottom:18px;">Annualized using √252 trading days.</p>
+
+    <div class="hv-cards">
+      <div class="hv-card hv10">
+        <div class="tag">HV-10</div>
+        <div class="val" id="hv10Val">–</div>
+        <div class="meta" id="hv10Meta">10-day realised volatility, annualised</div>
+      </div>
+      <div class="hv-card hv20">
+        <div class="tag">HV-20</div>
+        <div class="val" id="hv20Val">–</div>
+        <div class="meta" id="hv20Meta">20-day realised volatility, annualised</div>
+      </div>
+    </div>
+
+    <div class="chart-legend">
+      <span><i style="border-color:#5f7d43;border-top-style:solid;"></i>Close</span>
+      <span><i style="border-color:#3f7a5a;border-top-style:dashed;"></i>HV-10</span>
+      <span><i style="border-color:#b3592f;border-top-style:dashed;"></i>HV-20</span>
+    </div>
+    <div class="chart-wrap" id="chartWrap"></div>
+
+    <div class="table-scroll">
+      <table class="hv-table">
+        <thead>
+          <tr>
+            <th>Date</th><th>Close</th><th>Daily return</th><th>HV-10</th><th>HV-20</th>
+          </tr>
+        </thead>
+        <tbody id="hvTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const el = id => document.getElementById(id);
+
+const INSTRUMENTS = {
+  nifty:     { label: "NIFTY 50",       spot: 24800, vol: 0.125, seed: 1001 },
+  banknifty: { label: "BANK NIFTY",     spot: 51200, vol: 0.140, seed: 1002 },
+  sensex:    { label: "SENSEX",         spot: 81400, vol: 0.120, seed: 1003 },
+  reliance:  { label: "Reliance Industries", spot: 2950, vol: 0.220, seed: 1004 },
+  tcs:       { label: "TCS",            spot: 3850,  vol: 0.200, seed: 1005 },
+  hdfcbank:  { label: "HDFC Bank",      spot: 1680,  vol: 0.185, seed: 1006 },
+  infosys:   { label: "Infosys",        spot: 1550,  vol: 0.240, seed: 1007 }
+};
+
+let currentMode = 'eod';
+let series = [];   // [{date, close}], oldest -> newest
+
+// --- seeded PRNG (mulberry32) so EOD demo series is stable across reloads ---
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function randNormal(rng){
+  const u1 = Math.max(rng(), 1e-9), u2 = rng();
+  return Math.sqrt(-2*Math.log(u1)) * Math.cos(2*Math.PI*u2);
+}
+
+function lastTradingDay(from){
+  let d = new Date(from);
+  if(d.getDay() === 0) d.setDate(d.getDate()-2);
+  else if(d.getDay() === 6) d.setDate(d.getDate()-1);
+  return d;
+}
+function prevTradingDay(d){
+  const nd = new Date(d);
+  do{ nd.setDate(nd.getDate()-1); } while(nd.getDay()===0 || nd.getDay()===6);
+  return nd;
+}
+function fmtDate(d){ return d.toISOString().slice(0,10); }
+
+function generateEodSeries(key){
+  const inst = INSTRUMENTS[key];
+  const rng = mulberry32(inst.seed);
+  const N = 60;
+  const dailyVol = inst.vol / Math.sqrt(252);
+  const rets = [];
+  for(let i=0;i<N-1;i++) rets.push(dailyVol * randNormal(rng));
+  const sumRets = rets.reduce((a,b)=>a+b,0);
+  let price = inst.spot * Math.exp(-sumRets); // so the walk lands exactly on spot at the end
+  const dates = [];
+  let d = lastTradingDay(new Date());
+  for(let i=0;i<N;i++){ dates.unshift(new Date(d)); d = prevTradingDay(d); }
+  const out = [{date: fmtDate(dates[0]), close: +price.toFixed(2)}];
+  for(let i=0;i<rets.length;i++){
+    price = price * Math.exp(rets[i]);
+    out.push({date: fmtDate(dates[i+1]), close: +price.toFixed(2)});
+  }
+  return out;
+}
+
+// --- core HV math ---
+function computeReturns(seriesArr){
+  // returns[i] corresponds to seriesArr[i] (i>=1); returns[0] is undefined/unused
+  const returns = new Array(seriesArr.length).fill(null);
+  for(let i=1;i<seriesArr.length;i++){
+    returns[i] = Math.log(seriesArr[i].close / seriesArr[i-1].close);
+  }
+  return returns;
+}
+
+function rollingHv(returns, index, window){
+  // annualised HV (%) using the `window` most recent returns ending at `index` (inclusive)
+  if(index - window + 1 < 1) return null; // not enough data (need `window` returns, returns[0] unused)
+  const slice = returns.slice(index - window + 1, index + 1);
+  const mean = slice.reduce((a,b)=>a+b,0) / slice.length;
+  const variance = slice.reduce((a,b)=>a + (b-mean)*(b-mean), 0) / (slice.length - 1);
+  const stdev = Math.sqrt(variance);
+  return stdev * Math.sqrt(252) * 100;
+}
+
+function fmtPct(n){ return n === null ? '—' : n.toFixed(2) + '%'; }
+function fmtRet(n){ return n === null ? '—' : (n*100).toFixed(2) + '%'; }
+
+function renderAll(){
+  const errBox = el('dataError');
+  if(series.length < 21){
+    errBox.style.display = 'block';
+    errBox.textContent = `Need at least 21 daily closes to compute HV-20 (currently have ${series.length}). Load more data.`;
+  } else {
+    errBox.style.display = 'none';
+  }
+
+  const returns = computeReturns(series);
+  const hv10Series = series.map((_,i) => rollingHv(returns, i, 10));
+  const hv20Series = series.map((_,i) => rollingHv(returns, i, 20));
+
+  // populate "as of" date selector
+  const asOfSel = el('asOfDate');
+  const prevChoice = asOfSel.value;
+  asOfSel.innerHTML = '';
+  series.forEach((row, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = row.date;
+    asOfSel.appendChild(opt);
+  });
+  let asOfIndex = series.length - 1;
+  if(prevChoice !== '' && Number(prevChoice) < series.length) asOfIndex = Number(prevChoice);
+  asOfSel.value = asOfIndex;
+
+  const hv10 = hv10Series[asOfIndex];
+  const hv20 = hv20Series[asOfIndex];
+  el('hv10Val').textContent = fmtPct(hv10);
+  el('hv20Val').textContent = fmtPct(hv20);
+  el('hv10Meta').textContent = hv10 === null ? 'Need 11 closes ending on this date' : '10-day realised volatility, annualised, as of ' + series[asOfIndex].date;
+  el('hv20Meta').textContent = hv20 === null ? 'Need 21 closes ending on this date' : '20-day realised volatility, annualised, as of ' + series[asOfIndex].date;
+
+  renderTable(series, returns, hv10Series, hv20Series, asOfIndex);
+  renderChart(series, hv10Series, hv20Series, asOfIndex);
+}
+
+function renderTable(seriesArr, returns, hv10Series, hv20Series, asOfIndex){
+  const body = el('hvTableBody');
+  body.innerHTML = '';
+  for(let i = seriesArr.length - 1; i >= 0; i--){
+    const tr = document.createElement('tr');
+    if(i === asOfIndex) tr.className = 'as-of';
+    tr.innerHTML = `<td>${seriesArr[i].date}</td>
+      <td>₹${seriesArr[i].close.toLocaleString('en-IN')}</td>
+      <td>${fmtRet(returns[i])}</td>
+      <td>${fmtPct(hv10Series[i])}</td>
+      <td>${fmtPct(hv20Series[i])}</td>`;
+    body.appendChild(tr);
+  }
+}
+
+function renderChart(seriesArr, hv10Series, hv20Series, asOfIndex){
+  const W = 900, H = 260;
+  const padL = 46, padR = 46, padT = 10, padB = 24;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const n = seriesArr.length;
+
+  const closes = seriesArr.map(r => r.close);
+  const priceMin = Math.min(...closes), priceMax = Math.max(...closes);
+  const priceRange = (priceMax - priceMin) || 1;
+
+  const hvAll = [...hv10Series, ...hv20Series].filter(v => v !== null && v !== undefined);
+  const hvMin = hvAll.length ? Math.min(...hvAll) : 0;
+  const hvMax = hvAll.length ? Math.max(...hvAll) : 1;
+  const hvRange = (hvMax - hvMin) || 1;
+
+  const xAt = i => n <= 1 ? padL : padL + (i * plotW) / (n - 1);
+  const yPriceAt = v => padT + plotH - ((v - priceMin) / priceRange) * plotH;
+  const yHvAt = v => padT + plotH - ((v - hvMin) / hvRange) * plotH;
+
+  function pathFor(values, yFn){
+    let d = '';
+    let drawing = false;
+    for(let i=0;i<values.length;i++){
+      const v = values[i];
+      if(v === null || v === undefined){ drawing = false; continue; }
+      const cmd = drawing ? 'L' : 'M';
+      d += `${cmd}${xAt(i).toFixed(1)},${yFn(v).toFixed(1)} `;
+      drawing = true;
+    }
+    return d.trim();
+  }
+
+  const pricePath = pathFor(closes, yPriceAt);
+  const hv10Path = pathFor(hv10Series, yHvAt);
+  const hv20Path = pathFor(hv20Series, yHvAt);
+
+  // gridlines (3 horizontal) + price/hv axis labels
+  let gridSvg = '';
+  for(let g=0; g<=2; g++){
+    const frac = g/2;
+    const y = padT + plotH * frac;
+    const priceVal = priceMax - frac*(priceMax-priceMin);
+    const hvVal = hvMax - frac*(hvMax-hvMin);
+    gridSvg += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}" stroke="#edefe8" stroke-width="1"/>`;
+    gridSvg += `<text x="${padL-8}" y="${(y+3).toFixed(1)}" font-size="9.5" font-family="IBM Plex Mono, monospace" fill="#8b9285" text-anchor="end">${priceVal.toFixed(0)}</text>`;
+    gridSvg += `<text x="${W-padR+8}" y="${(y+3).toFixed(1)}" font-size="9.5" font-family="IBM Plex Mono, monospace" fill="#8b9285" text-anchor="start">${hvVal.toFixed(1)}%</text>`;
+  }
+
+  // x-axis: first, ~middle, last date labels
+  let xLabelsSvg = '';
+  const labelIdxs = n > 1 ? [0, Math.floor((n-1)/2), n-1] : [0];
+  labelIdxs.forEach(i => {
+    xLabelsSvg += `<text x="${xAt(i).toFixed(1)}" y="${H-6}" font-size="9.5" font-family="IBM Plex Mono, monospace" fill="#8b9285" text-anchor="middle">${seriesArr[i].date}</text>`;
+  });
+
+  // as-of marker: vertical line + dot on price line
+  let markerSvg = '';
+  if(asOfIndex !== null && asOfIndex !== undefined && asOfIndex >= 0 && asOfIndex < n){
+    const mx = xAt(asOfIndex);
+    markerSvg = `<line x1="${mx.toFixed(1)}" y1="${padT}" x2="${mx.toFixed(1)}" y2="${padT+plotH}" stroke="#8b9285" stroke-width="1" stroke-dasharray="3,3"/>
+      <circle cx="${mx.toFixed(1)}" cy="${yPriceAt(closes[asOfIndex]).toFixed(1)}" r="4" fill="#5f7d43" stroke="#fff" stroke-width="1.5"/>`;
+  }
+
+  const svg = `
+  <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+    ${gridSvg}
+    <path d="${pricePath}" fill="none" stroke="#5f7d43" stroke-width="2"/>
+    <path d="${hv10Path}" fill="none" stroke="#3f7a5a" stroke-width="1.5" stroke-dasharray="4,3"/>
+    <path d="${hv20Path}" fill="none" stroke="#b3592f" stroke-width="1.5" stroke-dasharray="2,2"/>
+    ${markerSvg}
+    ${xLabelsSvg}
+  </svg>`;
+
+  el('chartWrap').innerHTML = svg;
+}
+
+function loadInstrument(key){
+  series = generateEodSeries(key);
+  el('eodBadge').textContent = INSTRUMENTS[key].label + ' · 60 trading days of simulated EOD closes';
+  renderAll();
+}
+
+function setMode(mode){
+  currentMode = mode;
+  document.querySelectorAll('.source-tab').forEach(btn => {
+    const active = btn.dataset.mode === mode;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', String(active));
+  });
+  el('eodModeContent').style.display = mode === 'eod' ? 'flex' : 'none';
+  el('liveModeLock').style.display = mode === 'live' ? 'flex' : 'none';
+
+  if(mode === 'eod'){
+    loadInstrument(el('instrument').value);
+  }
+  // live: leave last-loaded series showing behind the lock, as a preview
+}
+
+document.querySelectorAll('.source-tab').forEach(btn => {
+  btn.addEventListener('click', () => setMode(btn.dataset.mode));
+});
+el('instrument').addEventListener('change', e => loadInstrument(e.target.value));
+el('asOfDate').addEventListener('change', renderAll);
+el('liveUpgradeBtn').addEventListener('click', () => {
+  el('liveUpgradeBtn').textContent = 'Request sent — our team will reach out';
+  el('liveUpgradeBtn').disabled = true;
+});
+
+loadInstrument('nifty');
+</script>
+</body>
+</html>

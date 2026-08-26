@@ -4,6 +4,7 @@ import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 
 import { ForgotPasswordDialogComponent } from '../components/forgot-password-dialog/forgot-password-dialog.component';
 import { AuthService } from '../../../core/services/auth.service';
+import { ToastService } from '../../../core/services/toast.service';
 
 @Component({
   selector: 'app-login',
@@ -16,6 +17,7 @@ import { AuthService } from '../../../core/services/auth.service';
 export class LoginComponent {
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly toast = inject(ToastService);
 
   readonly form = new FormGroup({
     email: new FormControl('', [Validators.required, Validators.email]),
@@ -56,6 +58,7 @@ export class LoginComponent {
       },
       error: () => {
         this.isSubmitting.set(false);
+        this.toast.error('Unable to sign in. Please check your credentials and try again.');
       }
     });
   }

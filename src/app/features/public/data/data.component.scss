@@ -10,6 +10,10 @@
   flex-direction: column;
 }
 
+.content {
+  padding: 28px 36px 60px;
+}
+
 .data__banner {
   padding: $space-20 $space-36;
   background: $color-accent-tint;

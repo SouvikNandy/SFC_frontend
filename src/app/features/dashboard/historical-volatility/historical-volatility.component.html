@@ -1,0 +1,118 @@
+<section class="historical-volatility-page">
+    <div class="head">
+
+        <p class="sub">HV-10 and HV-20 — annualized volatility from realised daily returns, with a rolling chart and
+            full return table.</p>
+    </div>
+
+    <div class="panel">
+        <p class="panel-title">Price data</p>
+        <p class="panel-hint">Choose where the historical closing prices come from.</p>
+
+        <div class="source-tabs" role="tablist" aria-label="Data source">
+            <button type="button" role="tab" [attr.aria-selected]="mode === 'eod'" [class.active]="mode === 'eod'"
+                (click)="selectMode('eod')">
+                <span aria-hidden="true">▤</span><span>EOD data <em>from BhavCopy</em></span>
+            </button>
+            <button type="button" role="tab" [attr.aria-selected]="mode === 'live'" [class.active]="mode === 'live'"
+                (click)="selectMode('live')">
+                <span aria-hidden="true">▣</span><span>Live data <em>Premium</em></span>
+            </button>
+        </div>
+
+        @if (mode === 'eod') {
+        <div class="price-data-row">
+            <div class="field-block instrument-field">
+                <label for="instrument">Instrument</label>
+                <select id="instrument" [value]="instrument" (change)="selectInstrument($event)">
+                    @for (option of instruments; track option.key) {
+                    <option [value]="option.key">{{ option.label }}{{ option.key === 'nifty' ? ' index' : option.key ===
+                        'banknifty' ? ' index' : '' }}</option>
+                    }
+                </select>
+            </div>
+            <div class="badge">{{ instrumentLabel }} · 60 trading days of simulated EOD closes</div>
+        </div>
+        } @else {
+        <div class="live-lock">
+            <div class="live-lock-icon" aria-hidden="true">▣</div>
+            <div class="live-lock-copy">
+                <p class="live-lock-title">Live historical data is a Premium feature</p>
+                <p class="live-lock-desc">Get a continuously updating series that includes today's live tick, instead of
+                    only yesterday's official close. Upgrade to enable this for your account.</p>
+            </div>
+            <button type="button" class="calc" [disabled]="liveUpgradeRequested" (click)="requestUpgrade()">
+                {{ liveUpgradeRequested ? 'Request sent — our team will reach out' : 'Upgrade to Premium' }}
+            </button>
+        </div>
+        }
+    </div>
+
+    <div class="panel">
+        <p class="panel-title">Date selection</p>
+        <p class="panel-hint">Pick the "as of" date — HV-10 and HV-20 are calculated using the 10 / 20 trading days
+            ending on this date.</p>
+        <div class="date-row">
+            <div class="field-block as-of-field">
+                <label for="asOfDate">As of date</label>
+                <select id="asOfDate" [value]="selectedIndex" (change)="selectDate($event)">
+                    @for (point of series; track point.date; let index = $index) {
+                    <option [value]="index">{{ point.date }}</option>
+                    }
+                </select>
+            </div>
+        </div>
+        @if (error) {
+        <p class="input-error" role="alert">{{ error }}</p>
+        }
+    </div>
+
+    <div class="panel results-panel">
+        <p class="panel-title">Results</p>
+        <p class="panel-hint results-hint">Annualized using √252 trading days.</p>
+
+        <div class="hv-cards">
+            <div class="hv-card hv10">
+                <div class="tag">HV-10</div>
+                <div class="val">{{ formatMetric(hv10Value) }}</div>
+                <div class="meta">{{ metricMeta(hv10Value, 10) }}</div>
+            </div>
+            <div class="hv-card hv20">
+                <div class="tag">HV-20</div>
+                <div class="val">{{ formatMetric(hv20Value) }}</div>
+                <div class="meta">{{ metricMeta(hv20Value, 20) }}</div>
+            </div>
+        </div>
+
+        <div class="chart-legend" aria-label="Chart legend">
+            <span><i class="legend-close"></i>Close</span>
+            <span><i class="legend-hv10"></i>HV-10</span>
+            <span><i class="legend-hv20"></i>HV-20</span>
+        </div>
+        <div class="chart-wrap">
+            <svg [attr.viewBox]="chart.viewBox" role="img" aria-label="Historical volatility rolling chart">
+                @for (line of chart.gridLines; track line.y) {
+                <line x1="46" [attr.y1]="line.y" x2="854" [attr.y2]="line.y" class="chart-grid"></line>
+                <text x="38" [attr.y]="line.y + 3" text-anchor="end" class="chart-axis">{{ line.priceLabel }}</text>
+                <text x="862" [attr.y]="line.y + 3" text-anchor="start" class="chart-axis">{{ line.volatilityLabel
+                    }}</text>
+                }
+                <path [attr.d]="chart.pricePath" class="chart-line chart-line-close"></path>
+                <path [attr.d]="chart.hv10Path" class="chart-line chart-line-hv10"></path>
+                <path [attr.d]="chart.hv20Path" class="chart-line chart-line-hv20"></path>
+                @if (chart.marker; as marker) {
+                <line [attr.x1]="marker.x" y1="10" [attr.x2]="marker.x" y2="236" class="chart-marker-line"></line>
+                <circle [attr.cx]="marker.x" [attr.cy]="marker.y" r="4" class="chart-marker-dot"></circle>
+                }
+                @for (label of chart.xLabels; track label.x) {
+                <text [attr.x]="label.x" y="254" text-anchor="middle" class="chart-axis">{{ label.label }}</text>
+                }
+            </svg>
+        </div>
+
+        <div class="table-scroll">
+            <app-data-table [columns]="columns" [data]="rows"
+                emptyMessage="No historical volatility data is available."></app-data-table>
+        </div>
+    </div>
+</section>

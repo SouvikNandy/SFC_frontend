@@ -3,6 +3,7 @@ import { AbstractControl, FormControl, FormGroup, ReactiveFormsModule, Validator
 import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { AuthService } from '../../../core/services/auth.service';
+import { ToastService } from '../../../core/services/toast.service';
 
 @Component({
   selector: 'app-verify-otp',
@@ -15,6 +16,7 @@ import { AuthService } from '../../../core/services/auth.service';
 export class VerifyOtpComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly authService = inject(AuthService);
+  private readonly toast = inject(ToastService);
 
   readonly registerEmail = this.route.snapshot.queryParamMap.get('email') ?? 'your email';
   readonly registeredPhone = this.route.snapshot.queryParamMap.get('phone') ?? 'your phone';
@@ -71,6 +73,7 @@ export class VerifyOtpComponent {
       error: () => {
         this.isSubmitting.set(false);
         this.otpError.set('Unable to verify the OTP. Please try again.');
+        this.toast.error('Unable to verify the OTP. Please try again.');
       }
     });
   }

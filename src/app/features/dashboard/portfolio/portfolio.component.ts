@@ -2,12 +2,14 @@ import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { PortfolioService } from './portfolio.service';
 import { Position } from './models/position.model';
+import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
+import { DataTableAction, DataTableActionEvent, DataTableColumn } from '../../../shared/components/data-table/data-table.types';
 
 @Component({
-    selector: 'app-portfolio',
-    standalone: true,
-    imports: [CommonModule],
-    template: `
+  selector: 'app-portfolio',
+  standalone: true,
+  imports: [CommonModule, DataTableComponent],
+  template: `
   <section class="sfc-page-pad portfolio-page">
     <div class="sfc-grid-4 portfolio-stats">
       <div class="stat-card total-pnl">
@@ -37,66 +39,61 @@ import { Position } from './models/position.model';
           <button class="btn-add" (click)="openAddTrade()">Add Trade</button>
         </div>
       </div>
-      <div class="sfc-table-wrap">
-        <table class="positions-table">
-          <thead>
-            <tr>
-              <th>Instrument</th>
-              <th class="align-right">Qty</th>
-              <th class="align-right">Avg price</th>
-              <th class="align-right">CMP</th>
-              <th class="align-right">P&amp;L</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let p of positions; let i = index">
-              <td>
-                <div class="inst-symbol">{{ p.sym }}</div>
-                <div class="inst-sub">{{ p.sub }}</div>
-              </td>
-              <td class="num align-right">{{ p.qty }}</td>
-              <td class="num align-right">₹{{ p.avg.toFixed(2) }}</td>
-              <td class="num align-right">₹{{ p.cmp.toFixed(2) }}</td>
-              <td class="num align-right" [class.pnl-positive]="(p.cmp - p.avg) * p.qty >= 0" [class.pnl-negative]="(p.cmp - p.avg) * p.qty < 0">{{ computePnl(p) }}</td>
-              <td class="align-right"><button class="btn-exit">Exit</button></td>
-            </tr>
-            <tr *ngIf="positions.length === 0">
-              <td colspan="6" class="muted">No open positions — add a trade to get started.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <app-data-table [columns]="positionColumns" [data]="positions" [loading]="isLoading"
+        [actions]="positionActions" emptyMessage="No open positions — add a trade to get started."
+        (actionClick)="onTableAction($event)"></app-data-table>
     </div>
   </section>
   `,
-    styleUrls: ['./portfolio.component.scss'],
-    changeDetection: ChangeDetectionStrategy.OnPush
+  styleUrls: ['./portfolio.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class PortfolioComponent {
-    private readonly svc = inject(PortfolioService);
-    positions: Position[] = [];
-    totalPnl = 0;
+  private readonly svc = inject(PortfolioService);
+  positions: Position[] = [];
+  totalPnl = 0;
+  isLoading = true;
+  readonly positionColumns: DataTableColumn<Position>[] = [
+    { key: 'sym', label: 'Instrument', secondaryFormatter: position => position.sub },
+    { key: 'qty', label: 'Qty', type: 'number', align: 'right' },
+    { key: 'avg', label: 'Avg price', type: 'currency', align: 'right' },
+    { key: 'cmp', label: 'CMP', type: 'currency', align: 'right' },
+    {
+      key: 'pnl',
+      label: 'P&L',
+      type: 'change',
+      align: 'right',
+      value: position => (position.cmp - position.avg) * position.qty,
+      formatter: (_value, position) => this.computePnl(position),
+    },
+  ];
+  readonly positionActions: DataTableAction<Position>[] = [{ id: 'exit', label: 'Exit' }];
 
-    constructor() {
-        this.svc.getPositions().subscribe(p => {
-            this.positions = p;
-            this.totalPnl = this.positions.reduce((s, pos) => s + (pos.cmp - pos.avg) * pos.qty, 0);
-        });
-    }
+  constructor() {
+    this.svc.getPositions().subscribe(p => {
+      this.positions = p;
+      this.isLoading = false;
+      this.totalPnl = this.positions.reduce((s, pos) => s + (pos.cmp - pos.avg) * pos.qty, 0);
+    });
+  }
 
-    get totalPnlStr(): string {
-        const v = Math.round(this.totalPnl);
-        return (v >= 0 ? '+' : '−') + '₹' + Math.abs(v).toLocaleString('en-IN');
-    }
+  get totalPnlStr(): string {
+    const v = Math.round(this.totalPnl);
+    return (v >= 0 ? '+' : '−') + '₹' + Math.abs(v).toLocaleString('en-IN');
+  }
 
-    computePnl(p: Position): string {
-        const pnl = Math.round((p.cmp - p.avg) * p.qty);
-        const sign = pnl >= 0 ? '+' : '−';
-        return `${sign}₹${Math.abs(pnl).toLocaleString('en-IN')}`;
-    }
+  computePnl(p: Position): string {
+    const pnl = Math.round((p.cmp - p.avg) * p.qty);
+    const sign = pnl >= 0 ? '+' : '−';
+    return `${sign}₹${Math.abs(pnl).toLocaleString('en-IN')}`;
+  }
 
-    openAddTrade(): void {
-        // placeholder for add-trade modal (UI-only migration)
+  openAddTrade(): void {
+    // placeholder for add-trade modal (UI-only migration)
+  }
+
+  onTableAction(event: DataTableActionEvent<Position>): void {
+    if (event.action.id === 'exit') {
     }
+  }
 }

@@ -1,1 +1,26 @@
 /* You can add global styles to this file, and also import other style files */
+select,
+input[type="date"] {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border: 1.5px solid var(--input-border);
+    border-radius: 8px;
+    font-size: 14px;
+    color: var(--ink);
+    background: var(--panel);
+    font-family: var(--font-mono);
+    width: auto;
+}
+
+.body {
+    font-family: var(--font-body);
+
+}
+
+p.sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin: -6px 0 22px;
+    max-width: 640px;
+}

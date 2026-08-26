@@ -1,0 +1,121 @@
+<section class="sfc-page-pad eod-page">
+    <div class="head">
+        <p class="sub">5-year historical NSE F&O database, searchable by symbol, instrument, strike, expiry and date
+            range.</p>
+    </div>
+
+    <div class="card controls">
+        <div class="controls-row">
+            <div class="control">
+                <div class="label">Symbol</div>
+                <div class="seg">
+                    <button *ngFor="let s of symbols" (click)="onSymbol(s)" [class.active]="symbol===s">{{ s }}</button>
+                </div>
+            </div>
+            <div class="control">
+                <div class="label">Instrument</div>
+                <div class="seg">
+                    <button (click)="onInstrument('FUT')" [class.active]="instrument==='FUT'">Futures</button>
+                    <button (click)="onInstrument('CE')" [class.active]="instrument==='CE'">Call</button>
+                    <button (click)="onInstrument('PE')" [class.active]="instrument==='PE'">Put</button>
+                </div>
+            </div>
+
+            <div class="control" *ngIf="instrument!=='FUT'">
+                <div class="label">Strike</div>
+                <select (change)="onStrikeChange($event)" [disabled]="isMetadataLoading">
+                    <option *ngFor="let r of strikeOptions" [value]="r" [selected]="strike===r">{{ r }}</option>
+                </select>
+            </div>
+
+            <div class="control" *ngIf="instrument!=='FUT'">
+                <div class="label">Expiry</div>
+                <select (change)="onExpiryChange($event)" [disabled]="isMetadataLoading">
+                    <option *ngFor="let e of expiryOptions" [value]="e" [selected]="expiry===e">{{ e | date:'dd MMM
+                        yyyy' }}</option>
+                </select>
+            </div>
+
+            <div class="control">
+                <div class="label">Date range</div>
+                <div class="seg">
+                    <button *ngFor="let r of ranges" (click)="onRange(r)" [class.active]="range===r">{{ r }}</button>
+                </div>
+            </div>
+
+            <div class="control" *ngIf="range==='Custom'">
+                <div class="label">Date range</div>
+
+                <div class="date-range-picker">
+                    <input class="date-range-input" type="text" [value]="customRangeLabel" readonly
+                        aria-label="Custom date range" [attr.aria-expanded]="dateRangeOpen" (click)="toggleDateRange()">
+                    <div class="date-range-popover" *ngIf="dateRangeOpen">
+                        <label>
+                            <span>Start date</span>
+                            <input type="date" [max]="todayStr" [value]="customFrom"
+                                (change)="onCustomFromChange($event)">
+                        </label>
+                        <label>
+                            <span>End date</span>
+                            <input type="date" [max]="todayStr" [value]="customTill"
+                                (change)="onCustomTillChange($event)">
+                        </label>
+                        <button type="button" class="date-range-done" (click)="applyCustomDateRange()">Done</button>
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn-export" (click)="downloadCsv()">Download CSV</button>
+        </div>
+    </div>
+
+
+    <div class="card chart-card">
+        <div class="chart-head">
+            <div class="title">{{ symbol }} {{ instrument!=='FUT' ? (strike ? ' ' + strike + ' ' + instrument : '') : '
+                Futures' }} — {{ range }}</div>
+            <div class="legend">Price (₹)</div>
+        </div>
+
+        <div class="chart" *ngIf="chart; else emptyChart">
+            <svg [attr.viewBox]="chart.viewBox" preserveAspectRatio="xMidYMid meet" width="100%"
+                [attr.height]="chart.height">
+                <g *ngFor="let t of chart.yTicks">
+                    <line [attr.x1]="58" [attr.x2]="(chart.width || 0) - 12" [attr.y1]="t.y" [attr.y2]="t.y"
+                        stroke="var(--border)" stroke-width="1"></line>
+                    <text [attr.x]="chart.yAxisLabelX" [attr.y]="t.y + 4" text-anchor="end" class="legend">{{ t.price |
+                        number:'1.0-0'
+                        }}</text>
+                </g>
+                <path [attr.d]="chart.path" fill="none" stroke="var(--accent)" stroke-width="2.5"></path>
+                <g *ngFor="let xt of chart.xTicks">
+                    <text [attr.x]="xt.x" [attr.y]="(chart.height || 0) - 8" text-anchor="middle" class="legend">{{
+                        xt.label
+                        }}</text>
+                </g>
+            </svg>
+        </div>
+        <ng-template #emptyChart>
+            <div class="empty">No EOD data is available for the selected filters.</div>
+        </ng-template>
+    </div>
+
+    <div class="card table-card">
+        <div class="table-note">
+            <span>Showing {{ rows.length }} sessions — latest first</span>
+            <div class="pagination-controls" aria-label="EOD pagination">
+                <label>Rows
+                    <select [value]="currentPageSize" (change)="onPageSizeChange($event)" [disabled]="loading">
+                        <option *ngFor="let size of pageSizes" [value]="size">{{ size }}</option>
+                    </select>
+                </label>
+                <span>Page {{ currentPage }}</span>
+                <button type="button" (click)="goToPreviousPage()"
+                    [disabled]="!hasPreviousPage || loading">Previous</button>
+                <button type="button" (click)="goToNextPage()" [disabled]="!hasNextPage || loading">Next</button>
+            </div>
+        </div>
+        <app-data-table [columns]="displayColumns" [data]="displayRows" [loading]="loading"
+            emptyMessage="No EOD data is available for the selected filters."></app-data-table>
+    </div>
+</section>

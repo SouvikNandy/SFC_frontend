@@ -1,1 +1,9 @@
 <main class="app-shell"><router-outlet /></main>
+
+@if (httpLoading.isLoading()) {
+<div class="app-loading-overlay" role="status" aria-live="polite" aria-label="Loading">
+    <app-loader label="Loading" />
+</div>
+}
+
+<app-toast />

@@ -6,7 +6,7 @@ import { AuthUser, AuthTokenData } from '../models/auth.model';
   providedIn: 'root'
 })
 export class StorageService {
-  readonly accessTokenKey = 'auth-access-token';
+  readonly accessTokenKey = '3a9ffb54-c4f1-4a54-9433-3678e9d36342';
   readonly refreshTokenKey = 'auth-refresh-token';
   readonly userKey = 'auth-user';
 

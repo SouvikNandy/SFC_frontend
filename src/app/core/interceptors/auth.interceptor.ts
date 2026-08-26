@@ -1,14 +1,18 @@
 import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { catchError, switchMap, throwError } from 'rxjs';
+import { catchError, finalize, switchMap, throwError } from 'rxjs';
 
 import { AuthService } from '../services/auth.service';
+import { HttpLoadingService } from '../services/http-loading.service';
 import { StorageService } from '../services/storage.service';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const storageService = inject(StorageService);
   const authService = inject(AuthService);
+  const httpLoadingService = inject(HttpLoadingService);
   const token = storageService.getAccessToken();
+
+  httpLoadingService.show();
 
   const authReq = req.clone({
     setHeaders: {
@@ -42,6 +46,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         }),
         catchError(() => throwError(() => error))
       );
-    })
+    }),
+    finalize(() => httpLoadingService.hide())
   );
 };
