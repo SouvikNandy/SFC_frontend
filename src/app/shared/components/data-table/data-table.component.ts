@@ -58,7 +58,7 @@ export class DataTableComponent<T extends object> {
     }
 
     alignClass(column: DataTableColumn<T>): DataTableAlign {
-        return column.align ?? (column.type === 'number' || column.type === 'currency' || column.type === 'percentage' || column.type === 'change' ? 'right' : 'left');
+        return column.align ?? (column.type === 'number' || column.type === 'currency' || column.type === 'percentage' || column.type === 'change' ? 'left' : 'left');
     }
 
     changeClass(value: unknown): string {
@@ -102,7 +102,6 @@ export class DataTableComponent<T extends object> {
     trackColumn(_index: number, column: DataTableColumn<T>): string {
         return String(column.key);
     }
-
     rowClass(row: T): string {
         return this.columns().find(column => column.rowClass)?.rowClass?.(row) ?? '';
     }

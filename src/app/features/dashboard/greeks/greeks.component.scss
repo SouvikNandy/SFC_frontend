@@ -53,7 +53,8 @@ h1 {
 .field-block {
     display: flex;
     flex-direction: column;
-    gap: 6px
+    gap: 6px;
+    position: relative;
 }
 
 .field-block label {
@@ -362,7 +363,7 @@ button.calc.secondary:hover {
 }
 
 .iv-result {
-    margin-top: 14px;
+    margin-top: 20px;
     background: var(--teal-tint);
     border: 1px solid #d7e3cb;
     border-radius: var(--radius);
@@ -382,8 +383,10 @@ button.calc.secondary:hover {
 
 .iv-source-hint {
     font-size: 11px;
-    color: var(--ink-faint);
-    font-family: IBM Plex Mono, monospace
+    color: #8b9285;
+    font-family: IBM Plex Mono, monospacel;
+    position: absolute;
+    top: 100%;
 }
 
 .src-toggle {

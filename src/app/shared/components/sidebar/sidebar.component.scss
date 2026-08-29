@@ -144,6 +144,7 @@
 
     .sfc-sidebar.open {
         transform: translateX(0);
-        box-shadow: 20px 0 40px rgba(18, 20, 26, 0.18)
+        box-shadow: 20px 0 40px rgba(18, 20, 26, 0.18);
+        overflow: auto
     }
 }
