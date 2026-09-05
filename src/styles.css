@@ -22,5 +22,6 @@ p.sub {
     font-size: 13px;
     color: var(--muted);
     margin: -6px 0 22px;
-    max-width: 640px;
+    font-weight: 500;
+    font-family: var(--font-body);
 }

@@ -14,11 +14,7 @@ h1 {
     letter-spacing: -.01em
 }
 
-.sub {
-    color: var(--ink-soft);
-    font-size: 14.5px;
-    margin: 0
-}
+
 
 .panel {
     background: var(--color-panel);
@@ -66,7 +62,8 @@ h1 {
 }
 
 select,
-input[type=number] {
+input[type=number],
+input[type='text'] {
     font-family: IBM Plex Mono, monospace;
     font-size: 14.5px;
     background: var(--color-panel);
@@ -163,11 +160,6 @@ input:focus {
 
 .source-tab.active em {
     color: rgba(255, 255, 255, .75)
-}
-
-.source-tab[data-mode="live"].active {
-    background: var(--teal-dark);
-    border-color: var(--teal-dark)
 }
 
 .mode-note {

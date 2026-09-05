@@ -1,8 +1,9 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { AbstractControl, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { AuthService } from '../../../core/services/auth.service';
+import { ToastService } from '../../../core/services/toast.service';
 
 @Component({
   selector: 'app-reset-password',
@@ -12,12 +13,13 @@ import { AuthService } from '../../../core/services/auth.service';
   styleUrls: ['./reset-password.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class ResetPasswordComponent {
+export class ResetPasswordComponent implements OnInit {
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly toast = inject(ToastService);
 
-  readonly token = this.route.snapshot.queryParamMap.get('token') ?? 'demo-token';
+  readonly token = this.route.snapshot.queryParamMap.get('token') ?? '';
 
   readonly form = new FormGroup({
     password: new FormControl('', [Validators.required, Validators.minLength(8), Validators.maxLength(32)]),
@@ -28,6 +30,10 @@ export class ResetPasswordComponent {
   readonly showPassword = signal(false);
   readonly showConfirmPassword = signal(false);
   readonly isSuccess = signal(false);
+
+  ngOnInit(): void {
+    if (!this.token) void this.router.navigateByUrl('/invalid-reset-link');
+  }
 
   get passwordControl(): AbstractControl {
     return this.form.controls.password;
@@ -55,7 +61,7 @@ export class ResetPasswordComponent {
 
     this.isSubmitting.set(true);
 
-    this.authService.resetPassword({ token: this.token, password: passwordValue }).subscribe({
+    this.authService.resetPassword({ token: this.token, new_password: passwordValue }).subscribe({
       next: () => {
         this.isSubmitting.set(false);
         this.isSuccess.set(true);
@@ -65,6 +71,7 @@ export class ResetPasswordComponent {
       },
       error: () => {
         this.isSubmitting.set(false);
+        this.toast.error('Unable to reset your password. Please request a new reset link and try again.');
       }
     });
   }

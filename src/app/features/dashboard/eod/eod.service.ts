@@ -12,6 +12,6 @@ export class EodService {
     }
 
     getDdGreeks(request: DdGreeksRequest): Observable<DdGreeksResponse> {
-        return this.api.post<DdGreeksResponse, DdGreeksRequest>('/fo/dd_greeks', request);
+        return this.api.post<DdGreeksResponse, DdGreeksRequest>('/fo/dd_symbol_details', request);
     }
 }

@@ -1,7 +1,10 @@
-import { ChangeDetectionStrategy, Component, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
-import { GreeksCalculatorService, PRESETS, GreeksInput } from './greeks-calculator.service';
+import { EMPTY, Subject, catchError, finalize, switchMap, takeUntil, tap } from 'rxjs';
+import { GreeksCalculatorService, GreeksInput } from './greeks-calculator.service';
+import { GreeksSymbolDetails } from './greeks.model';
+import { ToastService } from '../../../core/services/toast.service';
 
 @Component({
     selector: 'app-greeks',
@@ -11,25 +14,33 @@ import { GreeksCalculatorService, PRESETS, GreeksInput } from './greeks-calculat
     styleUrls: ['./greeks.component.scss'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class GreeksComponent implements OnInit {
-    form: any;
+export class GreeksComponent implements OnInit, OnDestroy {
+    form: ReturnType<FormBuilder['group']>;
 
-    presets = PRESETS;
-    spotOptions: Array<{ key: string, label: string }> = [];
     strikeOptions: number[] = [];
-    results: any = {};
+    results: Partial<ReturnType<GreeksCalculatorService['calculateAll']> & { markerLeft: number; moneynessText: string }> = {};
     inputError = '';
     ivResultText = '';
     ivResultVisible = false;
     badgeText = '';
-    private suppressStrikeSync = false;
-    private suppressSpotSync = false;
+    symbols: string[] = [];
+    filteredSymbols: string[] = [];
+    symbolsLoading = true;
+    symbolDetailsLoading = false;
+    suggestionsOpen = false;
+    highlightedSymbolIndex = -1;
+    historicalVolatility20: number | null = null;
+    symbolDetails: GreeksSymbolDetails | null = null;
+    private readonly symbolSelection$ = new Subject<string>();
+    private readonly destroy$ = new Subject<void>();
+    private lastSolvedIv: number | null = null;
 
-    constructor(private fb: FormBuilder, public svc: GreeksCalculatorService) {
+    constructor(private fb: FormBuilder, public svc: GreeksCalculatorService, private readonly toast: ToastService, private readonly changeDetector: ChangeDetectorRef) {
         this.form = this.fb.group({
             sourceMode: ['eod'],
-            presetKey: ['nifty'],
-            spotKey: ['nifty'],
+            symbol: ['', Validators.required],
+            presetKey: [''],
+            spotKey: [''],
             spot: [24800, [Validators.required, Validators.min(0.0001)]],
             strikeKey: ['24800'],
             strike: [24800, [Validators.required, Validators.min(0.0001)]],
@@ -43,24 +54,21 @@ export class GreeksComponent implements OnInit {
         });
     }
 
-    get presetKeys(): string[] { return Object.keys(this.presets); }
-    presetLabel(key?: string | null) { return key && this.presets[key] ? this.presets[key]!.label : null; }
-
     ngOnInit() {
-        this.populateSpotOptions();
-        this.applyPreset(String(this.form.value.presetKey || 'nifty'));
+        this.loadSymbols();
+        this.setupSymbolDetailsLoading();
         // subscribe individually to replicate prototype 'input' behaviour and sync logic
-        const spotCtrl = this.form.get('spot');
-        const strikeCtrl = this.form.get('strike');
-        const rateCtrl = this.form.get('rate');
-        const volCtrl = this.form.get('vol');
-        const expiryCtrl = this.form.get('expiry');
-        const dividendCtrl = this.form.get('dividend');
+        const spotCtrl = this.form.get('spot')!;
+        const strikeCtrl = this.form.get('strike')!;
+        const rateCtrl = this.form.get('rate')!;
+        const volCtrl = this.form.get('vol')!;
+        const expiryCtrl = this.form.get('expiry')!;
+        const dividendCtrl = this.form.get('dividend')!;
 
         const manualChange = () => {
             this.form.patchValue({ presetKey: 'custom' }, { emitEvent: false });
             this.badgeText = 'Manual entry — edit any field below';
-            this.calculate(false);
+            this.calculate();
             this.autofillIvPrice();
         };
 
@@ -68,36 +76,30 @@ export class GreeksComponent implements OnInit {
             // emulate prototype: mark preset custom, update strike select chain and spotSelect if matching
             this.form.patchValue({ presetKey: 'custom' }, { emitEvent: false });
             this.badgeText = 'Manual entry — edit any field below';
-            if (!this.suppressStrikeSync) {
-                const spot = Number(val) || 0;
-                this.populateStrikeOptions(spot, this.niceStep(spot), Number(this.form.value.strike));
-                if (!this.suppressSpotSync) {
-                    const match = Object.keys(this.presets).find(k => k !== 'custom' && this.presets[k]!.spot === spot);
-                    this.form.patchValue({ spotKey: match || 'custom' }, { emitEvent: false });
-                }
-            }
-            this.calculate(false);
+            const spot = Number(val) || 0;
+            this.populateStrikeOptions(spot, this.niceStep(spot), Number(this.form.value.strike));
+            this.form.patchValue({ spotKey: 'custom' }, { emitEvent: false });
+            this.calculate();
             this.autofillIvPrice();
         });
 
         strikeCtrl.valueChanges.subscribe((val: number) => {
             this.form.patchValue({ presetKey: 'custom' }, { emitEvent: false });
             this.badgeText = 'Manual entry — edit any field below';
-            if (!this.suppressStrikeSync) {
-                const opts = this.strikeOptions.map(s => String(s));
-                const v = String(val);
-                this.form.patchValue({ strikeKey: opts.includes(v) ? v : 'custom' }, { emitEvent: false });
-            }
-            this.calculate(false);
+            const opts = this.strikeOptions.map(s => String(s));
+            const v = String(val);
+            this.form.patchValue({ strikeKey: opts.includes(v) ? v : 'custom' }, { emitEvent: false });
+            this.calculate();
             this.autofillIvPrice();
         });
 
         [rateCtrl, volCtrl, expiryCtrl, dividendCtrl].forEach(ctrl => ctrl.valueChanges.subscribe(() => manualChange()));
     }
 
-    populateSpotOptions() {
-        this.spotOptions = Object.keys(this.presets).filter(k => k !== 'custom').map(k => ({ key: k, label: this.presets[k]!.label.split(' · ')[0] + ' — ₹' + this.presets[k]!.spot.toLocaleString('en-IN') }));
-        this.spotOptions.push({ key: 'custom', label: 'Custom price…' });
+    ngOnDestroy(): void {
+        this.destroy$.next();
+        this.destroy$.complete();
+        this.symbolSelection$.complete();
     }
 
     niceStep(spot: number) {
@@ -125,28 +127,14 @@ export class GreeksComponent implements OnInit {
         this.badgeText = '';
         if (mode === 'custom') {
             this.form.patchValue({ presetKey: 'custom' });
-            this.applyPreset('custom');
             // enable inputs for manual mode
             ['spot', 'strike', 'rate', 'vol', 'expiry', 'dividend', 'ivType'].forEach((c: string) => this.form.get(c)?.enable());
         } else if (mode === 'eod') {
-            const key = this.form.value.presetKey || 'nifty';
-            this.applyPreset(key);
             ['spot', 'strike', 'rate', 'vol', 'expiry', 'dividend', 'ivType'].forEach((c: string) => this.form.get(c)?.enable());
         } else if (mode === 'live') {
             // disable inputs in live lock
             ['spot', 'strike', 'rate', 'vol', 'expiry', 'dividend', 'ivType'].forEach((c: string) => this.form.get(c)?.disable());
         }
-    }
-
-    applyPreset(key: string) {
-        const p = this.presets[key];
-        if (!p) {
-            // manual
-            this.populateStrikeOptions(this.form.value.spot, this.niceStep(this.form.value.spot));
-            return;
-        }
-        this.form.patchValue({ spot: p.spot, strike: p.strike, rate: p.rate, vol: p.vol, expiry: p.expiry, dividend: p.dividend, presetKey: key, spotKey: key });
-        this.populateStrikeOptions(p.spot, p.step);
     }
 
     autofillIvPrice() {
@@ -166,7 +154,7 @@ export class GreeksComponent implements OnInit {
         this.form.patchValue({ ivPrice: parseFloat(price.toFixed(2)) });
     }
 
-    calculate(userTriggered = true) {
+    calculate() {
         const inVal: GreeksInput = {
             spot: Number(this.form.value.spot),
             strike: Number(this.form.value.strike),
@@ -189,8 +177,7 @@ export class GreeksComponent implements OnInit {
         const ratio = inVal.spot / inVal.strike;
         const pct = Math.max(4, Math.min(96, this.svc.normCdf(r.d2) * 100));
         // store for template
-        (this.results as any).markerLeft = pct;
-        (this.results as any).moneynessText = this.svc.fmt(this.svc.normCdf(r.d2) * 100, 1) + '% ITM probability' + ((ratio <= 1.003 && ratio >= 0.997) ? ' (ATM)' : '');
+        this.results = { ...r, markerLeft: pct, moneynessText: this.svc.fmt(this.svc.normCdf(r.d2) * 100, 1) + '% ITM probability' + ((ratio <= 1.003 && ratio >= 0.997) ? ' (ATM)' : '') };
     }
 
     solveIv() {
@@ -210,36 +197,131 @@ export class GreeksComponent implements OnInit {
         const iv = this.svc.impliedVolatility(type, marketPrice, S, K, r, q, T);
         this.ivResultText = 'Implied volatility ≈ ' + (iv * 100).toFixed(2) + '%';
         this.ivResultVisible = true;
-        (this.ivResultText as any);
-        // store iv for apply
-        (this as any)._lastSolvedIv = iv * 100;
+        this.lastSolvedIv = iv * 100;
     }
 
     applyIv() {
-        if (!(this as any)._lastSolvedIv) return;
-        this.form.patchValue({ vol: (this as any)._lastSolvedIv });
+        if (!this.lastSolvedIv) return;
+        this.form.patchValue({ vol: this.lastSolvedIv });
         this.form.patchValue({ presetKey: 'custom' });
-        this.calculate();
         this.ivResultVisible = false;
     }
 
     onSourceTabClick(mode: string) { this.setMode(mode); }
-    onPresetChange(key: string) { this.applyPreset(key); }
-    onSpotSelect(key: string) {
-        if (key === 'custom') return;
-        const p = this.presets[key];
-        if (p) {
-            // prototype behaviour: underlying price from preset but other fields left as-is
-            this.suppressSpotSync = true;
-            this.form.patchValue({ spot: p.spot, spotKey: key }, { emitEvent: true });
-            this.suppressSpotSync = false;
-            this.populateStrikeOptions(p.spot, p.step, Number(this.form.value.strike));
-            this.form.patchValue({ presetKey: 'custom' }, { emitEvent: false });
-            this.badgeText = 'Underlying price from ' + p.label.split(' · ')[0] + ' — other fields left as-is';
+    onSymbolInput(): void {
+        const query = String(this.form.value.symbol ?? '').trim().toLowerCase();
+        this.filteredSymbols = query ? this.symbols.filter(symbol => symbol.toLowerCase().includes(query)) : this.symbols;
+        this.suggestionsOpen = true;
+        this.highlightedSymbolIndex = -1;
+        this.form.get('presetKey')?.setValue('', { emitEvent: false });
+        this.form.get('symbol')?.setErrors(this.symbols.includes(String(this.form.value.symbol)) ? null : { invalidSymbol: true });
+    }
+
+    selectSymbol(symbol: string): void {
+        this.form.patchValue({ symbol, presetKey: symbol, spotKey: symbol }, { emitEvent: false });
+        this.form.get('symbol')?.setErrors(null);
+        this.filteredSymbols = [];
+        this.suggestionsOpen = false;
+        this.highlightedSymbolIndex = -1;
+        this.symbolSelection$.next(symbol);
+    }
+
+    onSymbolKeydown(event: KeyboardEvent): void {
+        if (!this.suggestionsOpen || !this.filteredSymbols.length) {
+            if (event.key === 'ArrowDown') this.onSymbolInput();
+            return;
         }
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            this.highlightedSymbolIndex = (this.highlightedSymbolIndex + 1) % this.filteredSymbols.length;
+        } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            this.highlightedSymbolIndex = this.highlightedSymbolIndex <= 0 ? this.filteredSymbols.length - 1 : this.highlightedSymbolIndex - 1;
+        } else if (event.key === 'Enter' && this.highlightedSymbolIndex >= 0) {
+            event.preventDefault();
+            this.selectSymbol(this.filteredSymbols[this.highlightedSymbolIndex]);
+        } else if (event.key === 'Escape') {
+            this.suggestionsOpen = false;
+        }
+    }
+
+    onSymbolBlur(): void {
+        window.setTimeout(() => {
+            this.suggestionsOpen = false;
+            this.changeDetector.markForCheck();
+        }, 150);
+    }
+
+    private loadSymbols(): void {
+        this.svc.getSymbols().pipe(
+            takeUntil(this.destroy$),
+            catchError(() => {
+                this.toast.error('Unable to load symbols. Please refresh and try again.');
+                return EMPTY;
+            }),
+            finalize(() => {
+                this.symbolsLoading = false;
+                this.changeDetector.markForCheck();
+            })
+        ).subscribe(symbols => {
+            this.symbols = symbols;
+            this.filteredSymbols = symbols;
+        });
+    }
+
+    private setupSymbolDetailsLoading(): void {
+        this.symbolSelection$.pipe(
+            takeUntil(this.destroy$),
+            tap(() => {
+                this.symbolDetailsLoading = true;
+                this.inputError = '';
+                this.symbolDetails = null;
+                this.historicalVolatility20 = null;
+            }),
+            switchMap(symbol => this.svc.getSymbolDetails({ symbol }).pipe(
+                tap(details => {
+                    this.symbolDetailsLoading = false;
+                    this.applySymbolDetails(details);
+                }),
+                catchError(() => {
+                    this.symbolDetailsLoading = false;
+                    this.toast.error('Unable to load symbol details. Please try again.');
+                    return EMPTY;
+                })
+            ))
+        ).subscribe(() => this.changeDetector.markForCheck());
+    }
+
+    private applySymbolDetails(details: GreeksSymbolDetails): void {
+        this.symbolDetails = details;
+        this.historicalVolatility20 = details.hv20?.hv20 ?? null;
+        const selectedStrike = details.strike.includes(details.atm_strike) ? details.atm_strike : Number(this.form.value.strike);
+        const expiryDays = this.daysBetween(details.trade_date, details.expiry_date);
+        this.strikeOptions = details.strike;
+        this.form.patchValue({
+            sourceMode: 'eod',
+            spot: details.underlying,
+            strike: details.strike.includes(selectedStrike) ? selectedStrike : details.atm_strike,
+            expiry: expiryDays,
+            vol: details.hv20?.hv20 ?? this.form.value.vol,
+            strikeKey: String(details.strike.includes(selectedStrike) ? selectedStrike : details.atm_strike),
+            ivPrice: this.form.value.ivType === 'put' ? details.market_price?.PE ?? null : details.market_price?.CE ?? null,
+        }, { emitEvent: false });
+        this.badgeText = `${details.symbol} · ${details.trade_date} market metadata`;
+        this.calculate();
+    }
+
+    private daysBetween(from: string, to: string): number {
+        const fromTime = this.parseApiDate(from);
+        const toTime = this.parseApiDate(to);
+        return Math.max(1, Math.round((toTime - fromTime) / 86400000));
+    }
+
+    private parseApiDate(value: string): number {
+        const [year, month, day] = value.split('-').map(Number);
+        return Date.UTC(year, month - 1, day);
     }
     onStrikeSelectChange(val: string) { if (val === 'custom') return; this.form.patchValue({ strike: Number(val) }); }
     onIvSrcClick(src: string) { this.form.patchValue({ ivSource: src }); this.autofillIvPrice(); }
-    onCalcClick() { this.calculate(true); }
     onLiveUpgrade() { /* stub - no backend */ this.inputError = 'Upgrade request sent'; }
 }

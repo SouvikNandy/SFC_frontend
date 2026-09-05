@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Probability Calculator</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css">
+<style>
+  :root{
+    --ink:#1c231b; --ink-soft:#5b6459; --ink-faint:#8b9285;
+    --line:#e2e4dc; --line-soft:#edefe8; --paper:#ffffff; --field:#fbfbf8;
+    --moss:#5f7d43; --moss-dark:#425b2c; --moss-tint:#eef3e6;
+    --call:#3f7a5a; --call-tint:#e7f3ec; --put:#b3592f; --put-tint:#faece3;
+    --radius:10px; --radius-lg:16px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:#f4f5f0;font-family:'Inter',-apple-system,sans-serif;color:var(--ink);padding:32px 20px 64px;}
+  .wrap{max-width:980px;margin:0 auto;}
+  .head{margin-bottom:28px;}
+  h1{font-family:'Sora',sans-serif;font-size:28px;font-weight:700;margin:0 0 4px;letter-spacing:-.01em;}
+  .sub{color:var(--ink-soft);font-size:14.5px;margin:0;}
+  .panel{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius-lg);padding:26px 28px 28px;margin-bottom:20px;}
+  .panel-title{font-family:'Sora',sans-serif;font-size:15px;font-weight:600;margin:0 0 3px;}
+  .panel-hint{font-size:13px;color:var(--ink-faint);margin:0 0 20px;}
+
+  .source-tabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;}
+  .source-tab{display:flex;align-items:center;gap:7px;font-family:'Inter',sans-serif;font-size:13px;font-weight:500;color:var(--ink-soft);background:var(--field);border:1px solid var(--line);border-radius:999px;padding:8px 14px;cursor:pointer;transition:background .15s,border-color .15s,color .15s;}
+  .source-tab i{font-size:15px;}
+  .source-tab em{font-style:normal;font-size:11px;color:var(--ink-faint);margin-left:2px;}
+  .source-tab:hover{border-color:var(--moss);}
+  .source-tab.active{background:var(--moss);border-color:var(--moss);color:#fff;}
+  .source-tab.active em{color:rgba(255,255,255,.75);}
+  .source-tab[data-mode="live"].active{background:var(--moss-dark);border-color:var(--moss-dark);}
+
+  .field-block{display:flex;flex-direction:column;gap:6px;}
+  .field-block label{font-size:12px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;}
+  select, input[type=number]{font-family:'IBM Plex Mono',monospace;font-size:14.5px;background:var(--field);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;color:var(--ink);outline:none;width:100%;transition:border-color .15s,box-shadow .15s;}
+  select{font-family:'Inter',sans-serif;font-weight:500;cursor:pointer;}
+  select:focus, input:focus{border-color:var(--moss);box-shadow:0 0 0 3px var(--moss-tint);}
+  .field-invalid{border-color:var(--put) !important;box-shadow:0 0 0 3px var(--put-tint) !important;}
+  .unit-wrap{position:relative;}
+  .unit-wrap input{padding-right:38px;}
+  .unit{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:12.5px;color:var(--ink-faint);pointer-events:none;}
+
+  .preset-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:22px;padding-bottom:22px;border-bottom:1px dashed var(--line);}
+  .preset-field{min-width:230px;flex:1;}
+  .badge{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--moss-dark);background:var(--moss-tint);border-radius:6px;padding:9px 10px;display:flex;align-items:center;}
+
+  .mode-note{font-size:13.5px;color:var(--ink-soft);background:var(--field);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;margin-bottom:20px;}
+  .live-lock{display:flex;align-items:center;gap:16px;background:var(--moss-tint);border:1px solid #d7e3cb;border-radius:var(--radius-lg);padding:18px 20px;margin-bottom:22px;}
+  .live-lock-icon{width:40px;height:40px;border-radius:50%;background:#fff;border:1px solid #d7e3cb;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;color:var(--moss-dark);}
+  .live-lock-copy{flex:1;min-width:0;}
+  .live-lock-title{font-family:'Sora',sans-serif;font-weight:600;font-size:14.5px;margin:0 0 3px;color:var(--moss-dark);}
+  .live-lock-desc{font-size:13px;color:var(--ink-soft);margin:0;line-height:1.5;}
+  button.calc{font-family:'Inter',sans-serif;font-weight:600;font-size:14px;background:var(--moss);color:#fff;border:none;border-radius:var(--radius);padding:12px 22px;cursor:pointer;flex-shrink:0;white-space:nowrap;transition:background .15s;}
+  button.calc:hover{background:var(--moss-dark);}
+
+  .grid-inputs{display:grid;grid-template-columns:repeat(3,1fr);gap:16px 18px;}
+  #gridInputs.locked{opacity:.45;pointer-events:none;filter:grayscale(.4);}
+
+  .src-hint{font-size:11px;color:var(--ink-faint);font-family:'IBM Plex Mono',monospace;}
+  input[readonly]{background:var(--moss-tint);color:var(--moss-dark);cursor:default;}
+
+  .input-error{font-size:13px;color:#8a2c1a;background:var(--put-tint);border:1px solid #f0d3bf;border-radius:var(--radius);padding:10px 14px;margin:16px 0 0;}
+
+  .actions{display:flex;align-items:center;justify-content:space-between;margin-top:22px;}
+  .live-note{font-size:12.5px;color:var(--ink-faint);display:flex;align-items:center;gap:6px;}
+  .live-dot{width:6px;height:6px;border-radius:50%;background:var(--moss);}
+
+  .prob-cards{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px;}
+  .prob-card{border-radius:var(--radius);padding:18px 20px;border:1px solid var(--line);}
+  .prob-card.touch{background:var(--call-tint);border-color:#cfe4d8;}
+  .prob-card.expire{background:var(--put-tint);border-color:#f0d3bf;}
+  .prob-card .tag{font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:600;}
+  .prob-card.touch .tag{color:var(--call);}
+  .prob-card.expire .tag{color:var(--put);}
+  .prob-card .val{font-family:'Sora',sans-serif;font-size:32px;font-weight:700;margin-top:6px;}
+  .prob-card.touch .val{color:var(--call);}
+  .prob-card.expire .val{color:var(--put);}
+  .prob-card .desc{font-size:12px;color:var(--ink-soft);margin-top:6px;line-height:1.45;}
+
+  .chart-legend{display:flex;gap:18px;margin-bottom:10px;font-size:12px;color:var(--ink-soft);flex-wrap:wrap;}
+  .chart-legend span{display:flex;align-items:center;gap:6px;}
+  .chart-legend i{width:14px;height:0;border-top:2.5px solid;display:inline-block;}
+  .chart-legend i.fill{height:11px;border:none;border-radius:2px;width:12px;}
+  .chart-wrap{background:var(--field);border:1px solid var(--line);border-radius:var(--radius);padding:12px;margin-bottom:22px;}
+  .chart-wrap svg{width:100%;height:auto;display:block;}
+
+  table.detail{width:100%;border-collapse:collapse;font-size:13.5px;}
+  table.detail th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);font-weight:600;padding:0 10px 10px;border-bottom:1px solid var(--line);}
+  table.detail th.num, table.detail td.num{text-align:right;}
+  table.detail td{padding:11px 10px;border-bottom:1px solid var(--line-soft);font-family:'IBM Plex Mono',monospace;}
+  table.detail td.label{font-family:'Inter',sans-serif;font-weight:500;}
+  table.detail tr:last-child td{border-bottom:none;}
+  .detail-desc{color:var(--ink-faint);font-family:'Inter',sans-serif;font-size:11.5px;display:block;margin-top:1px;}
+
+  @media (max-width:640px){
+    .grid-inputs{grid-template-columns:repeat(2,1fr);}
+    .prob-cards{grid-template-columns:1fr;}
+    .actions{flex-direction:column;align-items:stretch;gap:14px;}
+    button.calc{width:100%;}
+  }
+  @media (max-width:460px){
+    .grid-inputs{grid-template-columns:1fr;}
+    .target-pair .row2{flex-direction:column;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="head">
+    <h1>Probability Calculator</h1>
+    <p class="sub">Probability of the underlying reaching a target price before expiry, and of finishing beyond it at expiry.</p>
+  </div>
+
+  <div class="panel">
+    <p class="panel-title">Inputs</p>
+    <p class="panel-hint">Choose where your market parameters come from, then set a target price.</p>
+
+    <div class="source-tabs" role="tablist" aria-label="Data source">
+      <button class="source-tab" data-mode="custom" type="button" role="tab" aria-selected="false">
+        <i class="ti ti-edit" aria-hidden="true"></i><span>Custom</span>
+      </button>
+      <button class="source-tab active" data-mode="eod" type="button" role="tab" aria-selected="true">
+        <i class="ti ti-file-spreadsheet" aria-hidden="true"></i><span>EOD data <em>from BhavCopy</em></span>
+      </button>
+      <button class="source-tab" data-mode="live" type="button" role="tab" aria-selected="false">
+        <i class="ti ti-lock" aria-hidden="true"></i><span>Live data <em>Premium</em></span>
+      </button>
+    </div>
+
+    <div class="mode-note" id="customModeNote" style="display:none;">
+      Enter every value below by hand. Nothing is pulled from a data feed in this mode.
+    </div>
+
+    <div class="preset-row" id="eodModeContent">
+      <div class="field-block preset-field">
+        <label for="instrument">Instrument</label>
+        <select id="instrument">
+          <option value="nifty" selected>NIFTY 50 index</option>
+          <option value="banknifty">BANK NIFTY index</option>
+          <option value="sensex">SENSEX index</option>
+          <option value="reliance">Reliance Industries</option>
+          <option value="tcs">TCS</option>
+          <option value="hdfcbank">HDFC Bank</option>
+          <option value="infosys">Infosys</option>
+        </select>
+      </div>
+      <div class="badge" id="eodBadge">Values below refresh from your selection</div>
+    </div>
+
+    <div class="live-lock" id="liveModeLock" style="display:none;">
+      <div class="live-lock-icon"><i class="ti ti-lock" aria-hidden="true"></i></div>
+      <div class="live-lock-copy">
+        <p class="live-lock-title">Live data is a Premium feature</p>
+        <p class="live-lock-desc">Compute probabilities against the real-time spot price and live implied volatility instead of the previous close. Upgrade to enable this for your account.</p>
+      </div>
+      <button class="calc" id="liveUpgradeBtn" type="button">Upgrade to Premium</button>
+    </div>
+
+    <div class="grid-inputs" id="gridInputs">
+      <div class="field-block">
+        <label for="spot">Underlying price</label>
+        <div class="unit-wrap"><input type="number" id="spot" value="24800" step="1"><span class="unit">&#8377;</span></div>
+        <span class="src-hint" id="spotHint"></span>
+      </div>
+      <div class="field-block">
+        <label for="target">Target price</label>
+        <div class="unit-wrap"><input type="number" id="target" value="25200" step="1"><span class="unit">&#8377;</span></div>
+      </div>
+      <div class="field-block">
+        <label for="expiry">Days to expiry</label>
+        <div class="unit-wrap"><input type="number" id="expiry" value="30" step="1"><span class="unit">days</span></div>
+      </div>
+      <div class="field-block">
+        <label for="vol">Annual volatility</label>
+        <div class="unit-wrap"><input type="number" id="vol" value="12.5" step="0.1"><span class="unit">%</span></div>
+        <span class="src-hint" id="volHint"></span>
+      </div>
+    </div>
+
+    <p class="input-error" id="inputError" style="display:none;" role="alert"></p>
+
+    <div class="actions">
+      <span class="live-note"><span class="live-dot"></span>Results update as you change any value</span>
+      <button class="calc" id="calcBtn" type="button">Recalculate</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <p class="panel-title">Results</p>
+    <p class="panel-hint">Lognormal (Black-Scholes) model, zero-drift convention &mdash; volatility alone drives the outcome.</p>
+
+    <div class="prob-cards">
+      <div class="prob-card touch">
+        <div class="tag">Probability of touching</div>
+        <div class="val" id="probTouch">&#8211;</div>
+        <div class="desc" id="probTouchDesc">Chance the price trades at or through the target at any point before expiry.</div>
+      </div>
+      <div class="prob-card expire">
+        <div class="tag">Probability at expiry</div>
+        <div class="val" id="probExpire">&#8211;</div>
+        <div class="desc" id="probExpireDesc">Chance the price closes beyond the target on the expiry date.</div>
+      </div>
+    </div>
+
+    <div class="chart-legend">
+      <span><i style="border-color:#5f7d43;border-top-style:solid;"></i>Terminal price distribution</span>
+      <span><i class="fill" style="background:#e7f3ec;border:1px solid #cfe4d8;"></i>Beyond target</span>
+      <span><i style="border-color:#b3592f;border-top-style:dashed;"></i>Target</span>
+      <span><i style="border-color:#8b9285;border-top-style:dashed;"></i>Spot</span>
+    </div>
+    <div class="chart-wrap" id="chartWrap"></div>
+
+    <table class="detail">
+      <thead><tr><th>Supporting calculation</th><th class="num">Value</th></tr></thead>
+      <tbody>
+        <tr><td class="label">1 s.d. range at expiry<span class="detail-desc">About 68% of outcomes fall in this band</span></td><td class="num" id="sdRange">&#8211;</td></tr>
+        <tr><td class="label">Move required to target<span class="detail-desc">Distance from spot, in % and in standard deviations</span></td><td class="num" id="moveRequired">&#8211;</td></tr>
+        <tr><td class="label">d2<span class="detail-desc">Standardised distance used for the expiry probability</span></td><td class="num" id="d2Val">&#8211;</td></tr>
+        <tr><td class="label">Time to expiry<span class="detail-desc">In years, using a 365-day convention</span></td><td class="num" id="timeYears">&#8211;</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+const el = id => document.getElementById(id);
+
+// Instrument reference data. `seed` drives the synthetic EOD close series
+// that volatility is computed from; replace with a real BhavCopy series.
+const INSTRUMENTS = {
+  nifty:     { label: "NIFTY 50",            spot: 24800, step: 50,  seed: 1001 },
+  banknifty: { label: "BANK NIFTY",          spot: 51200, step: 100, seed: 1002 },
+  sensex:    { label: "SENSEX",              spot: 81400, step: 100, seed: 1003 },
+  reliance:  { label: "Reliance Industries", spot: 2950,  step: 50,  seed: 1004 },
+  tcs:       { label: "TCS",                 spot: 3850,  step: 50,  seed: 1005 },
+  hdfcbank:  { label: "HDFC Bank",           spot: 1680,  step: 20,  seed: 1006 },
+  infosys:   { label: "Infosys",             spot: 1550,  step: 20,  seed: 1007 }
+};
+
+// Baseline vol used only to generate the synthetic close series. The vol
+// the user sees is always re-derived from that series via HV-20.
+const SEED_VOL = { nifty:0.125, banknifty:0.140, sensex:0.120, reliance:0.220, tcs:0.200, hdfcbank:0.185, infosys:0.240 };
+
+const HV_WINDOW = 20;
+let currentMode = 'eod';
+
+// --- normal distribution helpers (identical to the Python backend) ---
+function erf(x){
+  const sign = x < 0 ? -1 : 1;
+  x = Math.abs(x);
+  const a1=0.254829592, a2=-0.284496736, a3=1.421413741, a4=-1.453152027, a5=1.061405429, p=0.3275911;
+  const t = 1/(1+p*x);
+  const y = 1-(((((a5*t+a4)*t)+a3)*t+a2)*t+a1)*t*Math.exp(-x*x);
+  return sign*y;
+}
+function normCdf(x){ return 0.5*(1+erf(x/Math.SQRT2)); }
+function normPdf(x){ return Math.exp(-x*x/2)/Math.sqrt(2*Math.PI); }
+
+// --- synthetic EOD close series (stand-in for BhavCopy / live history) ---
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function randNormal(rng){
+  const u1 = Math.max(rng(), 1e-9), u2 = rng();
+  return Math.sqrt(-2*Math.log(u1)) * Math.cos(2*Math.PI*u2);
+}
+function generateCloses(key, extraJitter){
+  const inst = INSTRUMENTS[key];
+  const rng = mulberry32(inst.seed + (extraJitter || 0));
+  const N = 60;
+  const dailyVol = SEED_VOL[key] / Math.sqrt(252);
+  const rets = [];
+  for(let i=0;i<N-1;i++) rets.push(dailyVol * randNormal(rng));
+  const sum = rets.reduce((a,b)=>a+b,0);
+  let price = inst.spot * Math.exp(-sum);   // walk lands on the quoted spot
+  const closes = [price];
+  for(let i=0;i<rets.length;i++){
+    price = price * Math.exp(rets[i]);
+    closes.push(price);
+  }
+  return closes;
+}
+
+// --- volatility from closes (mirrors volatility_from_closes in Python) ---
+function volatilityFromCloses(closes, window){
+  if(closes.length < window + 1) return null;
+  const returns = [];
+  for(let i=1;i<closes.length;i++) returns.push(Math.log(closes[i]/closes[i-1]));
+  const recent = returns.slice(-window);
+  const mean = recent.reduce((a,b)=>a+b,0) / window;
+  const variance = recent.reduce((a,b)=>a+(b-mean)*(b-mean),0) / (window - 1);
+  return Math.sqrt(variance) * Math.sqrt(252) * 100;
+}
+
+// --- core probability math (zero-drift convention: v = -sigma^2/2) ---
+function terminalProbabilityAbove(S, K, v, sigma, T){
+  const d2 = (Math.log(S/K) + v*T) / (sigma*Math.sqrt(T));
+  return normCdf(d2);
+}
+function touchProbability(S, K, v, sigma, T){
+  if(K === S) return 1;
+  const b = Math.log(K/S);
+  const sigSqrtT = sigma*Math.sqrt(T);
+  const scale = Math.exp(Math.min(2*v*b/(sigma*sigma), 700));
+  let p;
+  if(K > S){
+    p = normCdf((v*T - b)/sigSqrtT) + scale*normCdf((-b - v*T)/sigSqrtT);
+  } else {
+    p = normCdf((b - v*T)/sigSqrtT) + scale*normCdf((b + v*T)/sigSqrtT);
+  }
+  return Math.max(0, Math.min(1, p));
+}
+
+// --- validation (mirrors validate_inputs in the Python backend) ---
+function validateInputs(S, K, sigma, days){
+  const errors = [], bad = [];
+  if(!(S > 0)){ errors.push('Underlying price must be greater than 0.'); bad.push('spot'); }
+  if(!(K > 0)){ errors.push('Target price must be greater than 0.'); bad.push('target'); }
+  if(!(sigma > 0)){ errors.push('Volatility must be greater than 0%.'); bad.push('vol'); }
+  if(!(days > 0)){ errors.push('Days to expiry must be at least 1.'); bad.push('expiry'); }
+  if(sigma*100 > 1000){ errors.push('Volatility above 1000% is outside the supported range.'); bad.push('vol'); }
+  if(days > 3650){ errors.push('Days to expiry above 3650 (10 years) is outside the supported range.'); bad.push('expiry'); }
+  if(S > 0 && K > 0 && Math.max(K/S, S/K) > 100){
+    errors.push('Target is more than 100x away from spot - check your inputs.'); bad.push('target');
+  }
+  return { errors: errors, bad: bad };
+}
+function showInputError(message, bad){
+  const box = el('inputError');
+  ['spot','target','vol','expiry'].forEach(id => el(id).classList.remove('field-invalid'));
+  if(!message){ box.style.display='none'; box.textContent=''; return; }
+  box.style.display = 'block';
+  box.textContent = message;
+  bad.forEach(id => el(id).classList.add('field-invalid'));
+}
+
+function fmtPct(n){ return n.toFixed(2) + '%'; }
+function fmtNum(n, d){ if(d===undefined) d=2; return n.toLocaleString('en-IN', {minimumFractionDigits:d, maximumFractionDigits:d}); }
+
+function clearResults(){
+  ['probTouch','probExpire','sdRange','moveRequired','d2Val','timeYears']
+    .forEach(id => el(id).textContent = '\u2013');
+  el('chartWrap').innerHTML = '';
+}
+
+function calculate(){
+  const S = parseFloat(el('spot').value);
+  const K = parseFloat(el('target').value);
+  const sigma = parseFloat(el('vol').value)/100;
+  const days = parseFloat(el('expiry').value);
+
+  const check = validateInputs(S, K, sigma, days);
+  if(check.errors.length){ showInputError(check.errors[0], check.bad); clearResults(); return; }
+  showInputError(null, []);
+
+  const T = days/365;
+  const v = -0.5*sigma*sigma;          // zero-drift convention
+  const isUpside = K > S;
+
+  const pAbove = terminalProbabilityAbove(S, K, v, sigma, T);
+  const pExpire = isUpside ? pAbove : 1 - pAbove;
+  const pTouch = touchProbability(S, K, v, sigma, T);
+
+  const sd = sigma*Math.sqrt(T);
+  const d2 = (Math.log(S/K) + v*T)/sd;
+  const sdUpper = S*Math.exp(sd), sdLower = S*Math.exp(-sd);
+  const movePct = (K/S - 1)*100;
+  const moveSd = Math.abs(Math.log(K/S))/sd;
+
+  el('probTouch').textContent = fmtPct(pTouch*100);
+  el('probExpire').textContent = fmtPct(pExpire*100);
+  el('probTouchDesc').textContent =
+    'Chance the price trades at or ' + (isUpside ? 'through' : 'below') + ' \u20B9' + fmtNum(K,0) +
+    ' at any point in the next ' + days + ' day' + (days == 1 ? '' : 's') + '.';
+  el('probExpireDesc').textContent =
+    'Chance the price closes ' + (isUpside ? 'above' : 'below') + ' \u20B9' + fmtNum(K,0) + ' on the expiry date.';
+
+  el('sdRange').textContent = '\u20B9' + fmtNum(sdLower) + ' \u2014 \u20B9' + fmtNum(sdUpper);
+  el('moveRequired').textContent = (movePct >= 0 ? '+' : '') + fmtNum(movePct) + '%  (' + fmtNum(moveSd) + ' s.d.)';
+  el('d2Val').textContent = fmtNum(d2, 4);
+  el('timeYears').textContent = fmtNum(T, 4) + ' yr';
+
+  renderChart(S, K, v, sigma, T, isUpside);
+}
+
+function renderChart(S, K, v, sigma, T, isUpside){
+  const W = 900, H = 260, padL = 20, padR = 20, padT = 14, padB = 26;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+
+  const sd = sigma*Math.sqrt(T);
+  const centre = Math.log(S) + v*T;
+  const loLn = centre - 4*sd, hiLn = centre + 4*sd;
+
+  const N = 161;
+  const pts = [];
+  let maxD = 0;
+  for(let i=0;i<N;i++){
+    const lnP = loLn + (hiLn-loLn)*i/(N-1);
+    const price = Math.exp(lnP);
+    const z = (lnP - centre)/sd;
+    const density = normPdf(z)/(price*sd);
+    pts.push({price: price, density: density});
+    if(density > maxD) maxD = density;
+  }
+  if(!(maxD > 0)){ el('chartWrap').innerHTML = ''; return; }
+
+  const lnToX = ln => padL + ((ln - loLn)/(hiLn - loLn))*plotW;
+  const priceToX = p => lnToX(Math.log(p));
+  const dToY = d => padT + plotH - (d/maxD)*plotH;
+  const clampX = x => Math.max(padL, Math.min(W - padR, x));
+  const baseY = padT + plotH;
+
+  let shadePath = '';
+  const regionPts = pts.filter(p => isUpside ? p.price >= K : p.price <= K);
+  if(regionPts.length > 1){
+    const kX = clampX(priceToX(K));
+    const startX = isUpside ? kX : clampX(lnToX(loLn));
+    const endX   = isUpside ? clampX(lnToX(hiLn)) : kX;
+    shadePath = 'M' + startX.toFixed(1) + ',' + baseY.toFixed(1) + ' ';
+    regionPts.forEach(p => {
+      shadePath += 'L' + clampX(priceToX(p.price)).toFixed(1) + ',' + dToY(p.density).toFixed(1) + ' ';
+    });
+    shadePath += 'L' + endX.toFixed(1) + ',' + baseY.toFixed(1) + ' Z';
+  }
+
+  let curvePath = '';
+  pts.forEach((p,i) => {
+    curvePath += (i===0?'M':'L') + priceToX(p.price).toFixed(1) + ',' + dToY(p.density).toFixed(1) + ' ';
+  });
+
+  const kX = clampX(priceToX(K)), sX = clampX(priceToX(S));
+  let xLabels = '';
+  [loLn, centre, hiLn].forEach(ln => {
+    xLabels += '<text x="' + lnToX(ln).toFixed(1) + '" y="' + (H-7) + '" font-size="9.5" font-family="IBM Plex Mono, monospace" fill="#8b9285" text-anchor="middle">' + Math.round(Math.exp(ln)).toLocaleString('en-IN') + '</text>';
+  });
+
+  el('chartWrap').innerHTML =
+    '<svg viewBox="0 0 ' + W + ' ' + H + '" xmlns="http://www.w3.org/2000/svg">' +
+    '<line x1="' + padL + '" y1="' + baseY + '" x2="' + (W-padR) + '" y2="' + baseY + '" stroke="#e2e4dc" stroke-width="1"/>' +
+    (shadePath ? '<path d="' + shadePath + '" fill="#e7f3ec" stroke="none"/>' : '') +
+    '<path d="' + curvePath.trim() + '" fill="none" stroke="#5f7d43" stroke-width="2"/>' +
+    '<line x1="' + sX.toFixed(1) + '" y1="' + padT + '" x2="' + sX.toFixed(1) + '" y2="' + baseY + '" stroke="#8b9285" stroke-width="1.5" stroke-dasharray="3,3"/>' +
+    '<text x="' + sX.toFixed(1) + '" y="' + (padT+10) + '" font-size="10" font-family="IBM Plex Mono, monospace" fill="#8b9285" text-anchor="middle">spot</text>' +
+    '<line x1="' + kX.toFixed(1) + '" y1="' + padT + '" x2="' + kX.toFixed(1) + '" y2="' + baseY + '" stroke="#b3592f" stroke-width="1.5" stroke-dasharray="4,3"/>' +
+    '<text x="' + kX.toFixed(1) + '" y="' + (padT+10) + '" font-size="10" font-family="IBM Plex Mono, monospace" fill="#b3592f" text-anchor="middle">target</text>' +
+    xLabels +
+    '</svg>';
+}
+
+function eodDateLabel(){
+  const d = new Date();
+  d.setDate(d.getDate() - (d.getDay() === 1 ? 3 : d.getDay() === 0 ? 2 : 1));
+  return d.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+}
+
+// Loads spot + backend-derived volatility for the selected instrument.
+// EOD  -> previous close from BhavCopy
+// LIVE -> latest tick from the live feed (simulated here with a jitter)
+function loadInstrument(key){
+  const inst = INSTRUMENTS[key];
+  const isLive = currentMode === 'live';
+  const closes = generateCloses(key, isLive ? 7 : 0);
+  const spot = closes[closes.length - 1];
+  const hv = volatilityFromCloses(closes, HV_WINDOW);
+
+  el('spot').value = Math.round(spot * 100) / 100;
+  if(hv !== null) el('vol').value = Math.round(hv * 100) / 100;
+
+  const target = Math.round(spot/inst.step)*inst.step + 4*inst.step;
+  el('target').value = target;
+
+  if(isLive){
+    el('spotHint').textContent = 'Live feed \u00B7 last tick';
+    el('volHint').textContent  = 'HV-' + HV_WINDOW + ', computed from live history';
+  } else {
+    el('spotHint').textContent = 'BhavCopy EOD close \u00B7 ' + eodDateLabel();
+    el('volHint').textContent  = 'HV-' + HV_WINDOW + ', computed from BhavCopy EOD';
+  }
+  el('eodBadge').textContent = inst.label + ' \u00B7 EOD close, BhavCopy ' + eodDateLabel();
+  calculate();
+}
+
+function setMode(mode){
+  currentMode = mode;
+  document.querySelectorAll('.source-tab').forEach(btn => {
+    const active = btn.dataset.mode === mode;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', String(active));
+  });
+  el('customModeNote').style.display = mode === 'custom' ? 'block' : 'none';
+  el('eodModeContent').style.display = mode === 'eod' ? 'flex' : 'none';
+  el('liveModeLock').style.display  = mode === 'live' ? 'flex' : 'none';
+  el('gridInputs').classList.toggle('locked', mode === 'live');
+
+  // Spot and volatility are supplied by the data feed in EOD and LIVE,
+  // and entered by hand only in Custom.
+  const feedDriven = (mode === 'eod' || mode === 'live');
+  el('spot').readOnly = feedDriven;
+  el('vol').readOnly  = feedDriven;
+
+  ['spot','target','expiry','vol','calcBtn'].forEach(id => el(id).disabled = (mode === 'live'));
+
+  if(feedDriven){
+    loadInstrument(el('instrument').value);
+  } else {
+    el('spotHint').textContent = 'Entered manually';
+    el('volHint').textContent  = 'Entered manually';
+    calculate();
+  }
+}
+
+// --- wiring ---
+['spot','target','expiry','vol'].forEach(f => {
+  el(f).addEventListener('input', calculate);
+});
+el('instrument').addEventListener('change', e => loadInstrument(e.target.value));
+document.querySelectorAll('.source-tab').forEach(btn => {
+  btn.addEventListener('click', () => setMode(btn.dataset.mode));
+});
+el('calcBtn').addEventListener('click', calculate);
+el('liveUpgradeBtn').addEventListener('click', () => {
+  el('liveUpgradeBtn').textContent = 'Request sent - our team will reach out';
+  el('liveUpgradeBtn').disabled = true;
+});
+
+setMode('eod');
+</script>
+</body>
+</html>

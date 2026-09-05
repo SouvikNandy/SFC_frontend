@@ -1,23 +1,30 @@
 export type HistoricalVolatilityMode = 'eod' | 'live';
-export type HistoricalVolatilityInstrumentKey =
-    | 'nifty'
-    | 'banknifty'
-    | 'sensex'
-    | 'reliance'
-    | 'tcs'
-    | 'hdfcbank'
-    | 'infosys';
 
-export interface HistoricalVolatilityInstrument {
-    label: string;
-    spot: number;
-    volatility: number;
-    seed: number;
+export interface HistoricalVolatilityRequest {
+    symbol: string;
+    date: string;
 }
 
-export interface HistoricalVolatilityPricePoint {
-    date: string;
-    close: number;
+export interface SymbolListResponse {
+    success: boolean;
+    message?: string;
+    data?: string[];
+    SYMBOL_LIST?: string[];
+}
+
+export interface HistoricalVolatilityApiRow {
+    trade_date: string;
+    symbol: string;
+    close_price: number;
+    hv10: number | null;
+    hv20: number | null;
+    daily_return: number | null;
+}
+
+export interface HistoricalVolatilityResponse {
+    success: boolean;
+    message?: string;
+    data?: HistoricalVolatilityApiRow[];
 }
 
 export interface HistoricalVolatilityRow {

@@ -73,7 +73,10 @@ export class DashboardHomeComponent {
 
   get userName(): string {
     const u = this.auth.currentUser();
-    return u?.name ?? u?.email ?? 'Trader';
+    if (u?.first_name) {
+      return `${u.first_name} ${u.last_name ?? ''}`.trim();
+    }
+    return u?.email ?? 'Trader';
   }
 
   get today(): string {

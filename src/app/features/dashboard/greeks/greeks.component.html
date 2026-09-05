@@ -5,7 +5,7 @@
             stock.</p>
     </div>
 
-    <form class="panel" [formGroup]="form" (ngSubmit)="onCalcClick()">
+    <form class="panel" [formGroup]="form">
         <p class="panel-title">Inputs</p>
         <p class="panel-hint">Choose where your data comes from, then auto-fill from an instrument or enter every field
             yourself.</p>
@@ -35,15 +35,28 @@
         </div>
 
         <div class="preset-row" *ngIf="form.value.sourceMode==='eod'">
-            <div class="field-block preset-field">
-                <label for="preset">Prefilled instrument</label>
-                <select id="preset" [value]="form.value.presetKey" (change)="onPresetChange($any($event.target).value)">
-                    <option *ngFor="let k of presetKeys" [value]="k">{{ presets[k]?.label || 'Custom' }}</option>
-                </select>
+            <div class="field-block preset-field autocomplete-field">
+                <label for="symbol">Instrument</label>
+                <input id="symbol" type="text" formControlName="symbol" autocomplete="off" placeholder="Search symbol"
+                    [disabled]="symbolsLoading" (input)="onSymbolInput()" (focus)="onSymbolInput()"
+                    (blur)="onSymbolBlur()" (keydown)="onSymbolKeydown($event)" role="combobox"
+                    [attr.aria-expanded]="suggestionsOpen" aria-controls="greeks-symbol-options"
+                    [attr.aria-activedescendant]="highlightedSymbolIndex >= 0 ? 'greeks-symbol-' + highlightedSymbolIndex : null">
+                <div *ngIf="suggestionsOpen && filteredSymbols.length" id="greeks-symbol-options"
+                    class="autocomplete-options" role="listbox">
+                    <button *ngFor="let symbol of filteredSymbols; let index = index" type="button" role="option"
+                        [id]="'greeks-symbol-' + index" [class.highlighted]="index === highlightedSymbolIndex"
+                        [attr.aria-selected]="index === highlightedSymbolIndex" (mousedown)="$event.preventDefault()"
+                        (click)="selectSymbol(symbol)">
+                        {{ symbol }}
+                    </button>
+                </div>
+                <span *ngIf="symbolsLoading" class="field-status">Loading symbol list...</span>
+                <span *ngIf="symbolDetailsLoading" class="field-status">Loading symbol details...</span>
+                <span *ngIf="form.get('symbol')?.touched && form.get('symbol')?.invalid && !symbolsLoading"
+                    class="field-error">Select a symbol from the list.</span>
             </div>
-            <div class="badge" id="presetBadge">{{ badgeText || (presetLabel(form.value.presetKey) ?
-                (presetLabel(form.value.presetKey) + ' · EOD close, BhavCopy') : 'Manual entry — edit any field below')
-                }}</div>
+            <div class="badge" id="presetBadge">{{ badgeText || 'Select a symbol for EOD metadata' }}</div>
         </div>
 
         <div class="live-lock" *ngIf="form.value.sourceMode==='live'">
@@ -60,10 +73,6 @@
             <div class="field-block strike-pair">
                 <label for="spotSelect">Price of the underlying</label>
                 <div class="row2">
-                    <select *ngIf="form.value.sourceMode!=='custom'" id="spotSelect" [value]="form.value.spotKey"
-                        (change)="onSpotSelect($any($event.target).value)">
-                        <option *ngFor="let s of spotOptions" [value]="s.key">{{ s.label }}</option>
-                    </select>
                     <div class="unit-wrap"><input type="number" formControlName="spot"><span class="unit">₹</span></div>
                 </div>
             </div>
@@ -152,7 +161,6 @@
 
         <div class="actions">
             <span class="live-note"><span class="live-dot"></span>Results update as you change any value</span>
-            <button class="calc" id="calcBtn" type="button" (click)="onCalcClick()">Recalculate</button>
         </div>
     </form>
 

@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
 
-import { authGuard } from './core/guards/auth.guard';
+import { authGuard, guestGuard, registrationGuard } from './core/guards/auth.guard';
 import { AuthLayoutComponent } from './layouts/auth-layout/auth-layout.component';
 import { DashboardLayoutComponent } from './layouts/dashboard-layout/dashboard-layout.component';
 import { PublicLayoutComponent } from './layouts/public-layout/public-layout.component';
@@ -58,10 +58,12 @@ export const routes: Routes = [
     children: [
       {
         path: 'login',
+        canActivate: [guestGuard],
         loadComponent: () => import('./features/auth/login/login.component').then((m) => m.LoginComponent)
       },
       {
         path: 'register',
+        canActivate: [guestGuard],
         loadComponent: () => import('./features/auth/register/register.component').then((m) => m.RegisterComponent)
       },
       {
@@ -70,10 +72,12 @@ export const routes: Routes = [
       },
       {
         path: 'verify-otp',
+        canActivate: [registrationGuard],
         loadComponent: () => import('./features/auth/verify-otp/verify-otp.component').then((m) => m.VerifyOtpComponent)
       },
       {
         path: 'verify-email-success',
+        canActivate: [registrationGuard],
         loadComponent: () => import('./features/auth/verify-otp/verify-otp.component').then((m) => m.VerifyOtpComponent)
       },
       {

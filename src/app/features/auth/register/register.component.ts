@@ -3,6 +3,7 @@ import { AbstractControl, FormControl, FormGroup, ReactiveFormsModule, Validator
 import { Router, RouterLink } from '@angular/router';
 
 import { AuthService } from '../../../core/services/auth.service';
+import { ToastService } from '../../../core/services/toast.service';
 
 @Component({
     selector: 'app-register',
@@ -15,6 +16,7 @@ import { AuthService } from '../../../core/services/auth.service';
 export class RegisterComponent {
     private readonly authService = inject(AuthService);
     private readonly router = inject(Router);
+    private readonly toast = inject(ToastService);
 
     readonly form = new FormGroup({
         fullName: new FormControl('', [Validators.required, Validators.minLength(2)]),
@@ -56,20 +58,15 @@ export class RegisterComponent {
 
         this.isSubmitting.set(true);
 
-        this.authService.register({ fullName: fullNameValue, email: emailValue, phone: phoneValue, password: passwordValue }).subscribe({
+        const nameParts = fullNameValue.trim().split(/\s+/);
+        this.authService.register({ first_name: nameParts[0] ?? '', last_name: nameParts.slice(1).join(' '), email: emailValue, method: 'direct', phone: phoneValue, password: passwordValue }).subscribe({
             next: () => {
-                window.setTimeout(() => {
-                    this.isSubmitting.set(false);
-                    this.router.navigate(['/verify-otp'], {
-                        queryParams: {
-                            email: emailValue,
-                            phone: phoneValue
-                        }
-                    });
-                }, 700);
+                this.isSubmitting.set(false);
+                this.router.navigateByUrl('/verify-otp');
             },
             error: () => {
                 this.isSubmitting.set(false);
+                this.toast.error('Unable to create your account. Please check your details and try again.');
             }
         });
     }

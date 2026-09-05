@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<title>Implied Volatility</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1c231b;--ink-soft:#5b6459;--ink-faint:#8b9285;
+    --line:#e2e4dc;--line-soft:#edefe8;--paper:#fff;--field:#fbfbf8;
+    --moss:#5f7d43;--moss-dark:#425b2c;--moss-tint:#eef3e6;
+    --call:#3f7a5a;--call-tint:#e7f3ec;--put:#b3592f;--put-tint:#faece3;
+    --warn:#8a6d1f;--warn-tint:#faf3df;--warn-line:#e8dcb4;
+    --radius:10px;--radius-lg:16px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:#f4f5f0;font-family:'Inter',-apple-system,sans-serif;color:var(--ink);padding:24px 16px 60px;font-size:14px;}
+  .wrap{max-width:1080px;margin:0 auto;}
+  .titlebar{display:flex;align-items:baseline;gap:13px;flex-wrap:wrap;margin-bottom:3px;}
+  h1{font-family:'Sora',sans-serif;font-size:23px;font-weight:700;margin:0;letter-spacing:-.01em;}
+  .ticker{font-family:'IBM Plex Mono',monospace;font-size:13px;background:var(--field);border:1px solid var(--line);border-radius:7px;padding:4px 10px;}
+  .lastpx{font-family:'Sora',sans-serif;font-size:19px;font-weight:700;}
+  .srcnote{font-size:11.5px;color:var(--ink-faint);font-family:'IBM Plex Mono',monospace;}
+  .sub{color:var(--ink-soft);font-size:13.5px;margin:0 0 20px;}
+  .panel{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius-lg);padding:18px 20px 20px;margin-bottom:16px;}
+  .sect-label{font-size:10.5px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.08em;margin:0 0 12px;}
+
+  .source-tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
+  .source-tab{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:500;color:var(--ink-soft);
+    background:var(--field);border:1px solid var(--line);border-radius:999px;padding:8px 14px;cursor:pointer;}
+  .source-tab em{font-style:normal;font-size:10.5px;color:var(--ink-faint);margin-left:2px;}
+  .source-tab:hover{border-color:var(--moss);}
+  .source-tab.active{background:var(--moss);border-color:var(--moss);color:#fff;}
+  .source-tab.active em{color:rgba(255,255,255,.75);}
+  .source-tab[data-mode="live"].active{background:var(--moss-dark);border-color:var(--moss-dark);}
+  .mode-note{font-size:12.5px;color:var(--ink-soft);background:var(--field);border:1px solid var(--line);
+    border-radius:var(--radius);padding:11px 13px;margin-bottom:16px;}
+  .live-lock{display:flex;align-items:center;gap:15px;background:var(--moss-tint);border:1px solid #d7e3cb;border-radius:var(--radius-lg);padding:16px 18px;margin-bottom:16px;}
+  .live-lock-icon{width:36px;height:36px;border-radius:50%;background:#fff;border:1px solid #d7e3cb;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;}
+  .live-lock-title{font-family:'Sora',sans-serif;font-weight:600;font-size:13.5px;margin:0 0 3px;color:var(--moss-dark);}
+  .live-lock-desc{font-size:12.5px;color:var(--ink-soft);margin:0;line-height:1.5;}
+
+  .fb{display:flex;flex-direction:column;gap:5px;position:relative;}
+  .fb label{font-size:10.5px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.05em;}
+  .fb .h{font-size:10px;color:var(--ink-faint);font-family:'IBM Plex Mono',monospace;}
+  select,input[type=number],input[type=text]{font-family:'IBM Plex Mono',monospace;font-size:13.5px;background:var(--field);
+    border:1px solid var(--line);border-radius:9px;padding:9px 10px;color:var(--ink);outline:none;width:100%;}
+  select{font-family:'Inter',sans-serif;font-weight:500;cursor:pointer;}
+  select:focus,input:focus{border-color:var(--moss);box-shadow:0 0 0 3px var(--moss-tint);}
+  input[readonly]{background:var(--moss-tint);color:var(--moss-dark);cursor:default;}
+  .field-invalid{border-color:var(--put)!important;box-shadow:0 0 0 3px var(--put-tint)!important;}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px;}
+
+  .seg{display:inline-flex;background:var(--line-soft);border-radius:8px;padding:2px;gap:2px;}
+  .seg button{font-family:'Inter',sans-serif;font-size:12px;font-weight:500;color:var(--ink-soft);
+    background:transparent;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;}
+  .seg button.active{background:#fff;color:var(--moss-dark);box-shadow:0 0 0 1px var(--line);font-weight:600;}
+  .seg.type button.active[data-type="call"]{color:var(--call);}
+  .seg.type button.active[data-type="put"]{color:var(--put);}
+
+  .combo-list{position:absolute;top:100%;left:0;right:0;z-index:40;margin-top:4px;background:var(--paper);
+    border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(28,35,27,.13);
+    max-height:280px;overflow-y:auto;display:none;}
+  .combo-list.open{display:block;}
+  .combo-opt{padding:9px 11px;cursor:pointer;display:flex;align-items:baseline;gap:8px;border-bottom:1px solid var(--line-soft);}
+  .combo-opt:last-child{border-bottom:none;}
+  .combo-opt:hover,.combo-opt.hi{background:var(--moss-tint);}
+  .combo-opt .sym{font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:600;min-width:88px;}
+  .combo-opt .nm{font-size:12px;color:var(--ink-soft);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .combo-empty{padding:14px;font-size:12.5px;color:var(--ink-faint);text-align:center;}
+
+  /* result */
+  .result{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:0;border:1px solid var(--line);
+    border-radius:var(--radius);overflow:hidden;margin-bottom:14px;}
+  .rcell{padding:16px 18px;border-right:1px solid var(--line);}
+  .rcell:last-child{border-right:none;}
+  .rcell .lab{font-size:9.5px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.07em;}
+  .rcell .big{font-family:'Sora',sans-serif;font-size:34px;font-weight:700;margin-top:4px;line-height:1.05;}
+  .rcell .big.na{font-size:22px;color:var(--ink-faint);}
+  .rcell .num{font-family:'Sora',sans-serif;font-size:18px;font-weight:700;margin-top:5px;}
+  .rcell .hint{font-size:10.5px;color:var(--ink-faint);margin-top:3px;line-height:1.4;}
+
+  .status{display:flex;align-items:flex-start;gap:10px;border-radius:var(--radius);padding:12px 14px;
+    font-size:12.5px;line-height:1.5;margin-bottom:14px;}
+  .status .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px;}
+  .status.ok{background:var(--call-tint);border:1px solid #cfe4d8;color:#25563d;}
+  .status.ok .dot{background:var(--call);}
+  .status.warn{background:var(--warn-tint);border:1px solid var(--warn-line);color:var(--warn);}
+  .status.warn .dot{background:#c9a227;}
+  .status.err{background:var(--put-tint);border:1px solid #f0d3bf;color:#8a2c1a;}
+  .status.err .dot{background:var(--put);}
+  .status b{font-weight:700;}
+
+  .chart-legend{display:flex;gap:15px;margin-bottom:8px;font-size:11.5px;color:var(--ink-soft);flex-wrap:wrap;}
+  .chart-legend span{display:flex;align-items:center;gap:5px;}
+  .chart-legend i{width:13px;height:0;border-top:2.5px solid;display:inline-block;}
+  .chart-wrap{background:var(--field);border:1px solid var(--line);border-radius:var(--radius);padding:10px;}
+  .chart-wrap svg{width:100%;height:auto;display:block;}
+  .cap{font-size:11.5px;color:var(--ink-faint);margin-top:8px;line-height:1.5;}
+
+  table.trace{width:100%;border-collapse:collapse;font-family:'IBM Plex Mono',monospace;font-size:11.5px;}
+  table.trace th{text-align:right;font-family:'Inter',sans-serif;font-size:9.5px;font-weight:700;color:var(--ink-faint);
+    text-transform:uppercase;letter-spacing:.05em;padding:0 8px 8px;border-bottom:1px solid var(--line);}
+  table.trace th:first-child{text-align:left;}
+  table.trace td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--line-soft);}
+  table.trace td:first-child{text-align:left;color:var(--ink-faint);}
+  table.trace tr:last-child td{border-bottom:none;font-weight:600;background:var(--moss-tint);}
+
+  @media (max-width:900px){.grid4{grid-template-columns:repeat(2,1fr);}.result{grid-template-columns:1fr 1fr;}}
+  @media (max-width:640px){
+    body{padding:14px 10px 44px;font-size:15px;}
+    h1{font-size:20px;}
+    .panel{padding:14px 13px 16px;border-radius:12px;margin-bottom:12px;}
+    select,input{font-size:16px;padding:11px 10px;min-height:44px;}
+    .grid4,.grid3{grid-template-columns:1fr;gap:11px;}
+    .result{grid-template-columns:1fr;border:none;gap:8px;background:transparent;}
+    .rcell{border:1px solid var(--line);border-radius:10px;background:var(--paper);}
+    .rcell:first-child .big{font-size:30px;}
+    .source-tab{flex:1;justify-content:center;padding:11px 6px;font-size:12px;min-height:44px;}
+    .source-tab em{display:block;margin:1px 0 0;font-size:9.5px;}
+    .seg{width:100%;} .seg button{flex:1;padding:11px 8px;min-height:44px;}
+    .live-lock{flex-direction:column;align-items:stretch;gap:11px;}
+    .live-lock button{width:100%;}
+    table.trace{font-size:11px;} table.trace td,table.trace th{padding:6px 5px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="titlebar">
+    <h1>Implied Volatility</h1>
+    <span class="ticker" id="tickerBox">NIFTY</span>
+    <span class="lastpx" id="lastPx">&#8377;24,800</span>
+    <span class="srcnote" id="srcNote"></span>
+  </div>
+  <p class="sub">Solves the volatility that reproduces an observed option price, and reports how reliable that solve is.</p>
+
+  <div class="panel">
+    <p class="sect-label">Data source</p>
+    <div class="source-tabs" role="tablist" aria-label="Data source">
+      <button class="source-tab" data-mode="custom" type="button" role="tab" aria-selected="false"><span>Custom</span></button>
+      <button class="source-tab active" data-mode="eod" type="button" role="tab" aria-selected="true"><span>EOD data <em>from BhavCopy</em></span></button>
+      <button class="source-tab" data-mode="live" type="button" role="tab" aria-selected="false"><span>Live data <em>Premium</em></span></button>
+    </div>
+    <div class="mode-note" id="customModeNote" style="display:none;">
+      Enter every value by hand &mdash; underlying, strike, days to expiry and the market price you observed. Nothing is pulled from a data feed.
+    </div>
+    <div class="live-lock" id="liveModeLock" style="display:none;">
+      <div class="live-lock-icon">&#128274;</div>
+      <div class="live-lock-copy">
+        <p class="live-lock-title">Live data is a Premium feature</p>
+        <p class="live-lock-desc">Solve against the real-time underlying and streaming option quotes instead of the previous close.</p>
+      </div>
+      <button class="calc" id="liveUpgradeBtn" type="button" style="font-family:Inter;font-weight:600;font-size:13px;background:var(--moss);color:#fff;border:none;border-radius:9px;padding:10px 16px;cursor:pointer;">Upgrade to Premium</button>
+    </div>
+
+    <p class="sect-label">Contract</p>
+    <div class="grid4">
+      <div class="fb">
+        <label for="scriptSearch">Script</label>
+        <input type="text" id="scriptSearch" placeholder="Search scripts&hellip;" autocomplete="off" role="combobox" aria-expanded="false">
+        <div class="combo-list" id="scriptList" role="listbox"></div>
+        <span class="h" id="scriptHint"></span>
+      </div>
+      <div class="fb"><label for="underlying">Underlying price</label>
+        <input type="number" id="underlying" value="24800" step="0.05"><span class="h" id="undHint"></span></div>
+      <div class="fb"><label for="strike">Strike</label>
+        <select id="strike"></select>
+        <input type="number" id="strikeNum" value="24800" step="1" style="display:none;">
+        <span class="h" id="strikeHint">From the chain</span></div>
+      <div class="fb"><label for="expiry">Expiry</label>
+        <select id="expiry"></select>
+        <input type="number" id="expiryNum" value="17" step="1" min="1" style="display:none;">
+        <span class="h" id="expHint">Days to expiry</span></div>
+    </div>
+
+    <div class="grid3">
+      <div class="fb"><label>Option type</label>
+        <div class="seg type" id="typeSeg">
+          <button data-type="call" class="active" type="button">Call</button>
+          <button data-type="put" type="button">Put</button>
+        </div></div>
+      <div class="fb"><label for="marketPrice">Market price</label>
+        <div class="seg" id="priceSeg" style="margin-bottom:5px;">
+          <button data-src="auto" class="active" type="button">Auto</button>
+          <button data-src="manual" type="button">Manual</button>
+        </div>
+        <input type="number" id="marketPrice" value="266.90" step="0.05" readonly>
+        <span class="h" id="priceHint"></span></div>
+      <div class="fb"><label for="rate">Interest rate %</label>
+        <input type="number" id="rate" value="10" step="0.05">
+        <span class="h">Risk-free rate used in discounting</span></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <p class="sect-label">Result</p>
+    <div class="result">
+      <div class="rcell"><div class="lab">Implied volatility</div>
+        <div class="big" id="ivOut">&#8211;</div>
+        <div class="hint" id="ivHint">&nbsp;</div></div>
+      <div class="rcell"><div class="lab">Theoretical price at this IV</div>
+        <div class="num" id="theoOut">&#8211;</div>
+        <div class="hint" id="theoHint">&nbsp;</div></div>
+      <div class="rcell"><div class="lab">Sensitivity</div>
+        <div class="num" id="sensOut">&#8211;</div>
+        <div class="hint" id="sensHint">&nbsp;</div></div>
+    </div>
+    <div class="status" id="statusBox"><span class="dot"></span><span id="statusText">&nbsp;</span></div>
+
+    <p class="sect-label" style="margin-top:18px;">Price against volatility</p>
+    <div class="chart-legend">
+      <span><i style="border-color:#5f7d43;border-top-style:solid;"></i>Theoretical price</span>
+      <span><i style="border-color:#b3592f;border-top-style:dashed;"></i>Market price</span>
+      <span><i style="border-color:#8b9285;border-top-style:dashed;"></i>Solved IV</span>
+    </div>
+    <div class="chart-wrap" id="chartWrap"></div>
+    <p class="cap" id="chartCap"></p>
+  </div>
+
+  <div class="panel" id="tracePanel">
+    <p class="sect-label">Calculation trace</p>
+    <table class="trace"><thead><tr>
+      <th>Step</th><th>Volatility</th><th>Model price</th><th>Residual</th><th>Vega</th>
+    </tr></thead><tbody id="traceBody"></tbody></table>
+    <p class="cap" id="traceCap"></p>
+  </div>
+</div>
+
+<script>
+const el=id=>document.getElementById(id);
+const DAYS_YEAR=365, TICK=0.05;
+const SIGMA_MIN=0.0001, SIGMA_MAX=5.0, MAX_NEWTON=60, PRICE_TOL=1e-8, VEGA_FLOOR=1e-8;
+const IV_PTS_PER_TICK_WARN=0.5;
+
+const SYMBOLS={
+  nifty:{label:"NIFTY 50",tick:"NIFTY",spot:24800,step:50,seed:1001,vol:.125},
+  banknifty:{label:"NIFTY BANK",tick:"BANKNIFTY",spot:51200,step:100,seed:1002,vol:.140},
+  finnifty:{label:"NIFTY FIN SERVICE",tick:"FINNIFTY",spot:23450,step:50,seed:1008,vol:.135},
+  sensex:{label:"BSE SENSEX",tick:"SENSEX",spot:81400,step:100,seed:1003,vol:.120},
+  reliance:{label:"Reliance Industries",tick:"RELIANCE",spot:2950,step:50,seed:1004,vol:.220},
+  tcs:{label:"Tata Consultancy Services",tick:"TCS",spot:3850,step:50,seed:1005,vol:.200},
+  infosys:{label:"Infosys",tick:"INFY",spot:1550,step:20,seed:1007,vol:.240},
+  hdfcbank:{label:"HDFC Bank",tick:"HDFCBANK",spot:1680,step:20,seed:1006,vol:.185},
+  icicibank:{label:"ICICI Bank",tick:"ICICIBANK",spot:1245,step:10,seed:1011,vol:.195},
+  sbin:{label:"State Bank of India",tick:"SBIN",spot:812,step:10,seed:1012,vol:.230},
+  tatamotors:{label:"Tata Motors",tick:"TATAMOTORS",spot:742,step:10,seed:1032,vol:.290},
+  tatasteel:{label:"Tata Steel",tick:"TATASTEEL",spot:152,step:1,seed:1027,vol:.290},
+  itc:{label:"ITC",tick:"ITC",spot:418,step:5,seed:1037,vol:.185},
+  larsen:{label:"Larsen & Toubro",tick:"LT",spot:3620,step:50,seed:1048,vol:.225},
+  bhartiartl:{label:"Bharti Airtel",tick:"BHARTIARTL",spot:1642,step:20,seed:1049,vol:.215},
+  maruti:{label:"Maruti Suzuki India",tick:"MARUTI",spot:12450,step:100,seed:1031,vol:.215},
+  sunpharma:{label:"Sun Pharmaceutical",tick:"SUNPHARMA",spot:1785,step:20,seed:1043,vol:.220},
+  adanient:{label:"Adani Enterprises",tick:"ADANIENT",spot:2740,step:50,seed:1052,vol:.340}
+};
+let mode='eod', symbolKey='nifty', SPOT=24800, optType='call', priceSrc='auto';
+// In Custom the strike and expiry are typed; in the feed modes they come from
+// the chain, so every read goes through these rather than a fixed element.
+const getStrike=()=>parseFloat(mode==='custom'?el('strikeNum').value:el('strike').value);
+const getDays=()=>parseFloat(mode==='custom'?el('expiryNum').value:el('expiry').value);
+let EXPIRIES=[], TODAY=new Date(), lastResult=null;
+const isNarrow=()=>(typeof window!=='undefined'&&window.innerWidth)?window.innerWidth<=640:false;
+
+/* ---------- normal dist + BS ---------- */
+function erf(x){const s=x<0?-1:1;x=Math.abs(x);
+  const a1=.254829592,a2=-.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=.3275911;
+  const t=1/(1+p*x);return s*(1-(((((a5*t+a4)*t)+a3)*t+a2)*t+a1)*t*Math.exp(-x*x));}
+function normCdf(x){return .5*(1+erf(x/Math.SQRT2));}
+function normPdf(x){return Math.exp(-x*x/2)/Math.sqrt(2*Math.PI);}
+function bsPrice(side,S,K,r,q,T,sg){
+  if(T<=0||sg<=0)return side==='call'?Math.max(S-K,0):Math.max(K-S,0);
+  const d1=(Math.log(S/K)+(r-q+.5*sg*sg)*T)/(sg*Math.sqrt(T)),d2=d1-sg*Math.sqrt(T);
+  const eq=Math.exp(-q*T),er=Math.exp(-r*T);
+  return side==='call'?S*eq*normCdf(d1)-K*er*normCdf(d2):K*er*normCdf(-d2)-S*eq*normCdf(-d1);}
+function bsVegaRaw(S,K,r,q,T,sg){
+  if(T<=0||sg<=0)return 0;
+  const d1=(Math.log(S/K)+(r-q+.5*sg*sg)*T)/(sg*Math.sqrt(T));
+  return S*Math.exp(-q*T)*normPdf(d1)*Math.sqrt(T);}
+function priceBounds(side,S,K,r,q,T){
+  const eq=Math.exp(-q*T),er=Math.exp(-r*T);
+  return side==='call'?[Math.max(S*eq-K*er,0),S*eq]:[Math.max(K*er-S*eq,0),K*er];}
+
+/* ---------- solver (mirrors implied_volatility.py) ---------- */
+function validate(side,mp,S,K,days,rate){
+  const e=[],bad=[];
+  if(!(mp>0)){e.push('Market price must be greater than 0.');bad.push('marketPrice');}
+  if(!(S>0)){e.push('Underlying price must be greater than 0.');bad.push('underlying');}
+  if(!(K>0)){e.push('Strike price must be greater than 0.');bad.push('strike');}
+  if(!(days>0)){e.push('Days to expiry must be at least 1.');bad.push('expiry');}
+  if(isNaN(rate)){e.push('Enter an interest rate.');bad.push('rate');}
+  return{errors:e,bad:bad};
+}
+function solveIV(side,mp,S,K,days,ratePct,divPct,trace){
+  const v=validate(side,mp,S,K,days,ratePct);
+  if(v.errors.length)return{ok:false,status:'invalid_input',message:v.errors[0],bad:v.bad,trace:[]};
+  const r=ratePct/100,q=(divPct||0)/100,T=days/DAYS_YEAR;
+  const b=priceBounds(side,S,K,r,q,T),loB=b[0],hiB=b[1];
+  if(mp<loB-1e-9)return{ok:false,status:'below_intrinsic',bounds:b,trace:[],
+    message:'Price '+mp.toFixed(2)+' is below the no-arbitrage floor '+loB.toFixed(2)+
+            ' (discounted intrinsic value). No volatility can produce it.'};
+  if(mp>hiB+1e-9)return{ok:false,status:'above_maximum',bounds:b,trace:[],
+    message:'Price '+mp.toFixed(2)+' exceeds the theoretical maximum '+hiB.toFixed(2)+
+            '. No volatility can produce it.'};
+
+  const steps=[]; let sigma=0.25,method=null,iters=0;
+  for(let i=1;i<=MAX_NEWTON;i++){
+    const price=bsPrice(side,S,K,r,q,T,sigma), diff=price-mp, vg=bsVegaRaw(S,K,r,q,T,sigma);
+    if(trace)steps.push({i:i,sigma:sigma,price:price,diff:diff,vega:vg});
+    if(Math.abs(diff)<PRICE_TOL){method='newton';iters=i;break;}
+    if(vg<VEGA_FLOOR)break;
+    const nxt=sigma-diff/vg;
+    if(!isFinite(nxt)||nxt<=SIGMA_MIN||nxt>SIGMA_MAX)break;
+    sigma=nxt;
+  }
+  if(method===null){
+    let lo=SIGMA_MIN,hi=SIGMA_MAX,i=0;
+    for(i=1;i<=200;i++){
+      const mid=(lo+hi)/2, price=bsPrice(side,S,K,r,q,T,mid);
+      if(trace&&i%8===0)steps.push({i:MAX_NEWTON+i,sigma:mid,price:price,diff:price-mp,
+        vega:bsVegaRaw(S,K,r,q,T,mid)});
+      if(price>mp)hi=mid;else lo=mid;
+      if(hi-lo<1e-10)break;
+    }
+    sigma=(lo+hi)/2;method='bisection';iters=i;
+  }
+  const theo=bsPrice(side,S,K,r,q,T,sigma), residual=theo-mp, vega=bsVegaRaw(S,K,r,q,T,sigma);
+  const ivPerTick=vega>VEGA_FLOOR?(TICK/vega*100):Infinity;
+  let status='ok',message='Converged by '+method+' in '+iters+' iteration'+(iters!==1?'s':'')+'.';
+  if(ivPerTick>IV_PTS_PER_TICK_WARN){
+    status='low_vega';
+    const shown=ivPerTick>100?'more than 100':ivPerTick.toFixed(2);
+    message='Converged, but one tick of price moves this IV by '+shown+
+      ' volatility points \u2014 the quote barely responds to volatility here, so treat the number as indicative only.';
+  }else if(Math.abs(residual)>1e-4){
+    status='poor_fit';message='Best fit leaves a residual of '+residual.toFixed(4)+'; treat with caution.';
+  }
+  return{ok:true,ivPct:sigma*100,status:status,message:message,method:method,iterations:iters,
+         residual:residual,vega:vega,ivPerTick:ivPerTick,bounds:b,theoretical:theo,trace:steps};
+}
+
+/* ---------- chain premium (same surface as the chain viewer) ---------- */
+function chainIV(S,K,baseVolPct,live){
+  const base=baseVolPct/100,m=Math.log(K/S);
+  const adj=Math.max(-0.45,Math.min(1.20,-2.0*m+25.0*m*m));
+  return live?base*(1+adj)*1.03:base*(1+adj);}
+const M32=0xFFFFFFFF;
+function h32(x){x=x&M32;x=(x^61)^(x>>>16);x=(x+((x<<3)&M32))&M32;x=x^(x>>>4);
+  x=Math.imul(x,0x27D4EB2D)&M32;x=x^(x>>>15);return x>>>0;}
+function contractNoise(side,K,days,live){
+  const h=(Math.imul(Math.round(K),73856093)^Math.imul(Math.round(days),19349663)
+    ^(side==='call'?83492791:22801763)^(live?1013904223:0))&M32;
+  return ((h32(h)%2001)/1000-1)*0.012;}
+function chainPremium(side,K,days,live,baseVol){
+  const iv=chainIV(SPOT,K,baseVol,live);
+  const v=bsPrice(side,SPOT,K,0,0,Math.max(days,0.5)/365,iv);
+  return Math.max(0.05,Math.round(v*(1+contractNoise(side,K,days,live))/0.05)*0.05);}
+
+/* ---------- synthetic EOD ---------- */
+function mulberry32(s){return function(){s|=0;s=(s+0x6D2B79F5)|0;
+  let t=Math.imul(s^(s>>>15),1|s);t=(t+Math.imul(t^(t>>>7),61|t))^t;
+  return ((t^(t>>>14))>>>0)/4294967296;};}
+function randN(rng){const u1=Math.max(rng(),1e-9),u2=rng();return Math.sqrt(-2*Math.log(u1))*Math.cos(2*Math.PI*u2);}
+function generateCloses(k,j){const i=SYMBOLS[k]||SYMBOLS.nifty,rng=mulberry32(i.seed+(j||0)),N=60;
+  const dv=i.vol/Math.sqrt(252);
+  const target=j?i.spot*Math.exp(dv*randN(rng)):i.spot;
+  const r=[];for(let x=0;x<N-1;x++)r.push(dv*randN(rng));
+  const sum=r.reduce((a,b)=>a+b,0);let p=target*Math.exp(-sum);const c=[p];
+  for(let x=0;x<r.length;x++){p*=Math.exp(r[x]);c.push(p);}return c;}
+function hvFromCloses(c,w){if(c.length<w+1)return null;const r=[];
+  for(let i=1;i<c.length;i++)r.push(Math.log(c[i]/c[i-1]));
+  const rec=r.slice(-w),m=rec.reduce((a,b)=>a+b,0)/w;
+  return Math.sqrt(rec.reduce((a,b)=>a+(b-m)*(b-m),0)/(w-1))*Math.sqrt(252)*100;}
+let baseVol=12.5;
+
+/* ---------- dates ---------- */
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x;}
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function buildExpiries(){const out=[],seen=new Set();let d=new Date(TODAY);
+  for(let i=0;i<70;i++){d=addDays(d,1);if(d.getDay()===4){const k=d.toDateString();
+    if(!seen.has(k)){seen.add(k);out.push(new Date(d));}}}
+  for(let m=2;m<=6;m++){const f=new Date(TODAY.getFullYear(),TODAY.getMonth()+m+1,0);
+    let l=new Date(f);while(l.getDay()!==4)l=addDays(l,-1);
+    const k=l.toDateString();if(!seen.has(k)){seen.add(k);out.push(l);}}
+  out.sort((a,b)=>a-b);
+  return out.map(d=>({date:d,days:Math.round((d-TODAY)/86400000)})).filter(e=>e.days>0);}
+function fillExpiries(){EXPIRIES=buildExpiries();
+  const s=el('expiry'),prev=s.value;
+  s.innerHTML=EXPIRIES.map(e=>'<option value="'+e.days+'">'+e.date.getDate()+' '+MON[e.date.getMonth()]+' \u00B7 '+e.days+'d</option>').join('');
+  s.value=(prev&&EXPIRIES.some(e=>String(e.days)===prev))?prev:String(EXPIRIES[Math.min(2,EXPIRIES.length-1)].days);}
+function fillStrikes(){
+  const inst=SYMBOLS[symbolKey],step=inst.step,atm=Math.round(SPOT/step)*step;
+  const s=el('strike'),prev=parseFloat(s.value);
+  let opts='';
+  for(let i=-10;i<=10;i++){const K=atm+i*step;if(K<=0)continue;
+    opts+='<option value="'+K+'">'+K.toLocaleString('en-IN')+(i===0?' (ATM)':'')+'</option>';}
+  s.innerHTML=opts;
+  const keep=(!isNaN(prev)&&Array.prototype.some.call(s.options,o=>+o.value===prev));
+  s.value=String(keep?prev:atm);}
+
+/* ---------- script combobox ---------- */
+let comboHi=-1,comboMatches=[];
+function scoreSym(k,q){const S=SYMBOLS[k],t=S.tick.toUpperCase(),n=S.label.toUpperCase();
+  if(!q)return 0;
+  if(t===q)return -3; if(t.indexOf(q)===0)return -2; if(n.indexOf(q)===0)return -1;
+  if(t.indexOf(q)>=0)return 1; if(n.indexOf(q)>=0)return 2; return null;}
+function renderCombo(){
+  const q=el('scriptSearch').value.trim().toUpperCase(),sc=[];
+  Object.keys(SYMBOLS).forEach(k=>{const v=scoreSym(k,q);if(v!==null)sc.push({k:k,v:v});});
+  sc.sort((a,b)=>a.v-b.v||SYMBOLS[a.k].tick.localeCompare(SYMBOLS[b.k].tick));
+  comboMatches=sc.map(x=>x.k);
+  const L=el('scriptList');
+  if(!comboMatches.length)L.innerHTML='<div class="combo-empty">No script matches</div>';
+  else L.innerHTML=comboMatches.slice(0,30).map((k,i)=>
+    '<div class="combo-opt'+(i===comboHi?' hi':'')+'" data-key="'+k+'"><span class="sym">'+
+    SYMBOLS[k].tick+'</span><span class="nm">'+SYMBOLS[k].label+'</span></div>').join('');
+  L.querySelectorAll('.combo-opt').forEach(o=>o.addEventListener('mousedown',e=>{
+    e.preventDefault();pickScript(o.dataset.key);}));
+  L.classList.add('open');el('scriptSearch').setAttribute('aria-expanded','true');}
+function closeCombo(){el('scriptList').classList.remove('open');
+  el('scriptSearch').setAttribute('aria-expanded','false');comboHi=-1;}
+function pickScript(k){if(!SYMBOLS[k])return;symbolKey=k;
+  el('scriptSearch').value=SYMBOLS[k].tick;el('scriptHint').textContent=SYMBOLS[k].label;
+  closeCombo();loadScript(k);}
+
+/* ---------- load ---------- */
+function eodDate(){const d=new Date();d.setDate(d.getDate()-(d.getDay()===1?3:d.getDay()===0?2:1));
+  return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});}
+function loadScript(k){
+  if(!SYMBOLS[k])k='nifty';
+  symbolKey=k;
+  const inst=SYMBOLS[k],live=(mode==='live');
+  const c=generateCloses(k,live?7:0),hv=hvFromCloses(c,20);
+  SPOT=Math.round(c[c.length-1]*100)/100;
+  baseVol=hv!==null?Math.round(hv*100)/100:12.5;
+  el('underlying').value=SPOT;
+  el('tickerBox').textContent=inst.tick;
+  el('lastPx').textContent='\u20B9'+SPOT.toLocaleString('en-IN');
+  el('srcNote').textContent=live?'Live feed \u00B7 last tick':'BhavCopy EOD close \u00B7 '+eodDate();
+  el('undHint').textContent=live?'Live feed':'BhavCopy EOD close';
+  el('scriptSearch').value=inst.tick;
+  el('scriptHint').textContent=inst.label;
+  fillStrikes();
+  syncPrice();
+}
+function syncPrice(){
+  if(priceSrc==='auto'){
+    const K=getStrike(),days=getDays();
+    el('marketPrice').value=chainPremium(optType,K,days,mode==='live',baseVol).toFixed(2);
+    el('marketPrice').readOnly=true;
+    el('priceHint').textContent=(mode==='live'?'Live LTP':'BhavCopy settle')+' for this contract';
+  }else{
+    el('marketPrice').readOnly=false;
+    el('priceHint').textContent='Entered manually';
+  }
+  compute();
+}
+
+/* ---------- compute + render ---------- */
+function compute(){
+  const S=parseFloat(el('underlying').value),K=getStrike();
+  const days=getDays(),rate=parseFloat(el('rate').value);
+  const mp=parseFloat(el('marketPrice').value);
+  const res=solveIV(optType,mp,S,K,days,rate,0,true);
+  lastResult=res;
+  ['marketPrice','underlying','strike','expiry','strikeNum','expiryNum','rate']
+    .forEach(i=>el(i).classList.remove('field-invalid'));
+  if(res.bad)res.bad.forEach(i=>{
+    const t=(mode==='custom'&&i==='strike')?'strikeNum':(mode==='custom'&&i==='expiry')?'expiryNum':i;
+    el(t).classList.add('field-invalid');});
+
+  const box=el('statusBox'),txt=el('statusText');
+  if(!res.ok){
+    el('ivOut').textContent='No solution';el('ivOut').className='big na';
+    el('ivHint').textContent='';
+    el('theoOut').textContent='\u2013';el('theoHint').textContent='';
+    el('sensOut').textContent='\u2013';el('sensHint').textContent='';
+    box.className='status err';
+    const label=res.status==='invalid_input'?'Invalid input':
+                res.status==='below_intrinsic'?'Below no-arbitrage floor':
+                res.status==='above_maximum'?'Above theoretical maximum':'Failed';
+    txt.innerHTML='<b>'+label+'.</b> '+res.message+
+      (res.bounds?' Valid quotes for this contract lie between \u20B9'+res.bounds[0].toFixed(2)+
+        ' and \u20B9'+res.bounds[1].toFixed(2)+'.':'');
+    el('chartWrap').innerHTML='';el('chartCap').textContent='';
+    el('traceBody').innerHTML='';el('traceCap').textContent='';
+    return;
+  }
+  el('ivOut').className='big';
+  el('ivOut').textContent=res.ivPct.toFixed(2)+'%';
+  el('ivHint').textContent=optType==='call'?'Call contract':'Put contract';
+  el('theoOut').textContent='\u20B9'+res.theoretical.toFixed(2);
+  el('theoHint').textContent='Residual '+(Math.abs(res.residual)<1e-6?'< 0.000001':res.residual.toExponential(2));
+  el('sensOut').textContent=(res.ivPerTick>100?'>100':res.ivPerTick.toFixed(3))+' pts';
+  el('sensHint').textContent='IV move per \u20B90.05 tick \u00B7 vega '+(res.vega/100).toFixed(3);
+
+  box.className='status '+(res.status==='ok'?'ok':'warn');
+  const lbl=res.status==='ok'?'Converged':(res.status==='low_vega'?'Converged \u2014 low sensitivity':'Poor fit');
+  txt.innerHTML='<b>'+lbl+'.</b> '+res.message+
+    ' Method: '+res.method+', '+res.iterations+' iteration'+(res.iterations!==1?'s':'')+'.';
+
+  renderChart(res,S,K,days,rate);
+  renderTrace(res);
+}
+
+function renderChart(res,S,K,days,rate){
+  const nar=isNarrow();
+  const W=nar?340:1000,H=nar?300:340,padL=nar?44:62,padR=nar?12:24,padT=18,padB=nar?30:34;
+  const pw=W-padL-padR,ph=H-padT-padB;
+  const FS=nar?10.5:10;
+  const maxVol=Math.max(res.ivPct*2.2,40);
+  const r=rate/100,T=days/DAYS_YEAR;
+  const N=141,pts=[];
+  for(let i=0;i<N;i++){const v=maxVol*i/(N-1);
+    pts.push({v:v,p:bsPrice(optType,S,K,r,0,T,Math.max(v/100,1e-9))});}
+  const mp=parseFloat(el('marketPrice').value);
+  let yMax=Math.max.apply(null,pts.map(p=>p.p)),yMin=Math.min.apply(null,pts.map(p=>p.p));
+  yMax=Math.max(yMax,mp);yMin=Math.min(yMin,mp);
+  const pad=(yMax-yMin)*0.10||1;yMax+=pad;yMin-=pad;
+  const xAt=v=>padL+(v/maxVol)*pw, yAt=p=>padT+ph-((p-yMin)/(yMax-yMin))*ph;
+
+  let grid='';
+  for(let g=0;g<=4;g++){const val=yMin+(yMax-yMin)*g/4,y=yAt(val);
+    grid+='<line x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y.toFixed(1)+'" stroke="#edefe8"/>'+
+      '<text x="'+(padL-7)+'" y="'+(y+3.5).toFixed(1)+'" font-size="'+FS+'" font-family="IBM Plex Mono,monospace" fill="#8b9285" text-anchor="end">'+
+      (val>=1000?(val/1000).toFixed(1)+'k':val.toFixed(0))+'</text>';}
+  let xl='';const nx=nar?4:6;
+  for(let i=0;i<nx;i++){const v=maxVol*i/(nx-1);
+    xl+='<text x="'+xAt(v).toFixed(1)+'" y="'+(H-9)+'" font-size="'+FS+'" font-family="IBM Plex Mono,monospace" fill="#8b9285" text-anchor="middle">'+v.toFixed(0)+'%</text>';}
+
+  const curve=pts.map((p,i)=>(i?'L':'M')+xAt(p.v).toFixed(1)+','+yAt(p.p).toFixed(1)).join(' ');
+  const mpY=yAt(mp), ivX=xAt(Math.min(res.ivPct,maxVol));
+
+  el('chartWrap').innerHTML='<svg viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg">'+grid+
+    '<line x1="'+padL+'" y1="'+mpY.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+mpY.toFixed(1)+
+      '" stroke="#b3592f" stroke-width="1.6" stroke-dasharray="5,4"/>'+
+    '<path d="'+curve+'" fill="none" stroke="#5f7d43" stroke-width="2.2"/>'+
+    '<line x1="'+ivX.toFixed(1)+'" y1="'+padT+'" x2="'+ivX.toFixed(1)+'" y2="'+(padT+ph)+
+      '" stroke="#8b9285" stroke-width="1.4" stroke-dasharray="3,3"/>'+
+    '<circle cx="'+ivX.toFixed(1)+'" cy="'+mpY.toFixed(1)+'" r="5" fill="#5f7d43" stroke="#fff" stroke-width="2"/>'+
+    '<text x="'+ivX.toFixed(1)+'" y="'+(padT+11)+'" font-size="'+FS+'" font-family="IBM Plex Mono,monospace" fill="#425b2c" text-anchor="middle" font-weight="600">'+
+      res.ivPct.toFixed(2)+'%</text>'+
+    xl+'</svg>';
+
+  el('chartCap').textContent='The solver walks this curve until the model price meets the market price of \u20B9'+
+    mp.toFixed(2)+'. Where the curve is steep the volatility is well determined; where it flattens, '+
+    'many volatilities give nearly the same price and the answer becomes unreliable.';
+}
+
+function renderTrace(res){
+  const b=el('traceBody');
+  b.innerHTML=res.trace.map(s=>'<tr><td>'+s.i+'</td><td>'+(s.sigma*100).toFixed(4)+'%</td><td>'+
+    s.price.toFixed(4)+'</td><td>'+(Math.abs(s.diff)<1e-9?s.diff.toExponential(1):s.diff.toFixed(6))+
+    '</td><td>'+(s.vega/100).toFixed(4)+'</td></tr>').join('');
+  el('traceCap').textContent=res.method==='newton'
+    ? 'Newton-Raphson: each step divides the price error by vega to jump straight to a better volatility. The residual falls roughly quadratically.'
+    : 'Newton-Raphson could not converge here, so the solver fell back to bisection, which halves the search interval each step. Slower but it cannot fail once the price is within the arbitrage bounds.';
+}
+
+/* ---------- modes ---------- */
+function setMode(m){
+  mode=m;
+  document.querySelectorAll('.source-tab').forEach(b=>{
+    const a=b.dataset.mode===m;b.classList.toggle('active',a);b.setAttribute('aria-selected',String(a));});
+  const custom=(m==='custom');
+  el('customModeNote').style.display=custom?'block':'none';
+  el('liveModeLock').style.display=m==='live'?'flex':'none';
+  el('scriptSearch').parentElement.style.display=custom?'none':'';
+
+  // swap the chain-driven controls for plain inputs
+  el('strike').style.display=custom?'none':'';
+  el('strikeNum').style.display=custom?'':'none';
+  el('expiry').style.display=custom?'none':'';
+  el('expiryNum').style.display=custom?'':'none';
+  el('strikeHint').textContent=custom?'Entered manually':'From the chain';
+  el('expHint').textContent=custom?'Days to expiry':'Days to expiry';
+
+  // the market-price source toggle only means something with a feed behind it
+  el('priceSeg').style.display=custom?'none':'';
+  el('underlying').readOnly=!custom;
+
+  if(custom){
+    priceSrc='manual';
+    el('marketPrice').readOnly=false;
+    el('priceHint').textContent='Entered manually';
+    SPOT=parseFloat(el('underlying').value)||SPOT;
+    el('tickerBox').textContent='CUSTOM';
+    el('lastPx').textContent='\u20B9'+SPOT.toLocaleString('en-IN');
+    el('srcNote').textContent='Manual entry';
+    el('undHint').textContent='Entered manually';
+    compute();
+  }else{
+    priceSrc='auto';
+    document.querySelectorAll('#priceSeg button').forEach(x=>
+      x.classList.toggle('active',x.dataset.src==='auto'));
+    loadScript(symbolKey);
+  }
+}
+
+/* ---------- wiring ---------- */
+el('scriptSearch').addEventListener('input',()=>{comboHi=-1;renderCombo();});
+el('scriptSearch').addEventListener('focus',()=>{el('scriptSearch').select();renderCombo();});
+el('scriptSearch').addEventListener('blur',()=>setTimeout(closeCombo,120));
+el('scriptSearch').addEventListener('keydown',e=>{
+  const n=Math.min(comboMatches.length,30);
+  if(e.key==='ArrowDown'){e.preventDefault();comboHi=Math.min(comboHi+1,n-1);renderCombo();}
+  else if(e.key==='ArrowUp'){e.preventDefault();comboHi=Math.max(comboHi-1,0);renderCombo();}
+  else if(e.key==='Enter'){e.preventDefault();const p=comboMatches[comboHi>=0?comboHi:0];if(p)pickScript(p);}
+  else if(e.key==='Escape'){closeCombo();}});
+el('strike').addEventListener('change',syncPrice);
+el('expiry').addEventListener('change',syncPrice);
+el('strikeNum').addEventListener('input',compute);
+el('expiryNum').addEventListener('input',compute);
+el('underlying').addEventListener('input',()=>{
+  if(mode!=='custom')return;
+  SPOT=parseFloat(el('underlying').value)||SPOT;
+  el('lastPx').textContent='\u20B9'+SPOT.toLocaleString('en-IN');
+  compute();});
+el('rate').addEventListener('input',compute);
+el('marketPrice').addEventListener('input',compute);
+document.querySelectorAll('#typeSeg button').forEach(b=>b.addEventListener('click',()=>{
+  optType=b.dataset.type;
+  document.querySelectorAll('#typeSeg button').forEach(x=>x.classList.toggle('active',x===b));
+  syncPrice();}));
+document.querySelectorAll('#priceSeg button').forEach(b=>b.addEventListener('click',()=>{
+  priceSrc=b.dataset.src;
+  document.querySelectorAll('#priceSeg button').forEach(x=>x.classList.toggle('active',x===b));
+  syncPrice();}));
+document.querySelectorAll('.source-tab').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode)));
+el('liveUpgradeBtn').addEventListener('click',()=>{
+  el('liveUpgradeBtn').textContent='Request sent - our team will reach out';
+  el('liveUpgradeBtn').disabled=true;});
+if(typeof window!=='undefined'){let was=isNarrow(),rt=null;
+  window.addEventListener('resize',()=>{clearTimeout(rt);
+    rt=setTimeout(()=>{const n=isNarrow();if(n!==was){was=n;compute();}},180);});}
+
+fillExpiries();
+setMode('eod');
+closeCombo();
+</script>
+</body>
+</html>

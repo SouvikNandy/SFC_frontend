@@ -1,5 +1,6 @@
 import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
+import { Router } from '@angular/router';
 import { catchError, finalize, switchMap, throwError } from 'rxjs';
 
 import { AuthService } from '../services/auth.service';
@@ -10,6 +11,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const storageService = inject(StorageService);
   const authService = inject(AuthService);
   const httpLoadingService = inject(HttpLoadingService);
+  const router = inject(Router);
   const token = storageService.getAccessToken();
 
   httpLoadingService.show();
@@ -44,7 +46,11 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
           return next(retriedReq);
         }),
-        catchError(() => throwError(() => error))
+        catchError((refreshError) => {
+          authService.expireSession();
+          void router.navigateByUrl('/login');
+          return throwError(() => refreshError);
+        })
       );
     }),
     finalize(() => httpLoadingService.hide())

@@ -1,0 +1,185 @@
+<section class="implied-volatility-page">
+    <form [formGroup]="form">
+        <!-- <div class="titlebar">
+            <h1>Implied Volatility</h1>
+            <span class="ticker">{{ modeControl.value === 'custom' ? 'CUSTOM' : (symbolControl.value || '—') }}</span>
+            <span class="lastpx">{{ formatPrice(underlyingControl.value) }}</span>
+            <span class="srcnote">{{ sourceNote }}</span>
+        </div> -->
+        <p class="sub">Solves the volatility that reproduces an observed option price, and reports how reliable that
+            solve
+            is.</p>
+
+        <div class="panel">
+            <p class="sect-label">Data source</p>
+            <div class="source-tabs" role="tablist" aria-label="Data source">
+                <button type="button" role="tab" [class.active]="modeControl.value === 'custom'"
+                    [attr.aria-selected]="modeControl.value === 'custom'" (click)="selectMode('custom')">Custom</button>
+                <button type="button" role="tab" [class.active]="modeControl.value === 'eod'"
+                    [attr.aria-selected]="modeControl.value === 'eod'" (click)="selectMode('eod')">EOD data <em>from
+                        BhavCopy</em></button>
+                <button type="button" role="tab" [class.active]="modeControl.value === 'live'"
+                    [attr.aria-selected]="modeControl.value === 'live'" (click)="selectMode('live')">Live data
+                    <em>Premium</em></button>
+            </div>
+            @if (modeControl.value === 'custom') {
+            <div class="mode-note">Enter every value by hand — underlying, strike, days to expiry and the market price
+                you
+                observed. Nothing is pulled from a data feed.</div>
+            }
+            @if (modeControl.value === 'live') {
+            <div class="live-lock">
+                <div class="live-lock-icon" aria-hidden="true">▣</div>
+                <div class="live-lock-copy">
+                    <p class="live-lock-title">Live data is a Premium feature</p>
+                    <p class="live-lock-desc">Solve against the real-time underlying and streaming option quotes instead
+                        of
+                        the previous close.</p>
+                </div>
+                <button type="button" class="calc" [disabled]="liveUpgradeRequested" (click)="requestUpgrade()">{{
+                    liveUpgradeRequested ? 'Request sent — our team will reach out' : 'Upgrade to Premium' }}</button>
+            </div>
+            }
+
+            <p class="sect-label">Contract</p>
+            <div class="grid4">
+                @if (modeControl.value !== 'custom') {
+                <div class="field-block autocomplete-field">
+                    <label for="scriptSearch">Script</label>
+                    <input id="scriptSearch" type="text" formControlName="symbol" autocomplete="off"
+                        placeholder="Search scripts…" role="combobox" [disabled]="symbolsLoading || detailsLoading"
+                        [attr.aria-expanded]="suggestionsOpen" aria-controls="iv-symbol-options"
+                        [attr.aria-activedescendant]="highlightedSymbolIndex >= 0 ? 'iv-symbol-' + highlightedSymbolIndex : null"
+                        (input)="onSymbolInput()" (focus)="onSymbolInput()" (blur)="onSymbolBlur()"
+                        (keydown)="onSymbolKeydown($event)">
+                    @if (suggestionsOpen) {
+                    <div id="iv-symbol-options" class="autocomplete-options" role="listbox">
+                        @for (symbol of filteredSymbols; track symbol; let index = $index) {
+                        <button type="button" role="option" [id]="'iv-symbol-' + index"
+                            [class.highlighted]="index === highlightedSymbolIndex" (mousedown)="$event.preventDefault()"
+                            (click)="selectSymbol(symbol)">{{ symbol }}</button>
+                        } @empty { <div class="combo-empty">No script matches</div> }
+                    </div>
+                    }
+                    @if (symbolsLoading) { <span class="field-hint">Loading symbol list…</span> }
+                    @if (detailsLoading) { <span class="field-hint">Loading symbol details…</span> }
+                </div>
+                }
+                <div class="field-block"><label for="underlying">Underlying price</label><input id="underlying"
+                        type="number" formControlName="underlying" step="0.05"
+                        [readonly]="modeControl.value !== 'custom'" (input)="onFieldChange()"><span
+                        class="field-hint">{{ modeControl.value === 'custom' ? 'Entered
+                        manually' : 'API EOD underlying' }}</span></div>
+                <div class="field-block"><label for="strike">Strike</label>
+                    @if (modeControl.value === 'custom') { <input id="strike" type="number" formControlName="strike"
+                        step="1" (input)="onFieldChange()"> }
+                    @else { <select id="strike" formControlName="strike" (change)="onStrikeChange()">
+                        <option value="0">Select strike</option>@for (strike of strikes; track strike) { <option
+                            [ngValue]="strike">{{ strike | number:'1.0-2' }}</option> }
+                    </select> }
+                    <span class="field-hint">{{ modeControl.value === 'custom' ? 'Entered manually' : 'From the chain ·
+                        ATM
+                        selected' }}</span>
+                </div>
+                <div class="field-block"><label for="expiry">Expiry</label><input id="expiry" type="number"
+                        formControlName="expiry" step="1" min="1" [readonly]="modeControl.value !== 'custom'"
+                        (input)="onFieldChange()"><span class="field-hint">{{ modeControl.value === 'custom' ? 'Days to
+                        expiry' : (expiryDate ? expiryDate + ' · ' + expiryControl.value + 'd' : 'Days to expiry')
+                        }}</span>
+                </div>
+            </div>
+
+            <div class="grid3">
+                <div class="field-block"><label>Option type</label>
+                    <div class="seg type"><button type="button" [class.active]="optionType === 'call'"
+                            (click)="selectOptionType('call')">Call</button><button type="button"
+                            [class.active]="optionType === 'put'" (click)="selectOptionType('put')">Put</button></div>
+                </div>
+                <div class="field-block"><label for="marketPrice">Market price</label>
+                    @if (modeControl.value !== 'custom') { <div class="seg"><button type="button"
+                            [class.active]="priceSource === 'auto'"
+                            (click)="selectPriceSource('auto')">Auto</button><button type="button"
+                            [class.active]="priceSource === 'manual'"
+                            (click)="selectPriceSource('manual')">Manual</button></div> }
+                    <input id="marketPrice" type="number" formControlName="marketPrice" step="0.05"
+                        [readonly]="priceSource === 'auto' || modeControl.value === 'live'"
+                        (input)="onFieldChange()"><span class="field-hint">{{ priceSource === 'auto' ? (optionType ===
+                        'call' ? 'API market_price.CE' : 'API
+                        market_price.PE') : 'Entered manually' }}</span>
+                </div>
+                <div class="field-block"><label for="rate">Interest rate %</label><input id="rate" type="number"
+                        formControlName="rate" step="0.05" (input)="onFieldChange()"><span class="field-hint">Risk-free
+                        rate
+                        used in discounting</span></div>
+            </div>
+            @if (error) { <p class="input-error" role="alert">{{ error }}</p> }
+        </div>
+
+        <div class="panel">
+            <p class="sect-label">Result</p>
+            <div class="result-grid">
+                <div class="result-cell">
+                    <div class="result-label">Implied volatility</div>
+                    <div class="result-big" [class.na]="!result?.ok">{{ result?.ok ? (result?.ivPct?.toFixed(2) + '%') :
+                        (result ? 'No solution' : '—') }}</div>
+                    <div class="result-hint">{{ result?.ok ? (optionType === 'call' ? 'Call contract' : 'Put contract')
+                        : ''
+                        }}</div>
+                </div>
+                <div class="result-cell">
+                    <div class="result-label">Theoretical price at this IV</div>
+                    <div class="result-number">{{ formatPrice(result?.theoretical) }}</div>
+                    <div class="result-hint">{{ residualHint() }}</div>
+                </div>
+                <div class="result-cell">
+                    <div class="result-label">Sensitivity</div>
+                    <div class="result-number">{{ formatSensitivity(result?.ivPerTick) }}</div>
+                    <div class="result-hint">{{ vegaHint() }}</div>
+                </div>
+            </div>
+            @if (result) { <div [class]="statusClass()"><span class="status-dot"></span><span><b>{{ statusLabel()
+                        }}.</b>
+                    {{
+                    result.message }}@if (result.method) { Method: {{ result.method }}, {{ result.iterations }}
+                    iteration{{
+                    result.iterations === 1 ? '' : 's' }}. }</span></div> }
+
+            <p class="sect-label chart-title">Price against volatility</p>
+            <div class="chart-legend"><span><i class="legend-theoretical"></i>Theoretical price</span><span><i
+                        class="legend-market"></i>Market price</span><span><i class="legend-solved"></i>Solved IV</span>
+            </div>
+            @if (chart; as chartData) {
+            <div class="chart-wrap"><svg [attr.viewBox]="chartData.viewBox" role="img"
+                    aria-label="Theoretical option price against volatility">
+                    @for (line of chartData.gridLines; track line.y) { <line x1="58" [attr.y1]="line.y" x2="876"
+                        [attr.y2]="line.y" class="chart-grid"></line><text x="50" [attr.y]="line.y + 3"
+                        text-anchor="end" class="chart-axis">{{ line.label }}</text> }
+                    <path [attr.d]="chartData.curvePath" class="chart-curve"></path>
+                    <line x1="58" [attr.y1]="chartData.marketLineY" x2="876" [attr.y2]="chartData.marketLineY"
+                        class="chart-market"></line>
+                    <line [attr.x1]="chartData.solvedLineX" y1="18" [attr.x2]="chartData.solvedLineX" y2="268"
+                        class="chart-solved"></line>
+                    <circle [attr.cx]="chartData.solvedPoint.x" [attr.cy]="chartData.solvedPoint.y" r="5"
+                        class="chart-point"></circle><text [attr.x]="chartData.solvedLineX" y="30" text-anchor="middle"
+                        class="chart-solved-label">{{ chartData.solvedLabel }}</text>
+                    @for (label of chartData.xLabels; track label.x) { <text [attr.x]="label.x" y="290"
+                        text-anchor="middle" class="chart-axis">{{ label.label }}</text> }
+                </svg></div>
+            <p class="chart-caption">The solver walks this curve until the model price meets the market price. Where the
+                curve is steep the volatility is well determined; where it flattens, the answer becomes unreliable.</p>
+            } @else { <div class="chart-empty">Enter valid inputs to display the price-volatility curve.</div> }
+        </div>
+
+        <div class="panel trace-panel">
+            <p class="sect-label">Calculation trace</p>
+            <app-data-table [columns]="traceColumns" [data]="traceRows"
+                emptyMessage="Solver steps will appear after a valid calculation."></app-data-table>
+            <p class="chart-caption">{{ result?.method === 'newton' ? 'Newton-Raphson: each step divides the price error
+                by
+                vega to jump straight to a better volatility. The residual falls roughly quadratically.' :
+                result?.method
+                === 'bisection' ? 'Newton-Raphson could not converge here, so the solver fell back to bisection, which
+                halves the search interval each step.' : 'Solver steps will appear after a valid calculation.' }}</p>
+        </div>
+    </form>
+</section>

@@ -1,19 +1,20 @@
 import { Injectable } from '@angular/core';
 
-import { AuthUser, AuthTokenData } from '../models/auth.model';
+import { AuthUser, AuthTokenData, RegistrationContext } from '../models/auth.model';
 
 @Injectable({
   providedIn: 'root'
 })
 export class StorageService {
-  readonly accessTokenKey = '3a9ffb54-c4f1-4a54-9433-3678e9d36342';
+  readonly accessTokenKey = 'auth-access-token';
   readonly refreshTokenKey = 'auth-refresh-token';
   readonly userKey = 'auth-user';
+  readonly registrationContextKey = 'auth-registration-context';
 
   get<T>(key: string): T | null {
     const value = window.localStorage.getItem(key);
-
-    return value ? (JSON.parse(value) as T) : null;
+    if (!value) return null;
+    try { return JSON.parse(value) as T; } catch { this.remove(key); return null; }
   }
 
   set<T>(key: string, value: T): void {
@@ -70,6 +71,20 @@ export class StorageService {
     this.removeAccessToken();
     this.removeRefreshToken();
     this.removeUser();
+  }
+
+  getRegistrationContext(): RegistrationContext | null {
+    const value = window.sessionStorage.getItem(this.registrationContextKey);
+    if (!value) return null;
+    try { return JSON.parse(value) as RegistrationContext; } catch { this.clearRegistrationContext(); return null; }
+  }
+
+  setRegistrationContext(context: RegistrationContext): void {
+    window.sessionStorage.setItem(this.registrationContextKey, JSON.stringify(context));
+  }
+
+  clearRegistrationContext(): void {
+    window.sessionStorage.removeItem(this.registrationContextKey);
   }
 
   getJwtToken(): string | null {

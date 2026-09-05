@@ -1,4 +1,7 @@
 import { Injectable } from '@angular/core';
+import { Observable, map } from 'rxjs';
+import { ApiService } from '../../../core/services/api.service';
+import { GreeksSymbolDetails, GreeksSymbolDetailsRequest, GreeksSymbolDetailsResponse, GreeksSymbolListResponse } from './greeks.model';
 
 export interface GreeksInput {
     spot: number;
@@ -9,30 +12,28 @@ export interface GreeksInput {
     dividend: number; // percent
 }
 
-export interface Preset {
-    spot: number;
-    strike: number;
-    rate: number;
-    vol: number;
-    expiry: number;
-    dividend: number;
-    step: number;
-    label: string;
-}
-
-export const PRESETS: Record<string, Preset | null> = {
-    custom: null,
-    nifty: { spot: 24800, strike: 24800, rate: 10, vol: 12.5, expiry: 7, dividend: 10, step: 50, label: "NIFTY 50 · typical weekly expiry setup" },
-    banknifty: { spot: 51200, strike: 51200, rate: 10, vol: 14.0, expiry: 7, dividend: 10, step: 100, label: "BANK NIFTY · typical weekly expiry setup" },
-    sensex: { spot: 81400, strike: 81400, rate: 10, vol: 12.0, expiry: 7, dividend: 10, step: 100, label: "SENSEX · typical weekly expiry setup" },
-    reliance: { spot: 2950, strike: 2950, rate: 10, vol: 22.0, expiry: 30, dividend: 10, step: 50, label: "Reliance Industries · monthly expiry setup" },
-    tcs: { spot: 3850, strike: 3850, rate: 10, vol: 20.0, expiry: 30, dividend: 10, step: 50, label: "TCS · monthly expiry setup" },
-    hdfcbank: { spot: 1680, strike: 1680, rate: 10, vol: 18.5, expiry: 30, dividend: 10, step: 20, label: "HDFC Bank · monthly expiry setup" },
-    infosys: { spot: 1550, strike: 1550, rate: 10, vol: 24.0, expiry: 30, dividend: 10, step: 20, label: "Infosys · monthly expiry setup" }
-};
-
 @Injectable({ providedIn: 'root' })
 export class GreeksCalculatorService {
+    constructor(private readonly api: ApiService) { }
+
+    getSymbols(): Observable<string[]> {
+        return this.api.get<GreeksSymbolListResponse>('/fo/dd_list').pipe(
+            map(response => {
+                if (!response.success) throw new Error('Invalid symbol list response');
+                return response.data ?? response.SYMBOL_LIST ?? [];
+            })
+        );
+    }
+
+    getSymbolDetails(request: GreeksSymbolDetailsRequest): Observable<GreeksSymbolDetails> {
+        return this.api.post<GreeksSymbolDetailsResponse, GreeksSymbolDetailsRequest>('/fo/dd_symbol_details', request).pipe(
+            map(response => {
+                if (!response.success || !response.data) throw new Error('Invalid symbol details response');
+                return response.data;
+            })
+        );
+    }
+
     // from prototype: erf-based normCdf and normPdf
     private erf(x: number) {
         const sign = x < 0 ? -1 : 1;

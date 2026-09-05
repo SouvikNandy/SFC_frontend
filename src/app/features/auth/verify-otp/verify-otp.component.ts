@@ -1,8 +1,9 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { AbstractControl, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 
 import { AuthService } from '../../../core/services/auth.service';
+import { DEFAULT_OTP } from '../../../core/models/auth.model';
 import { ToastService } from '../../../core/services/toast.service';
 
 @Component({
@@ -14,67 +15,55 @@ import { ToastService } from '../../../core/services/toast.service';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class VerifyOtpComponent {
-  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly authService = inject(AuthService);
   private readonly toast = inject(ToastService);
 
-  readonly registerEmail = this.route.snapshot.queryParamMap.get('email') ?? 'your email';
-  readonly registeredPhone = this.route.snapshot.queryParamMap.get('phone') ?? 'your phone';
+  readonly registrationContext = this.authService.getRegistrationContext();
+  readonly registerEmail = this.registrationContext?.email ?? 'your email';
+  readonly registeredPhone = this.registrationContext?.phone ?? 'your phone';
 
   readonly form = new FormGroup({
-    emailOtp: new FormControl('', [Validators.required, Validators.pattern(/^\d{6}$/)]),
-    phoneOtp: new FormControl('', [Validators.required, Validators.pattern(/^\d{6}$/)])
+    otp: new FormControl('', [Validators.required, Validators.pattern(/^\d{4}$/)])
   });
 
   readonly isSubmitting = signal(false);
   readonly isSuccess = signal(false);
   readonly otpError = signal<string | null>(null);
 
-  get emailOtpControl(): AbstractControl {
-    return this.form.controls.emailOtp;
+  get otpControl(): AbstractControl {
+    return this.form.controls.otp;
   }
 
-  get phoneOtpControl(): AbstractControl {
-    return this.form.controls.phoneOtp;
-  }
-
-  normalizeOtp(controlName: 'emailOtp' | 'phoneOtp', value: string): void {
-    const nextValue = value.replace(/\D/g, '').slice(0, 6);
-    this.form.controls[controlName].setValue(nextValue);
+  normalizeOtp(value: string): void {
+    this.otpControl.setValue(value.replace(/\D/g, '').slice(0, 4));
   }
 
   verifyOtp(): void {
+    if (!this.registrationContext) {
+      this.router.navigateByUrl('/register');
+      return;
+    }
     if (this.form.invalid) {
       this.form.markAllAsTouched();
-      this.otpError.set('Both OTP codes must be exactly 6 digits.');
+      this.otpError.set('Enter the 4-digit verification code.');
       return;
     }
 
-    const emailOtp = this.emailOtpControl.value ?? '';
-    const phoneOtp = this.phoneOtpControl.value ?? '';
+    const otp = this.otpControl.value ?? '';
 
-    if (emailOtp.length !== 6 || phoneOtp.length !== 6) {
+    if (otp !== DEFAULT_OTP) {
       this.form.markAllAsTouched();
-      this.otpError.set('Both OTP codes must be exactly 6 digits.');
+      this.otpError.set('Enter the correct 4-digit verification code.');
       return;
     }
 
     this.isSubmitting.set(true);
     this.otpError.set(null);
 
-    this.authService.verifyOtp({
-      phone: this.registeredPhone,
-      otp: phoneOtp
-    }).subscribe({
-      next: () => {
-        this.isSubmitting.set(false);
-        this.isSuccess.set(true);
-      },
-      error: () => {
-        this.isSubmitting.set(false);
-        this.otpError.set('Unable to verify the OTP. Please try again.');
-        this.toast.error('Unable to verify the OTP. Please try again.');
-      }
+    this.authService.verifyOtp({ phone: this.registeredPhone, otp }).subscribe({
+      next: () => { this.isSubmitting.set(false); this.isSuccess.set(true); void this.router.navigateByUrl(this.authService.isAuthenticated() ? '/dashboard' : '/login'); },
+      error: () => { this.isSubmitting.set(false); this.otpError.set('Unable to verify the OTP. Please try again.'); this.toast.error('Unable to verify the OTP. Please try again.'); }
     });
   }
 

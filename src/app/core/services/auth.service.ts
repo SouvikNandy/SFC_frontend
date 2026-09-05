@@ -1,8 +1,8 @@
 import { Injectable, signal } from '@angular/core';
-import { Observable, of, tap } from 'rxjs';
+import { Observable, of, catchError, finalize, shareReplay, tap, throwError } from 'rxjs';
 
 import {
-  AuthUser,
+  AuthUser, AuthTokenData, DEFAULT_OTP, RegistrationContext,
   ForgotPasswordRequest,
   LoginRequest,
   LoginResponse,
@@ -31,6 +31,8 @@ export class AuthService {
     this.initialize();
   }
 
+  private refreshInFlight$: Observable<RefreshTokenResponse> | null = null;
+
   initialize(): void {
     const token = this.storageService.getAccessToken();
     const user = this.storageService.getUser();
@@ -40,15 +42,48 @@ export class AuthService {
   }
 
   private persistSessionFromResponse(response: LoginResponse | VerifyOtpResponse | RefreshTokenResponse): void {
-    const payload = response.data;
+    const payload = response.data as any;
 
-    if (!payload || !payload.tokens || !payload.user) {
+    if (!payload) {
+      console.warn('[Auth] Payload is empty or null');
       return;
     }
 
-    this.storageService.setSession(payload.tokens, payload.user);
-    this.currentUser.set(payload.user);
+    console.log('[Auth] Processing response payload:', payload);
+
+    // Handle new format (direct access_token/refresh_token in payload)
+    const hasDirectTokens = payload.access_token && payload.refresh_token;
+    // Handle old format (tokens object)
+    const hasTokensObject = payload.tokens && payload.tokens.accessToken && payload.tokens.refreshToken;
+
+    if (!hasDirectTokens && !hasTokensObject) {
+      console.warn('[Auth] No valid tokens found in response');
+      return;
+    }
+
+    const tokensToNormalize = hasDirectTokens
+      ? { accessToken: payload.access_token, refreshToken: payload.refresh_token }
+      : payload.tokens;
+
+    console.log('[Auth] Tokens to normalize:', tokensToNormalize);
+
+    const tokens = this.normalizeTokens(tokensToNormalize);
+    if (!tokens) {
+      console.warn('[Auth] Failed to normalize tokens');
+      return;
+    }
+
+    const user = payload.user;
+    if (!user) {
+      console.warn('[Auth] No user data in response');
+      return;
+    }
+
+    console.log('[Auth] Persisting session with user:', user.email);
+    this.storageService.setSession(tokens, user);
+    this.currentUser.set(user);
     this.isAuthenticated.set(true);
+    console.log('[Auth] Session persisted successfully');
   }
 
   private clearSession(): void {
@@ -58,22 +93,49 @@ export class AuthService {
   }
 
   login(request: LoginRequest): Observable<LoginResponse> {
+    console.log('[Auth] Starting login with email:', request.email);
     return this.apiService.post<LoginResponse, LoginRequest>('/auth/login', request).pipe(
       tap((response) => {
-        this.persistSessionFromResponse(response);
+        console.log('[Auth] Login response received:', response);
+        if (response.success) {
+          this.persistSessionFromResponse(response);
+        } else {
+          console.warn('[Auth] Login response not successful:', response.message);
+        }
       })
     );
   }
 
   register(request: RegisterRequest): Observable<RegisterResponse> {
-    return this.apiService.post<RegisterResponse, RegisterRequest>('/auth/register', request);
+    return this.apiService.post<RegisterResponse, RegisterRequest>('/auth/register', request).pipe(
+      tap((response) => {
+        if (!response.success) return;
+        const data = response.data as any;
+        const registrationId = data?.registration_id;
+        this.storageService.setRegistrationContext({ email: request.email, phone: request.phone, ...(registrationId ? { registrationId } : {}) });
+
+        if (data?.user) {
+          // Handle new format (direct access_token/refresh_token)
+          const hasDirectTokens = data.access_token && data.refresh_token;
+
+          if (hasDirectTokens) {
+            const tokensToNormalize = { accessToken: data.access_token, refreshToken: data.refresh_token };
+            const tokens = this.normalizeTokens(tokensToNormalize);
+            if (tokens) {
+              this.storageService.setSession(tokens, data.user);
+              this.currentUser.set(data.user);
+              this.isAuthenticated.set(true);
+            }
+          }
+        }
+      })
+    );
   }
 
   verifyOtp(request: VerifyOtpRequest): Observable<VerifyOtpResponse> {
-    return this.apiService.post<VerifyOtpResponse, VerifyOtpRequest>('/auth/verify-otp', request).pipe(
-      tap((response) => {
-        this.persistSessionFromResponse(response);
-      })
+    if (request.otp !== DEFAULT_OTP) return throwError(() => new Error('Invalid OTP'));
+    return of({ success: true, message: 'OTP verified locally', data: null } as VerifyOtpResponse).pipe(
+      tap(() => this.storageService.clearRegistrationContext())
     );
   }
 
@@ -84,10 +146,7 @@ export class AuthService {
 
     const request: ForgotPasswordRequest = { email: email.trim() };
 
-    // Keep the actual API contract isolated for the real backend.
-    // No fake endpoint is being invented here.
-    return of({ success: true, message: 'If an account exists for this email address, a password reset link will be sent.' });
-    // return this.apiService.post<{ success: boolean }, ForgotPasswordRequest>('/auth/forgot-password', request);
+    return this.apiService.post<{ success: boolean }, ForgotPasswordRequest>('/auth/forgot-password', request);
   }
 
   resetPassword(request: ResetPasswordRequest): Observable<{ success: boolean }> {
@@ -97,59 +156,59 @@ export class AuthService {
   logout(): Observable<{ success: boolean }> {
     const refreshToken = this.storageService.getRefreshToken();
 
-    const requestBody: RefreshTokenRequest = {
-      refreshToken: refreshToken ?? ''
-    };
-
-    const cleanup$ = new Observable<{ success: boolean }>((subscriber) => {
-      this.clearSession();
-      subscriber.next({ success: true });
-      subscriber.complete();
-    });
-
-    if (!refreshToken) {
-      return cleanup$;
-    }
-
-    return this.apiService.post<{ success: boolean }, RefreshTokenRequest>('/auth/logout', requestBody).pipe(
-      tap(() => {
-        this.clearSession();
-      }),
-      // Fallback if logout endpoint is unavailable or not implemented by the backend.
-      // A local cleanup still keeps the session consistent for the app.
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      // no-op fallback handled by the final local cleanup below
+    this.storageService.clearRegistrationContext();
+    if (!refreshToken) { this.clearSession(); return of({ success: true }); }
+    return this.apiService.post<{ success: boolean }, RefreshTokenRequest>('/auth/logout', { refresh_token: refreshToken }).pipe(
+      catchError(() => of({ success: false })),
+      finalize(() => this.clearSession())
     );
   }
 
   refreshToken(): Observable<RefreshTokenResponse> {
     const refreshToken = this.storageService.getRefreshToken();
 
-    if (!refreshToken) {
-      this.clearSession();
-      throw new Error('Refresh token is not available.');
-    }
-
-    return this.apiService.post<RefreshTokenResponse, RefreshTokenRequest>('/auth/refresh', { refreshToken }).pipe(
+    if (!refreshToken) return throwError(() => new Error('Refresh token is not available.'));
+    if (this.refreshInFlight$) return this.refreshInFlight$;
+    this.refreshInFlight$ = this.apiService.post<RefreshTokenResponse, RefreshTokenRequest>('/auth/refresh', { refresh_token: refreshToken }).pipe(
       tap((response) => {
         const payload = response.data;
+        if (!payload) throw new Error('Invalid refresh response');
 
-        if (!payload || !payload.tokens) {
-          this.clearSession();
-          return;
-        }
+        // Handle new format (direct access_token/refresh_token)
+        const hasDirectTokens = 'access_token' in payload && payload.access_token && 'refresh_token' in payload && payload.refresh_token;
+        // Handle old format (tokens object)
+        const hasTokensObject = 'tokens' in payload && payload.tokens;
 
-        const user = payload.user ?? this.storageService.getUser();
+        if (!hasDirectTokens && !hasTokensObject) throw new Error('Invalid refresh response: no tokens found');
 
-        if (!user) {
-          this.clearSession();
-          return;
-        }
+        const tokensToNormalize = hasDirectTokens
+          ? { accessToken: payload.access_token, refreshToken: payload.refresh_token }
+          : (payload as any).tokens;
 
-        this.storageService.setSession(payload.tokens, user);
+        const tokens = this.normalizeTokens(tokensToNormalize);
+        if (!tokens) throw new Error('Invalid refresh tokens');
+
+        const user = (payload as any).user ?? this.storageService.getUser();
+        if (!user) throw new Error('Invalid refresh response: no user found');
+
+        this.storageService.setSession(tokens, user);
         this.currentUser.set(user);
         this.isAuthenticated.set(true);
-      })
+      }),
+      finalize(() => { this.refreshInFlight$ = null; }),
+      shareReplay({ bufferSize: 1, refCount: false })
     );
+    return this.refreshInFlight$;
+  }
+
+  getRegistrationContext(): RegistrationContext | null { return this.storageService.getRegistrationContext(); }
+  clearRegistrationContext(): void { this.storageService.clearRegistrationContext(); }
+  expireSession(): void { this.clearSession(); this.storageService.clearRegistrationContext(); }
+
+  private normalizeTokens(tokens: AuthTokenData): AuthTokenData | null {
+    const raw = tokens as AuthTokenData & { access_token?: string; refresh_token?: string };
+    const accessToken = raw.accessToken ?? raw.access_token;
+    const refreshToken = raw.refreshToken ?? raw.refresh_token;
+    return accessToken && refreshToken ? { ...tokens, accessToken, refreshToken } : null;
   }
 }

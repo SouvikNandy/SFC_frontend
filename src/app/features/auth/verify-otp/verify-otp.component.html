@@ -5,26 +5,15 @@
     </button>
 
     <h2 id="verify-title" class="verify-otp__title">Verify your details</h2>
-    <p class="verify-otp__description">
-        We sent 6-digit codes to <strong>{{ registerEmail }}</strong> and your phone. Enter both to activate your
-        account.
-    </p>
+    <p class="verify-otp__description">Enter the 4-digit code sent to <strong>{{ registerEmail }}</strong> and your
+        phone to activate your account.</p>
 
     <form class="verify-otp__form" [formGroup]="form" (ngSubmit)="verifyOtp()" novalidate>
         <div class="verify-otp__field">
-            <label for="email-otp" class="verify-otp__label">Email OTP</label>
-            <input id="email-otp" class="verify-otp__input" type="text" inputmode="numeric" maxlength="6"
-                placeholder="000000" formControlName="emailOtp"
-                (input)="normalizeOtp('emailOtp', $any($event.target).value)"
-                [attr.aria-invalid]="emailOtpControl.touched && emailOtpControl.invalid" />
-        </div>
-
-        <div class="verify-otp__field">
-            <label for="phone-otp" class="verify-otp__label">Phone OTP</label>
-            <input id="phone-otp" class="verify-otp__input" type="text" inputmode="numeric" maxlength="6"
-                placeholder="000000" formControlName="phoneOtp"
-                (input)="normalizeOtp('phoneOtp', $any($event.target).value)"
-                [attr.aria-invalid]="phoneOtpControl.touched && phoneOtpControl.invalid" />
+            <label for="otp" class="verify-otp__label">Verification code</label>
+            <input id="otp" class="verify-otp__input" type="text" inputmode="numeric" maxlength="4" placeholder="0000"
+                formControlName="otp" (input)="normalizeOtp($any($event.target).value)"
+                [attr.aria-invalid]="otpControl.touched && otpControl.invalid" />
         </div>
 
         @if (otpError()) {

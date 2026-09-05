@@ -1,0 +1,122 @@
+<section class="probability-page">
+    <div class="head">
+
+        <p class="sub">Probability of the underlying reaching a target price before expiry, and of finishing beyond
+            it at expiry.</p>
+    </div>
+    <form class="panel" [formGroup]="form">
+
+        <p class="panel-title">Inputs</p>
+        <p class="panel-hint">Choose where your market parameters come from, then set a target price.</p>
+        <div class="source-tabs" role="tablist" aria-label="Data source">
+            <button type="button" role="tab" [class.active]="modeControl.value === 'custom'"
+                [attr.aria-selected]="modeControl.value === 'custom'" (click)="selectMode('custom')">Custom</button>
+            <button type="button" role="tab" [class.active]="modeControl.value === 'eod'"
+                [attr.aria-selected]="modeControl.value === 'eod'" (click)="selectMode('eod')">EOD data <em>from
+                    BhavCopy</em></button>
+            <button type="button" role="tab" [class.active]="modeControl.value === 'live'"
+                [attr.aria-selected]="modeControl.value === 'live'" (click)="selectMode('live')">Live data
+                <em>Premium</em></button>
+        </div>
+        @if (modeControl.value === 'custom') { <div class="mode-note">Enter every value below by hand. Nothing is pulled
+            from a data feed in this mode.</div> }
+        @if (modeControl.value === 'live') {
+        <div class="live-lock">
+            <div class="live-lock-icon" aria-hidden="true">▣</div>
+            <div class="live-lock-copy">
+                <p class="live-lock-title">Live data is a Premium feature</p>
+                <p class="live-lock-desc">Compute probabilities against the real-time spot price and live implied
+                    volatility instead of the previous close. Upgrade to enable.</p>
+            </div><button type="button" class="calc" [disabled]="liveUpgradeRequested" (click)="requestUpgrade()">{{
+                liveUpgradeRequested ? 'Request sent — our team will reach out' : 'Upgrade to Premium' }}</button>
+        </div>
+        }
+        @if (modeControl.value !== 'custom') {
+        <div class="preset-row">
+            <div class="field-block autocomplete-field"><label for="instrument">Instrument</label><input id="instrument"
+                    type="text" formControlName="symbol" autocomplete="off" placeholder="Search symbol"
+                    [disabled]="symbolsLoading || detailsLoading" role="combobox" [attr.aria-expanded]="suggestionsOpen"
+                    aria-controls="probability-symbol-options" (input)="onSymbolInput()" (focus)="onSymbolInput()"
+                    (blur)="onSymbolBlur()" (keydown)="onSymbolKeydown($event)">
+                @if (suggestionsOpen) { <div id="probability-symbol-options" class="autocomplete-options"
+                    role="listbox">@for (symbol of filteredSymbols; track symbol; let index = $index) { <button
+                        type="button" role="option" [class.highlighted]="index === highlightedSymbolIndex"
+                        (mousedown)="$event.preventDefault()" (click)="selectSymbol(symbol)">{{ symbol }}</button> }
+                    @empty { <div class="combo-empty">No script matches</div> }</div> }
+                @if (symbolsLoading) { <span class="field-hint">Loading symbol list…</span> } @if (detailsLoading) {
+                <span class="field-hint">Loading symbol details…</span> }
+            </div>
+            <div class="badge">{{ sourceNote || 'Values below refresh from your selection' }}</div>
+        </div>
+        }
+        <div class="grid-inputs">
+            <div class="field-block"><label for="spot">Underlying price</label>
+                <div class="unit-wrap"><input id="spot" type="number" formControlName="spot" step="1"
+                        [readonly]="modeControl.value === 'eod'" (input)="onFieldChange()"><span class="unit">₹</span>
+                </div><span class="field-hint">{{ modeControl.value === 'custom' ? 'Entered manually' : 'API EOD
+                    underlying' }}</span>
+            </div>
+            <div class="field-block"><label for="target">Target price</label>
+                <div class="unit-wrap"><input id="target" type="number" formControlName="target" step="1"
+                        (input)="onFieldChange()"><span class="unit">₹</span></div>
+            </div>
+            <div class="field-block"><label for="expiry">Days to expiry</label>
+                <div class="unit-wrap"><input id="expiry" type="number" formControlName="expiry" step="1" min="1"
+                        max="3650" [readonly]="modeControl.value === 'eod'" (input)="onFieldChange()"><span
+                        class="unit">days</span></div>
+            </div>
+            <div class="field-block"><label for="vol">Annual volatility</label>
+                <div class="unit-wrap"><input id="vol" type="number" formControlName="vol" step="0.1" min="0.01"
+                        max="1000" [readonly]="modeControl.value === 'eod'" (input)="onFieldChange()"><span
+                        class="unit">%</span></div><span class="field-hint">{{ modeControl.value === 'custom' ? 'Entered
+                    manually' : 'HV20 from symbol details' }}</span>
+            </div>
+        </div>
+        @if (error) { <p class="input-error" role="alert">{{ error }}</p> }
+        @if (form.invalid && form.touched) { <p class="input-error" role="alert">Enter valid positive values. Volatility
+            must be at most 1000% and expiry at most 3650 days.</p> }
+        <div class="actions"><span class="live-note"><span class="live-dot"></span>Results update as you change any
+                value</span><button type="button" class="calc" [disabled]="calculating || modeControl.value === 'live'"
+                (click)="recalculate()">{{ calculating ? 'Calculating…' : 'Recalculate' }}</button></div>
+    </form>
+
+    <div class="panel">
+        <p class="panel-title">Results</p>
+        <p class="panel-hint">Lognormal (Black-Scholes) model, zero-drift convention — volatility alone drives the
+            outcome.</p>
+        <div class="prob-cards">
+            <div class="prob-card touch">
+                <div class="tag">Probability of touching</div>
+                <div class="val">{{ formatPercent(data?.results?.probTouchPct) }}</div>
+                <div class="desc">Chance the price trades at or {{ directionLabel() }} ₹{{ targetControl.value |
+                    number:'1.0-0' }} at any point before expiry.</div>
+            </div>
+            <div class="prob-card expire">
+                <div class="tag">Probability at expiry</div>
+                <div class="val">{{ formatPercent(probabilityAtExpiry()) }}</div>
+                <div class="desc">Chance the price closes {{ directionLabel() }} ₹{{ targetControl.value |
+                    number:'1.0-0' }} on the expiry date.</div>
+            </div>
+        </div>
+        <div class="chart-legend"><span><i class="legend-curve"></i>Terminal price distribution</span><span><i
+                    class="legend-fill"></i>Beyond target</span><span><i class="legend-target"></i>Target</span><span><i
+                    class="legend-spot"></i>Spot</span></div>
+        @if (chart; as chartData) { <div class="chart-wrap"><svg [attr.viewBox]="chartData.viewBox" role="img"
+                aria-label="Terminal price distribution">
+                <line x1="20" [attr.y1]="chartData.baseY" x2="880" [attr.y2]="chartData.baseY" class="chart-axis-line">
+                </line>
+                <path [attr.d]="chartData.shadePath" class="chart-shade"></path>
+                <path [attr.d]="chartData.curvePath" class="chart-curve"></path>
+                <line [attr.x1]="chartData.spotX" y1="14" [attr.x2]="chartData.spotX" [attr.y2]="chartData.baseY"
+                    class="chart-spot"></line><text [attr.x]="chartData.spotX" y="25" text-anchor="middle"
+                    class="chart-label">Spot</text>
+                <line [attr.x1]="chartData.targetX" y1="14" [attr.x2]="chartData.targetX" [attr.y2]="chartData.baseY"
+                    class="chart-target"></line><text [attr.x]="chartData.targetX" y="25" text-anchor="middle"
+                    class="chart-target-label">Target</text>@for (label of chartData.xLabels; track label.x) { <text
+                    [attr.x]="label.x" y="252" text-anchor="middle" class="chart-axis">{{ label.label }}</text> }
+            </svg></div> } @else { <div class="chart-empty">Enter valid inputs to display the terminal price
+            distribution.</div> }
+        <app-data-table [columns]="detailColumns" [data]="detailRows"
+            emptyMessage="Supporting calculations will appear after a valid calculation."></app-data-table>
+    </div>
+</section>

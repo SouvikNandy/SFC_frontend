@@ -1,5 +1,4 @@
 .historical-volatility-page {
-    max-width: 980px;
     margin: 0 auto;
 }
 
@@ -11,11 +10,6 @@
     margin: 0 0 4px;
 }
 
-.sub {
-    margin: 0;
-    color: var(--ink-soft);
-    font-size: 14.5px;
-}
 
 .panel {
     padding: 26px 28px 28px;
@@ -106,7 +100,9 @@
     max-width: 100%;
 }
 
-select {
+select,
+input[type='text'],
+input[type='date'] {
     width: 100%;
     padding: 10px 12px;
     border: 1px solid var(--input-border);
@@ -389,4 +385,55 @@ button:focus-visible {
     .calc {
         width: 100%;
     }
+}
+
+.instrument-field {
+    position: relative;
+}
+
+.autocomplete-options {
+    position: absolute;
+    z-index: 2;
+    top: 100%;
+    right: 0;
+    left: 0;
+    max-height: 220px;
+    overflow-y: auto;
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    background: var(--panel);
+    box-shadow: 0 8px 18px rgba(18, 20, 26, .12);
+}
+
+.autocomplete-options button {
+    display: block;
+    width: 100%;
+    padding: 9px 12px;
+    border: 0;
+    color: var(--ink);
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+
+.autocomplete-options button:hover,
+.autocomplete-options button:focus-visible {
+    background: var(--panel-alt);
+}
+
+.field-status,
+.field-error {
+    font-size: 12px;
+}
+
+.field-status {
+    color: var(--muted-2);
+}
+
+.field-error {
+    color: var(--red);
+}
+
+.price-data-row .calc {
+    align-self: stretch;
 }

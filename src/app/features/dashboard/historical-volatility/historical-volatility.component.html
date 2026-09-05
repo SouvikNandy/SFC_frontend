@@ -21,17 +21,26 @@
         </div>
 
         @if (mode === 'eod') {
-        <div class="price-data-row">
+        <div class="price-data-row" [formGroup]="form">
             <div class="field-block instrument-field">
                 <label for="instrument">Instrument</label>
-                <select id="instrument" [value]="instrument" (change)="selectInstrument($event)">
-                    @for (option of instruments; track option.key) {
-                    <option [value]="option.key">{{ option.label }}{{ option.key === 'nifty' ? ' index' : option.key ===
-                        'banknifty' ? ' index' : '' }}</option>
+                <input id="instrument" type="text" formControlName="symbol" autocomplete="off"
+                    placeholder="Search symbol" [disabled]="symbolsLoading || calculating" (input)="onSymbolInput()"
+                    (focus)="onSymbolInput()" (blur)="onSymbolBlur()" role="combobox"
+                    [attr.aria-expanded]="suggestionsOpen" aria-controls="symbol-options">
+                @if (suggestionsOpen && filteredSymbols.length) {
+                <div id="symbol-options" class="autocomplete-options" role="listbox">
+                    @for (symbol of filteredSymbols; track symbol) {
+                    <button type="button" role="option" (mousedown)="$event.preventDefault()"
+                        (click)="selectSymbol(symbol)">{{ symbol }}</button>
                     }
-                </select>
+                </div>
+                }
+                @if (symbolsLoading) { <span class="field-status">Loading symbol list...</span> }
+                @if (symbolControl.touched && symbolControl.invalid && !symbolsLoading) { <span
+                    class="field-error">Select a symbol from the list.</span> }
             </div>
-            <div class="badge">{{ instrumentLabel }} · 60 trading days of simulated EOD closes</div>
+            <div class="badge">{{ instrumentLabel }} · EOD historical closes</div>
         </div>
         } @else {
         <div class="live-lock">
@@ -52,14 +61,12 @@
         <p class="panel-title">Date selection</p>
         <p class="panel-hint">Pick the "as of" date — HV-10 and HV-20 are calculated using the 10 / 20 trading days
             ending on this date.</p>
-        <div class="date-row">
+        <div class="date-row" [formGroup]="form">
             <div class="field-block as-of-field">
                 <label for="asOfDate">As of date</label>
-                <select id="asOfDate" [value]="selectedIndex" (change)="selectDate($event)">
-                    @for (point of series; track point.date; let index = $index) {
-                    <option [value]="index">{{ point.date }}</option>
-                    }
-                </select>
+                <input id="asOfDate" type="date" formControlName="date" [disabled]="calculating"
+                    (change)="onDateChange()">
+                @if (dateControl.touched && dateControl.invalid) { <span class="field-error">Select a date.</span> }
             </div>
         </div>
         @if (error) {

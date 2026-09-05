@@ -48,7 +48,7 @@ export class TopbarComponent {
 
     get userName(): string {
         const user = this.auth.currentUser();
-        return user ? (user.name ?? user.email ?? 'Signed in') : 'Signed in';
+        return user ? (user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : user.email ?? 'Signed in') : 'Signed in';
     }
 
     logout(): void {
