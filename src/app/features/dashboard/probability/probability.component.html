@@ -78,8 +78,7 @@
         @if (form.invalid && form.touched) { <p class="input-error" role="alert">Enter valid positive values. Volatility
             must be at most 1000% and expiry at most 3650 days.</p> }
         <div class="actions"><span class="live-note"><span class="live-dot"></span>Results update as you change any
-                value</span><button type="button" class="calc" [disabled]="calculating || modeControl.value === 'live'"
-                (click)="recalculate()">{{ calculating ? 'Calculating…' : 'Recalculate' }}</button></div>
+            value</span></div>
     </form>
 
     <div class="panel">

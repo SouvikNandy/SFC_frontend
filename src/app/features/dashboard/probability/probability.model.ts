@@ -7,7 +7,7 @@ export interface ProbabilityRequest {
     spot: number;
     target: number;
     expiry: number;
-    iv: number;
+    vol: number;
 }
 
 export interface ProbabilityCurvePoint {

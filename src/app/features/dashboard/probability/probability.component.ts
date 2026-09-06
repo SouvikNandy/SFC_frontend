@@ -212,9 +212,6 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
   onFieldChange(): void {
     if (!this.detailsLoading && this.modeControl.value !== 'live') this.calculate();
   }
-  recalculate(): void {
-    this.calculate();
-  }
   requestUpgrade(): void {
     this.liveUpgradeRequested = true;
   }
@@ -338,7 +335,7 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
     this.symbolDetails = details;
     this.sourceNote = `Values below refresh from your selection · ${details.trade_date}`;
     const currentTarget = this.targetControl.value;
-    const target = currentTarget > 0 ? currentTarget : details.underlying;
+    const target = currentTarget > 0 ? Math.round(currentTarget) : Math.round(details.underlying);
     const expiry = this.resolveExpiryDays(details);
     this.form.patchValue(
       { spot: Math.round(details.underlying), target, expiry, vol: details.hv20 ?? 0 },
@@ -373,7 +370,7 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
     const spot = Number(this.spotControl.value),
       target = Number(this.targetControl.value),
       expiry = Number(this.expiryControl.value),
-      iv = Number(this.volControl.value);
+      vol = Number(this.volControl.value);
     if (!symbol) {
       this.error = 'Select an instrument.';
       return null;
@@ -386,11 +383,11 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
       this.error = 'Target price must be greater than 0.';
       return null;
     }
-    if (!Number.isFinite(iv) || iv <= 0) {
+    if (!Number.isFinite(vol) || vol <= 0) {
       this.error = 'Volatility must be greater than 0%.';
       return null;
     }
-    if (iv > 1000) {
+    if (vol > 1000) {
       this.error = 'Volatility above 1000% is outside the supported range.';
       return null;
     }
@@ -407,7 +404,7 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
       return null;
     }
     this.error = '';
-    return { symbol, spot: Math.round(spot), target, expiry, iv };
+    return { symbol, spot: Math.round(spot), target, expiry, vol };
   }
 
   private buildDetailRows(data: ProbabilityApiData): ProbabilityDetailRow[] {

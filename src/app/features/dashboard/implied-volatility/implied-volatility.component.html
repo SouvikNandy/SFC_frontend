@@ -1,11 +1,11 @@
 <section class="implied-volatility-page">
     <form [formGroup]="form">
-        <!-- <div class="titlebar">
+        <div class="titlebar">
             <h1>Implied Volatility</h1>
             <span class="ticker">{{ modeControl.value === 'custom' ? 'CUSTOM' : (symbolControl.value || '—') }}</span>
             <span class="lastpx">{{ formatPrice(underlyingControl.value) }}</span>
             <span class="srcnote">{{ sourceNote }}</span>
-        </div> -->
+        </div>
         <p class="sub">Solves the volatility that reproduces an observed option price, and reports how reliable that
             solve
             is.</p>

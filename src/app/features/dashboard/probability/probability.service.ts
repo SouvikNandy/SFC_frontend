@@ -28,7 +28,7 @@ export class ProbabilityService {
 
     calculateCustom(request: ProbabilityRequest): ProbabilityApiData {
         const timeYears = request.expiry / 365;
-        const sigma = request.iv / 100;
+        const sigma = request.vol / 100;
         const logDrift = -0.5 * sigma * sigma;
         const standardDeviation = sigma * Math.sqrt(timeYears);
         const d2 = (Math.log(request.spot / request.target) + logDrift * timeYears) / standardDeviation;
@@ -46,7 +46,7 @@ export class ProbabilityService {
             return { price, density };
         });
         return {
-            inputs: { spot: request.spot, target: request.target, vol: request.iv, expiry: request.expiry, rate: 0, dividend: 0, day_count: 365, symbol: 'CUSTOM' },
+            inputs: { spot: request.spot, target: request.target, vol: request.vol, expiry: request.expiry, rate: 0, dividend: 0, day_count: 365, symbol: 'CUSTOM' },
             results: {
                 direction,
                 probTouchPct: probabilityTouch,
