@@ -168,43 +168,8 @@ h1 {
     font-size: 11px;
 }
 
-.autocomplete-field {
-    z-index: 5;
-}
+.autocomplete-field { z-index: 5; }
 
-.autocomplete-options {
-    position: absolute;
-    z-index: 10;
-    top: 68px;
-    right: 0;
-    left: 0;
-    max-height: 260px;
-    overflow-y: auto;
-    border: 1px solid var(--border);
-    border-radius: 9px;
-    background: var(--panel-2);
-    box-shadow: 0 8px 20px rgba(18, 20, 26, .14);
-}
-
-.autocomplete-options button {
-    display: block;
-    width: 100%;
-    padding: 10px 11px;
-    border: 0;
-    border-bottom: 1px solid var(--border-soft);
-    color: var(--ink);
-    background: transparent;
-    text-align: left;
-    font: inherit;
-    cursor: pointer;
-}
-
-.autocomplete-options button:hover,
-.autocomplete-options button.highlighted {
-    background: var(--teal-tint);
-}
-
-.combo-empty,
 .empty,
 .chart-empty {
     padding: 24px;
@@ -213,25 +178,6 @@ h1 {
     font-size: 13px;
 }
 
-.autocomplete-clear {
-    position: absolute;
-    top: 29px;
-    right: 7px;
-    width: 25px;
-    height: 25px;
-    padding: 0;
-    border: 0;
-    color: var(--muted-2);
-    background: transparent;
-    font-size: 18px;
-    line-height: 22px;
-    cursor: pointer;
-}
-
-.autocomplete-clear:hover,
-.autocomplete-clear:focus-visible {
-    color: var(--ink);
-}
 
 .live-lock {
     display: flex;
@@ -418,7 +364,7 @@ table.chain td {
     position: relative;
     padding: 11px 10px;
     border-bottom: 1px solid var(--input-border);
-    text-align: right;
+    text-align: center;
     white-space: nowrap;
 }
 

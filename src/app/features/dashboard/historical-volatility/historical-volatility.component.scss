@@ -391,56 +391,6 @@ button:focus-visible {
     position: relative;
 }
 
-.autocomplete-clear {
-    position: absolute;
-    top: 29px;
-    right: 8px;
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    border: 0;
-    color: var(--muted-2);
-    background: transparent;
-    font-size: 18px;
-    line-height: 24px;
-    cursor: pointer;
-}
-
-.autocomplete-clear:hover,
-.autocomplete-clear:focus-visible {
-    color: var(--ink);
-}
-
-.autocomplete-options {
-    position: absolute;
-    z-index: 2;
-    top: 100%;
-    right: 0;
-    left: 0;
-    max-height: 220px;
-    overflow-y: auto;
-    border: 1px solid var(--input-border);
-    border-radius: 8px;
-    background: var(--panel);
-    box-shadow: 0 8px 18px rgba(18, 20, 26, .12);
-}
-
-.autocomplete-options button {
-    display: block;
-    width: 100%;
-    padding: 9px 12px;
-    border: 0;
-    color: var(--ink);
-    background: transparent;
-    text-align: left;
-    cursor: pointer;
-}
-
-.autocomplete-options button:hover,
-.autocomplete-options button:focus-visible {
-    background: var(--panel-alt);
-}
-
 .field-status,
 .field-error {
     font-size: 12px;
