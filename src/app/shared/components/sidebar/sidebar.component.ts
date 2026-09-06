@@ -33,7 +33,9 @@ const NAV_LABELS: Record<string, string> = {
     <aside class="sfc-sidebar" [class.open]="sidebar.isOpen()">
       <div class="sfc-sidebar__inner">
         <div class="sfc-sidebar__brand">
-          <img src="assets/images/logo.png" alt="QuantSFC" class="sfc-logo" />
+          <a [routerLink]="['/dashboard', 'home']" (click)="sidebar.close()">
+            <img src="assets/images/logo.png" alt="QuantSFC" class="sfc-logo" />
+          </a>
         </div>
 
         <nav class="sfc-nav">

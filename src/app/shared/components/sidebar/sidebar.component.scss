@@ -13,6 +13,11 @@
     border-top: 1px solid var(--border)
 }
 
+.sfc-sidebar__brand {
+    padding: 0 8px;
+    margin-bottom: 20px;
+}
+
 .sfc-avatar {
     width: 30px;
     height: 30px;
@@ -99,7 +104,6 @@
     cursor: pointer;
     color: #6B6F76;
     text-decoration: none;
-    height: 44px
 }
 
 .nav-item svg {

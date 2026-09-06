@@ -38,6 +38,9 @@
                     [disabled]="symbolsLoading || detailsLoading" role="combobox" [attr.aria-expanded]="suggestionsOpen"
                     aria-controls="probability-symbol-options" (input)="onSymbolInput()" (focus)="onSymbolInput()"
                     (blur)="onSymbolBlur()" (keydown)="onSymbolKeydown($event)">
+                @if (symbolControl.value) { <button class="autocomplete-clear" type="button"
+                    aria-label="Clear selection" (mousedown)="$event.preventDefault()"
+                    (click)="clearSymbol()">×</button> }
                 @if (suggestionsOpen) { <div id="probability-symbol-options" class="autocomplete-options"
                     role="listbox">@for (symbol of filteredSymbols; track symbol; let index = $index) { <button
                         type="button" role="option" [class.highlighted]="index === highlightedSymbolIndex"
@@ -62,8 +65,7 @@
             </div>
             <div class="field-block"><label for="expiry">Days to expiry</label>
                 <div class="unit-wrap"><input id="expiry" type="number" formControlName="expiry" step="1" min="1"
-                        max="3650" [readonly]="modeControl.value === 'eod'" (input)="onFieldChange()"><span
-                        class="unit">days</span></div>
+                        max="3650" (input)="onFieldChange()"><span class="unit">days</span></div>
             </div>
             <div class="field-block"><label for="vol">Annual volatility</label>
                 <div class="unit-wrap"><input id="vol" type="number" formControlName="vol" step="0.1" min="0.01"

@@ -4,6 +4,7 @@ import { Subject, catchError, finalize, of, takeUntil } from 'rxjs';
 import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
 import { DataTableColumn } from '../../../shared/components/data-table/data-table.types';
 import { ToastService } from '../../../core/services/toast.service';
+import { DefaultStock } from '../../../shared/services/constantFile';
 import { HistoricalVolatilityService } from './historical-volatility.service';
 import { formatHistoricalVolatilityDate } from './historical-volatility-date.util';
 import { HistoricalVolatilityApiRow, HistoricalVolatilityChart, HistoricalVolatilityMode, HistoricalVolatilityRow } from './historical-volatility.model';
@@ -23,7 +24,7 @@ export class HistoricalVolatilityComponent implements OnInit, OnDestroy {
 
     readonly form = new FormGroup({
         symbol: new FormControl('', { nonNullable: true, validators: Validators.required }),
-        date: new FormControl('', { nonNullable: true, validators: Validators.required }),
+        date: new FormControl(formatHistoricalVolatilityDate(new Date()), { nonNullable: true, validators: Validators.required }),
     });
     readonly columns: DataTableColumn<HistoricalVolatilityRow>[] = [
         { key: 'date', label: 'Date' },
@@ -76,6 +77,18 @@ export class HistoricalVolatilityComponent implements OnInit, OnDestroy {
         this.filteredSymbols = [];
         this.suggestionsOpen = false;
         this.tryAutoCalculate();
+    }
+
+    clearSymbol(): void {
+        this.symbolControl.setValue('');
+        this.symbolControl.setErrors({ required: true });
+        this.filteredSymbols = this.symbols;
+        this.suggestionsOpen = false;
+        this.series = [];
+        this.selectedIndex = -1;
+        this.rows = [];
+        this.chart = this.buildChart();
+        this.error = '';
     }
 
     onDateChange(): void {
@@ -152,6 +165,8 @@ export class HistoricalVolatilityComponent implements OnInit, OnDestroy {
         ).subscribe(symbols => {
             this.symbols = symbols;
             this.filteredSymbols = symbols;
+            const initialSymbol = symbols.includes(DefaultStock) ? DefaultStock : symbols[0];
+            if (initialSymbol) this.selectSymbol(initialSymbol);
         });
     }
 

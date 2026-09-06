@@ -94,7 +94,7 @@ export const routes: Routes = [
       { path: '', redirectTo: 'home', pathMatch: 'full' },
       { path: 'home', loadComponent: () => import('./features/dashboard/dashboard-home/dashboard-home.component').then((m) => m.DashboardHomeComponent) },
       { path: 'portfolio', loadComponent: () => import('./features/dashboard/portfolio/portfolio.component').then((m) => m.PortfolioComponent) },
-      { path: 'options-chain', loadComponent: () => import('./features/dashboard/options-chain/options-chain.component').then((m) => m.OptionsChainComponent) },
+      { path: 'options-chain', loadComponent: () => import('./features/dashboard/options-chain/option-chain.component').then((m) => m.OptionsChainComponent) },
       { path: 'eod', loadComponent: () => import('./features/dashboard/eod/eod.component').then((m) => m.EodComponent) },
       { path: 'closed-trades', loadComponent: () => import('./features/dashboard/closed-trades/closed-trades.component').then((m) => m.ClosedTradesComponent) },
       { path: 'greeks', loadComponent: () => import('./features/dashboard/greeks/greeks.component').then((m) => m.GreeksComponent) },

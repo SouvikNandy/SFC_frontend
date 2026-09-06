@@ -5,6 +5,7 @@ import { EMPTY, Subject, catchError, finalize, switchMap, takeUntil, tap } from 
 import { GreeksCalculatorService, GreeksInput } from './greeks-calculator.service';
 import { GreeksSymbolDetails } from './greeks.model';
 import { ToastService } from '../../../core/services/toast.service';
+import { DefaultStock } from '../../../shared/services/constantFile';
 
 @Component({
     selector: 'app-greeks',
@@ -226,6 +227,21 @@ export class GreeksComponent implements OnInit, OnDestroy {
         this.symbolSelection$.next(symbol);
     }
 
+    clearSymbol(): void {
+        this.form.patchValue({ symbol: '', presetKey: '', spotKey: '' }, { emitEvent: false });
+        this.form.get('symbol')?.setErrors({ required: true });
+        this.filteredSymbols = this.symbols;
+        this.suggestionsOpen = false;
+        this.highlightedSymbolIndex = -1;
+        this.symbolDetailsLoading = false;
+        this.symbolDetails = null;
+        this.historicalVolatility20 = null;
+        this.strikeOptions = [];
+        this.results = {};
+        this.inputError = '';
+        this.symbolSelection$.next('');
+    }
+
     onSymbolKeydown(event: KeyboardEvent): void {
         if (!this.suggestionsOpen || !this.filteredSymbols.length) {
             if (event.key === 'ArrowDown') this.onSymbolInput();
@@ -266,19 +282,21 @@ export class GreeksComponent implements OnInit, OnDestroy {
         ).subscribe(symbols => {
             this.symbols = symbols;
             this.filteredSymbols = symbols;
+            const initialSymbol = symbols.includes(DefaultStock) ? DefaultStock : symbols[0];
+            if (initialSymbol) this.selectSymbol(initialSymbol);
         });
     }
 
     private setupSymbolDetailsLoading(): void {
         this.symbolSelection$.pipe(
             takeUntil(this.destroy$),
-            tap(() => {
-                this.symbolDetailsLoading = true;
+            tap(symbol => {
+                this.symbolDetailsLoading = Boolean(symbol);
                 this.inputError = '';
                 this.symbolDetails = null;
                 this.historicalVolatility20 = null;
             }),
-            switchMap(symbol => this.svc.getSymbolDetails({ symbol }).pipe(
+            switchMap(symbol => symbol ? this.svc.getSymbolDetails({ symbol }).pipe(
                 tap(details => {
                     this.symbolDetailsLoading = false;
                     this.applySymbolDetails(details);
@@ -288,22 +306,22 @@ export class GreeksComponent implements OnInit, OnDestroy {
                     this.toast.error('Unable to load symbol details. Please try again.');
                     return EMPTY;
                 })
-            ))
+            ) : EMPTY)
         ).subscribe(() => this.changeDetector.markForCheck());
     }
 
     private applySymbolDetails(details: GreeksSymbolDetails): void {
         this.symbolDetails = details;
-        this.historicalVolatility20 = details.hv20?.hv20 ?? null;
+        this.historicalVolatility20 = details.hv20 ?? null;
         const selectedStrike = details.strike.includes(details.atm_strike) ? details.atm_strike : Number(this.form.value.strike);
-        const expiryDays = this.daysBetween(details.trade_date, details.expiry_date);
+        const expiryDays = this.resolveExpiryDays(details);
         this.strikeOptions = details.strike;
         this.form.patchValue({
             sourceMode: 'eod',
             spot: details.underlying,
             strike: details.strike.includes(selectedStrike) ? selectedStrike : details.atm_strike,
             expiry: expiryDays,
-            vol: details.hv20?.hv20 ?? this.form.value.vol,
+            vol: details.hv20 ?? this.form.value.vol,
             strikeKey: String(details.strike.includes(selectedStrike) ? selectedStrike : details.atm_strike),
             ivPrice: this.form.value.ivType === 'put' ? details.market_price?.PE ?? null : details.market_price?.CE ?? null,
         }, { emitEvent: false });
@@ -315,6 +333,14 @@ export class GreeksComponent implements OnInit, OnDestroy {
         const fromTime = this.parseApiDate(from);
         const toTime = this.parseApiDate(to);
         return Math.max(1, Math.round((toTime - fromTime) / 86400000));
+    }
+
+    private resolveExpiryDays(details: GreeksSymbolDetails): number {
+        if (typeof details.expiry_days === 'number' && Number.isFinite(details.expiry_days)) return Math.max(1, details.expiry_days);
+        if (typeof details.expiry === 'number' && Number.isFinite(details.expiry)) return Math.max(1, details.expiry);
+        const expiry = Array.isArray(details.expiry_date) ? details.expiry_date[0] : details.expiry_date;
+        if (typeof expiry === 'number' && Number.isFinite(expiry)) return Math.max(1, expiry);
+        return typeof expiry === 'string' ? this.daysBetween(details.trade_date, expiry) : 1;
     }
 
     private parseApiDate(value: string): number {

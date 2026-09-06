@@ -28,6 +28,9 @@
                     placeholder="Search symbol" [disabled]="symbolsLoading || calculating" (input)="onSymbolInput()"
                     (focus)="onSymbolInput()" (blur)="onSymbolBlur()" role="combobox"
                     [attr.aria-expanded]="suggestionsOpen" aria-controls="symbol-options">
+                @if (symbolControl.value) { <button class="autocomplete-clear" type="button"
+                    aria-label="Clear selection" (mousedown)="$event.preventDefault()"
+                    (click)="clearSymbol()">×</button> }
                 @if (suggestionsOpen && filteredSymbols.length) {
                 <div id="symbol-options" class="autocomplete-options" role="listbox">
                     @for (symbol of filteredSymbols; track symbol) {

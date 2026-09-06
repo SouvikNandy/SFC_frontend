@@ -12,13 +12,14 @@ export interface GreeksSymbolDetailsRequest {
 export interface GreeksSymbolDetails {
     symbol: string;
     trade_date: string;
-    expiry_date: string;
+    expiry_date: string | number | Array<string | number>;
+    expiry_days?: number;
+    expiry?: number;
     underlying: number;
     strike: number[];
     atm_strike: number;
-    hv20?: {
-        hv20: number;
-    };
+    hv20: number;
+
     market_price?: {
         CE: number;
         PE: number;

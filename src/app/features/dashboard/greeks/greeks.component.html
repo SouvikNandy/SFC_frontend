@@ -42,6 +42,9 @@
                     (blur)="onSymbolBlur()" (keydown)="onSymbolKeydown($event)" role="combobox"
                     [attr.aria-expanded]="suggestionsOpen" aria-controls="greeks-symbol-options"
                     [attr.aria-activedescendant]="highlightedSymbolIndex >= 0 ? 'greeks-symbol-' + highlightedSymbolIndex : null">
+                <button *ngIf="form.get('symbol')?.value" class="autocomplete-clear" type="button"
+                    aria-label="Clear selection" (mousedown)="$event.preventDefault()"
+                    (click)="clearSymbol()">×</button>
                 <div *ngIf="suggestionsOpen && filteredSymbols.length" id="greeks-symbol-options"
                     class="autocomplete-options" role="listbox">
                     <button *ngFor="let symbol of filteredSymbols; let index = index" type="button" role="option"

@@ -502,3 +502,23 @@ input[readonly] {
         grid-template-columns: 1fr
     }
 }
+
+.autocomplete-clear {
+    position: absolute;
+    top: 29px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    color: var(--muted-2);
+    background: transparent;
+    font-size: 18px;
+    line-height: 24px;
+    cursor: pointer;
+}
+
+.autocomplete-clear:hover,
+.autocomplete-clear:focus-visible {
+    color: var(--ink);
+}

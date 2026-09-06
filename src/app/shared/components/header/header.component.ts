@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
+import { AuthService } from '../../../core/services/auth.service';
 
 @Component({
   selector: 'app-header',
@@ -27,7 +28,13 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
         <a class="header__link" routerLink="/contact" routerLinkActive="active">Contact</a>
         <!-- <a class="header__link" routerLink="/data" routerLinkActive="active">Data</a> -->
         <a class="header__link" routerLink="/tools" routerLinkActive="active">Tools</a>
-        <a class="header__link header__login-btn" routerLink="/login" routerLinkActive="active">Log in</a>
+        
+        @if (!(authService.isAuthenticated())) {
+          <a class="header__link header__login-btn" routerLink="/login" routerLinkActive="active">Log in</a>
+        } @else {
+                    <a class="header__link header__login-btn" routerLink="/dashboard" routerLinkActive="active">{{ getUserDisplayName() }}</a>
+
+        }
       </nav>
 
       <button
@@ -87,14 +94,18 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
           >Tools</a
         >
 
-        <a
-          class="mobile-nav__link "
-          routerLink="/login"
-          routerLinkActive="active"
-          (click)="toggleMobileNav()"
-          ><span class="header__login-btn">Log in</span></a
-        >
+        @if (!(authService.isAuthenticated())) {
+          <a
+            class="mobile-nav__link"
+            routerLink="/login"
+            routerLinkActive="active"
+            (click)="toggleMobileNav()"
+            ><span class="header__login-btn">Log in</span></a
+          >
+        } @else {
+                              <a class="header__link header__login-btn" routerLink="/dashboard" routerLinkActive="active">{{ getUserDisplayName() }}</a>
 
+        }
       </div>
     }
   `,
@@ -102,9 +113,16 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class HeaderComponent {
+  readonly authService = inject(AuthService);
   readonly mobileNavOpen = signal(false);
 
   toggleMobileNav(): void {
     this.mobileNavOpen.update((value) => !value);
+  }
+
+  getUserDisplayName(): string {
+    const user = this.authService.currentUser();
+    if (!user) return '';
+    return `${user.first_name} ${user.last_name}`.trim();
   }
 }

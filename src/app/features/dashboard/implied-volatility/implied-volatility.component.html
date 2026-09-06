@@ -52,6 +52,9 @@
                         [attr.aria-activedescendant]="highlightedSymbolIndex >= 0 ? 'iv-symbol-' + highlightedSymbolIndex : null"
                         (input)="onSymbolInput()" (focus)="onSymbolInput()" (blur)="onSymbolBlur()"
                         (keydown)="onSymbolKeydown($event)">
+                    @if (symbolControl.value) { <button class="autocomplete-clear" type="button"
+                        aria-label="Clear selection" (mousedown)="$event.preventDefault()"
+                        (click)="clearSymbol()">×</button> }
                     @if (suggestionsOpen) {
                     <div id="iv-symbol-options" class="autocomplete-options" role="listbox">
                         @for (symbol of filteredSymbols; track symbol; let index = $index) {
@@ -81,11 +84,19 @@
                         ATM
                         selected' }}</span>
                 </div>
-                <div class="field-block"><label for="expiry">Expiry</label><input id="expiry" type="number"
-                        formControlName="expiry" step="1" min="1" [readonly]="modeControl.value !== 'custom'"
-                        (input)="onFieldChange()"><span class="field-hint">{{ modeControl.value === 'custom' ? 'Days to
-                        expiry' : (expiryDate ? expiryDate + ' · ' + expiryControl.value + 'd' : 'Days to expiry')
-                        }}</span>
+                <div class="field-block"><label for="expiry">Expiry</label>
+                    @if (modeControl.value === 'custom') {
+                    <input id="expiry" type="number" formControlName="expiry" step="1" min="1"
+                        (input)="onFieldChange()">
+                    } @else {
+                    <select id="expiry" [value]="expiryDate"
+                        (change)="expiryDate = $any($event.target).value; onExpiryChange()"
+                        [disabled]="detailsLoading || !expiryOptions.length">
+                        @for (date of expiryOptions; track date) { <option [value]="date">{{ date }}</option> }
+                    </select>
+                    }
+                    <span class="field-hint">{{ modeControl.value === 'custom' ? 'Days to expiry' : (expiryDate ?
+                        expiryDate + ' · ' + expiryControl.value + 'd' : 'Days to expiry') }}</span>
                 </div>
             </div>
 

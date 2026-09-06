@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { EMPTY, Subject, catchError, finalize, of, switchMap, takeUntil, tap } from 'rxjs';
 import { ToastService } from '../../../core/services/toast.service';
+import { DefaultStock } from '../../../shared/services/constantFile';
 import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
 import { DataTableColumn } from '../../../shared/components/data-table/data-table.types';
 import { GreeksSymbolDetails } from '../greeks/greeks.model';
@@ -39,6 +40,7 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
     symbolDetails: GreeksSymbolDetails | null = null;
     strikes: number[] = [];
     expiryDate = '';
+    expiryOptions: string[] = [];
     tradeDate = '';
     sourceNote = '';
     highlightedSymbolIndex = -1;
@@ -91,6 +93,7 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
             this.sourceNote = 'Manual entry';
             this.strikes = [];
             this.expiryDate = '';
+            this.expiryOptions = [];
             this.symbolDetails = null;
             this.calculate();
         } else if (mode === 'eod') {
@@ -116,6 +119,25 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
         this.suggestionsOpen = false;
         this.highlightedSymbolIndex = -1;
         this.symbolSelection$.next(symbol);
+    }
+
+    clearSymbol(): void {
+        this.symbolControl.setValue('', { emitEvent: false });
+        this.symbolControl.setErrors({ required: true });
+        this.filteredSymbols = this.symbols;
+        this.suggestionsOpen = false;
+        this.highlightedSymbolIndex = -1;
+        this.detailsLoading = false;
+        this.symbolDetails = null;
+        this.strikes = [];
+        this.expiryDate = '';
+        this.expiryOptions = [];
+        this.tradeDate = '';
+        this.sourceNote = '';
+        this.result = null;
+        this.chart = null;
+        this.traceRows = [];
+        this.symbolSelection$.next('');
     }
 
     onSymbolKeydown(event: KeyboardEvent): void {
@@ -157,6 +179,10 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
     }
 
     onStrikeChange(): void { this.calculate(); }
+    onExpiryChange(): void {
+        if (this.modeControl.value === 'custom' || !this.expiryDate) return;
+        this.expiryControl.setValue(this.daysBetween(this.tradeDate, this.expiryDate));
+    }
     onFieldChange(): void { this.calculate(); }
     requestUpgrade(): void { this.liveUpgradeRequested = true; }
 
@@ -201,21 +227,23 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
         ).subscribe(symbols => {
             this.symbols = symbols;
             this.filteredSymbols = symbols;
-            if (this.modeControl.value === 'eod' && symbols.length) this.selectSymbol(symbols[0]);
+            if (this.modeControl.value === 'eod' && symbols.length) {
+                this.selectSymbol(symbols.includes(DefaultStock) ? DefaultStock : symbols[0]);
+            }
         });
     }
 
     private setupDetailsLoading(): void {
         this.symbolSelection$.pipe(
             takeUntil(this.destroy$),
-            tap(() => {
-                this.detailsLoading = true;
+            tap(symbol => {
+                this.detailsLoading = Boolean(symbol);
                 this.error = '';
                 this.result = null;
                 this.chart = null;
                 this.symbolDetails = null;
             }),
-            switchMap(symbol => this.volatility.getSymbolDetails({ symbol }).pipe(
+            switchMap(symbol => symbol ? this.volatility.getSymbolDetails({ symbol }).pipe(
                 tap(details => {
                     this.detailsLoading = false;
                     this.applyDetails(details);
@@ -226,7 +254,7 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
                     this.toast.error(this.error);
                     return EMPTY;
                 })
-            ))
+            ) : EMPTY)
         ).subscribe(() => this.changeDetector.markForCheck());
     }
 
@@ -241,11 +269,14 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
     private applyDetails(details: GreeksSymbolDetails): void {
         this.symbolDetails = details;
         this.strikes = details.strike ?? [];
-        this.expiryDate = details.expiry_date;
+        const expiryDetails = details as GreeksSymbolDetails & { expiry_date: string | string[] };
+        const rawExpiries = Array.isArray(expiryDetails.expiry_date) ? expiryDetails.expiry_date : expiryDetails.expiry_date ? [expiryDetails.expiry_date] : [];
+        this.expiryOptions = rawExpiries.map(String);
+        this.expiryDate = this.expiryOptions[0] ?? '';
         this.tradeDate = details.trade_date;
         this.sourceNote = `BhavCopy EOD close · ${details.trade_date}`;
         const atmStrike = this.strikes.includes(details.atm_strike) ? details.atm_strike : this.strikes[0] ?? 0;
-        this.form.patchValue({ underlying: details.underlying, strike: atmStrike, expiry: this.daysBetween(details.trade_date, details.expiry_date) }, { emitEvent: false });
+        this.form.patchValue({ underlying: details.underlying, strike: atmStrike, expiry: this.expiryDate ? this.daysBetween(details.trade_date, this.expiryDate) : 0 }, { emitEvent: false });
         this.patchAutomaticMarketPrice();
     }
 
