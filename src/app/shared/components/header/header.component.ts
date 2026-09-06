@@ -10,7 +10,7 @@ import { AuthService } from '../../../core/services/auth.service';
     <header class="header">
       <div class="header__brand">
         <span class="header__brand-mark">
-          <img src="assets/images/logo.png" alt="QuantSFC logo" />
+          <img src="assets/images/logo.webp" alt="QuantSFC logo" />
         </span>
       </div>
 
