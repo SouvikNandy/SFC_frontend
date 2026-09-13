@@ -4,7 +4,6 @@ export interface OptionsChainRequest {
 }
 
 export interface OptionsChainApiRow {
-    delta?: number | null;
     strike: number;
     c_oi?: number;
     c_oi_chg?: number;

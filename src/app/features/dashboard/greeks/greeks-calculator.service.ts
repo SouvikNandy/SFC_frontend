@@ -10,6 +10,7 @@ export interface GreeksInput {
     vol: number; // percent
     expiryDays: number;
     dividend: number; // percent
+    minimumExpiryDays?: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -91,7 +92,7 @@ export class GreeksCalculatorService {
         const q = input.dividend / 100;
         const sigma = input.vol / 100;
         const days = input.expiryDays;
-        const T = Math.max(days, 0.0001) / 365;
+        const T = Math.max(days, input.minimumExpiryDays ?? 0.0001) / 365;
 
         const d1 = (Math.log(S / K) + (r - q + 0.5 * sigma * sigma) * T) / (sigma * Math.sqrt(T));
         const d2 = d1 - sigma * Math.sqrt(T);

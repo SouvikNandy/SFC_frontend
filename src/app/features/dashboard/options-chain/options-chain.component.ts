@@ -42,14 +42,14 @@ type SortKey = ColumnKey | 'strike';
           type="button"
           [class.active]="!live"
           [attr.aria-selected]="!live"
-          (click)="live = false"
+          (click)="setLive(false)"
         >
           EOD data <em>from BhavCopy</em></button
         ><button
           type="button"
           [class.active]="live"
           [attr.aria-selected]="live"
-          (click)="live = true"
+          (click)="setLive(true)"
         >
           Live data <em>Premium</em>
         </button>
@@ -230,7 +230,7 @@ type SortKey = ColumnKey | 'strike';
             <thead>
               <tr>
                 <th class="grouphdr callhdr" [attr.colspan]="activeColumns.length">Calls</th>
-                <th class="grouphdr strikehdr">Strike</th>
+                <th class="grouphdr strikehdr"></th>
                 <th class="grouphdr puthdr" [attr.colspan]="activeColumns.length">Puts</th>
               </tr>
               <tr>
@@ -385,7 +385,7 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
     return this.view?.spot ?? this.details?.underlying ?? null;
   }
   get volatility(): number | null {
-    return this.view?.atmIv ?? this.details?.hv20 ?? null;
+    return this.details?.hv20 ?? 12.5;
   }
   get sourceNote(): string {
     return this.symbol
@@ -490,7 +490,7 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
         .pipe(takeUntil(this.destroy$))
         .subscribe((view) => {
           this.view = view;
-          this.rows = view.rows;
+          this.rows = view.rows.map((row) => this.calculateRowGreeks(row));
           this.loading = false;
           this.cd.markForCheck();
         });
@@ -563,6 +563,10 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
   upgrade(): void {
     this.toast.success('Live chain is available with a Premium subscription.');
   }
+  setLive(live: boolean): void {
+    this.live = live;
+    if (this.view) this.rows = this.view.rows.map((row) => this.calculateRowGreeks(row));
+  }
   private setupSelection(): void {
     this.selection$
       .pipe(
@@ -601,6 +605,60 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
         this.loadChain();
         this.cd.markForCheck();
       });
+  }
+  private calculateRowGreeks(row: OptionsChainRow): OptionsChainRow {
+    const spot = this.spot;
+    const expiryDays = this.resolveExpiryDays(this.expiry);
+    const baseVolPct = this.volatility;
+    if (spot === null || spot <= 0 || expiryDays <= 0 || baseVolPct === null) return row;
+
+    const iv = this.chainIV(spot, row.strike, baseVolPct, this.live) * 100;
+    const callGreeks = this.calculateSideGreeks('call', row.strike, iv, spot, expiryDays);
+    const putGreeks = this.calculateSideGreeks('put', row.strike, iv, spot, expiryDays);
+    return {
+      ...row,
+      call: { ...row.call, iv, ...callGreeks },
+      put: { ...row.put, iv, ...putGreeks },
+    };
+  }
+  private chainIV(spot: number, strike: number, baseVolPct: number, live: boolean): number {
+    const base = baseVolPct / 100;
+    const moneyness = Math.log(strike / spot);
+    const adjustment = Math.max(-0.45, Math.min(1.2, -2 * moneyness + 25 * moneyness * moneyness));
+    const iv = base * (1 + adjustment);
+    return live ? iv * 1.03 : iv;
+  }
+  private calculateSideGreeks(
+    side: Side,
+    strike: number,
+    volatility: number,
+    spot: number,
+    expiryDays: number,
+  ): Partial<OptionsChainRow['call']> | null {
+    if (!Number.isFinite(volatility) || volatility <= 0) return null;
+    const result = this.api.calculateAll({
+      spot,
+      strike,
+      rate: 0,
+      vol: volatility,
+      expiryDays,
+      dividend: 0,
+      minimumExpiryDays: 0.5,
+    });
+    return side === 'call'
+      ? { delta: result.deltaCall, gamma: result.gamma, theta: result.thetaCall, vega: result.vega }
+      : { delta: result.deltaPut, gamma: result.gamma, theta: result.thetaPut, vega: result.vega };
+  }
+  private resolveExpiryDays(value: string): number {
+    if (!value) return 0;
+    const expiryTime = Date.parse(`${value}T00:00:00Z`);
+    const tradeDate = this.details?.trade_date;
+    const startTime = tradeDate ? Date.parse(`${tradeDate}T00:00:00Z`) : Date.now();
+    if (Number.isFinite(expiryTime) && Number.isFinite(startTime)) {
+      return Math.max(1, Math.round((expiryTime - startTime) / 86400000));
+    }
+    const numericExpiry = Number(value);
+    return Number.isFinite(numericExpiry) ? Math.max(1, numericExpiry) : 0;
   }
   private loadSymbols(): void {
     this.api

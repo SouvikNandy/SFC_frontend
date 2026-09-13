@@ -334,8 +334,7 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
   private applyDetails(details: GreeksSymbolDetails): void {
     this.symbolDetails = details;
     this.sourceNote = `Values below refresh from your selection · ${details.trade_date}`;
-    const currentTarget = this.targetControl.value;
-    const target = currentTarget > 0 ? Math.round(currentTarget) : Math.round(details.underlying);
+    const target =  Math.round(details.underlying);
     const expiry = this.resolveExpiryDays(details);
     this.form.patchValue(
       { spot: Math.round(details.underlying), target, expiry, vol: details.hv20 ?? 0 },
