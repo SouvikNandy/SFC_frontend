@@ -8,10 +8,11 @@ import { DefaultStock } from '../../../shared/services/constantFile';
 import { HistoricalVolatilityService } from './historical-volatility.service';
 import { formatHistoricalVolatilityDate } from './historical-volatility-date.util';
 import { HistoricalVolatilityApiRow, HistoricalVolatilityChart, HistoricalVolatilityMode, HistoricalVolatilityRow } from './historical-volatility.model';
+import { ChartTooltipComponent, ChartTooltipRow } from '../../../shared/components/chart-tooltip/chart-tooltip.component';
 
 @Component({
     selector: 'app-historical-volatility',
-    imports: [ReactiveFormsModule, DataTableComponent],
+    imports: [ReactiveFormsModule, DataTableComponent, ChartTooltipComponent],
     templateUrl: './historical-volatility.component.html',
     styleUrl: './historical-volatility.component.scss',
     changeDetection: ChangeDetectionStrategy.OnPush,
@@ -43,6 +44,7 @@ export class HistoricalVolatilityComponent implements OnInit, OnDestroy {
     chart: HistoricalVolatilityChart = this.buildChart();
     liveUpgradeRequested = false;
     error = '';
+    chartTooltip: { index: number; left: number; top: number } | null = null;
     symbolsLoading = true;
     calculating = false;
     suggestionsOpen = false;
@@ -202,7 +204,31 @@ export class HistoricalVolatilityComponent implements OnInit, OnDestroy {
         });
         const xLabels = this.series.length ? (this.series.length > 1 ? [0, Math.floor((this.series.length - 1) / 2), this.series.length - 1] : [0]).map(index => ({ x: xAt(index), label: this.series[index].trade_date })) : [];
         const marker = this.selectedIndex >= 0 && this.selectedIndex < this.series.length ? { x: xAt(this.selectedIndex), y: yPriceAt(closes[this.selectedIndex]) } : null;
-        return { pricePath: this.pathFor(closes, xAt, yPriceAt), hv10Path: this.pathFor(hv10, xAt, yVolatilityAt), hv20Path: this.pathFor(hv20, xAt, yVolatilityAt), gridLines, xLabels, marker, viewBox: `0 0 ${width} ${height}` };
+        const chartPoints = this.series.map((point, index) => ({ date: point.trade_date, close: point.close_price, hv10: point.hv10, hv20: point.hv20, x: xAt(index), y: yPriceAt(point.close_price) }));
+        return { pricePath: this.pathFor(closes, xAt, yPriceAt), hv10Path: this.pathFor(hv10, xAt, yVolatilityAt), hv20Path: this.pathFor(hv20, xAt, yVolatilityAt), gridLines, xLabels, marker, viewBox: `0 0 ${width} ${height}`, points: chartPoints };
+    }
+
+    onChartPointer(event: MouseEvent | TouchEvent): void {
+        if (!this.chart.points.length) return;
+        const target = event.currentTarget as SVGRectElement, bounds = target.getBoundingClientRect();
+        const clientX = 'touches' in event ? event.touches[0]?.clientX : event.clientX;
+        const clientY = 'touches' in event ? event.touches[0]?.clientY : event.clientY;
+        if (clientX == null || clientY == null || !bounds.width) return;
+        const ratio = Math.max(0, Math.min(1, (clientX - bounds.left) / bounds.width));
+        const index = Math.min(this.chart.points.length - 1, Math.max(0, Math.round(ratio * (this.chart.points.length - 1))));
+        const container = target.parentElement?.parentElement?.getBoundingClientRect();
+        if (!container) return;
+        this.chartTooltip = { index, left: Math.max(8, Math.min(container.width - 182, clientX - container.left + 12)), top: Math.max(8, clientY - container.top - 90) };
+    }
+    hideChartTooltip(): void { this.chartTooltip = null; }
+    chartTooltipRows(): ChartTooltipRow[] {
+        const point = this.chart.points[this.chartTooltip?.index ?? -1];
+        if (!point) return [];
+        return [
+            { label: 'Close', value: `₹${point.close.toLocaleString('en-IN')}`, tone: 'neutral' },
+            ...(point.hv10 == null ? [] : [{ label: 'HV-10', value: `${point.hv10.toFixed(2)}%`, tone: 'call' as const }]),
+            ...(point.hv20 == null ? [] : [{ label: 'HV-20', value: `${point.hv20.toFixed(2)}%`, tone: 'put' as const }]),
+        ];
     }
 
     private pathFor(values: Array<number | null>, xAt: (index: number) => number, yAt: (value: number) => number): string {

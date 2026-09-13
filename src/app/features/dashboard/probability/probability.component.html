@@ -108,6 +108,10 @@
                 </line>
                 <path [attr.d]="chartData.shadePath" class="chart-shade"></path>
                 <path [attr.d]="chartData.curvePath" class="chart-curve"></path>
+                <rect class="chart-hit-area" x="0" y="0" width="900" height="260" fill="none" tabindex="0"
+                    aria-label="Hover to inspect terminal price distribution"
+                    (mousemove)="onChartPointer($event)" (touchstart)="onChartPointer($event)"
+                    (mouseleave)="hideChartTooltip()"></rect>
                 <line [attr.x1]="chartData.spotX" y1="14" [attr.x2]="chartData.spotX" [attr.y2]="chartData.baseY"
                     class="chart-spot"></line><text [attr.x]="chartData.spotX" y="25" text-anchor="middle"
                     class="chart-label">Spot</text>
@@ -115,7 +119,10 @@
                     class="chart-target"></line><text [attr.x]="chartData.targetX" y="25" text-anchor="middle"
                     class="chart-target-label">Target</text>@for (label of chartData.xLabels; track label.x) { <text
                     [attr.x]="label.x" y="252" text-anchor="middle" class="chart-axis">{{ label.label }}</text> }
-            </svg></div> } @else { <div class="chart-empty">Enter valid inputs to display the terminal price
+            </svg>
+            @if (chartTooltip) { <app-chart-tooltip [title]="chartTooltipTitle()" [rows]="chartTooltipRows()"
+                [left]="chartTooltip.left" [top]="chartTooltip.top"></app-chart-tooltip> }
+            </div> } @else { <div class="chart-empty">Enter valid inputs to display the terminal price
             distribution.</div> }
         <app-data-table [columns]="detailColumns" [data]="detailRows"
             emptyMessage="Supporting calculations will appear after a valid calculation."></app-data-table>

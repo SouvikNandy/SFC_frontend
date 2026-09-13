@@ -15,16 +15,36 @@ import { GreeksSymbolDetails } from '../greeks/greeks.model';
 import { DefaultStock } from '../../../shared/services/constantFile';
 import { OptionsChainService } from './options-chain.service';
 import { OptionsChainRow, OptionsChainSide, OptionsChainViewModel } from './models/chain.model';
+import { ChartTooltipComponent, ChartTooltipRow } from '../../../shared/components/chart-tooltip/chart-tooltip.component';
 
 type Side = 'call' | 'put';
 type ColumnKey = 'oi' | 'oiChange' | 'volume' | 'iv' | 'ltp' | 'delta' | 'gamma' | 'theta' | 'vega';
 type MoneyFilter = 'all' | 'call' | 'put';
 type SortKey = ColumnKey | 'strike';
+type ChartKind = 'oi' | 'iv';
+
+interface ChartPointCoordinate {
+  index: number;
+  x: number;
+  y: number;
+}
+
+interface ChartTooltipState {
+  kind: ChartKind;
+  index: number;
+  x: number;
+  y: number;
+  left: number;
+  top: number;
+  strike: number;
+  call: number;
+  put: number;
+}
 
 @Component({
   selector: 'app-options-chain',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ChartTooltipComponent],
   template: ` <section class="sfc-page-pad options-chain-page">
     <div class="titlebar">
       <h1>Options Chain</h1>
@@ -136,47 +156,81 @@ type SortKey = ColumnKey | 'strike';
         </div>
       </div>
     </div>
-    <div class="panel filters-panel">
-      <p class="sect-label">Filters</p>
-      <div class="chipbar">
-        <span class="chipgroup-label">Strikes</span>
+    <div class="panel filters-panel" (document:click)="closeColumnsMenu()">
+      <div class="filter-toolbar">
+        <div class="filter-heading">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+          <span>Filters</span>
+        </div>
+        <div class="filter-group">
+          <div class="filter-group-label">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14M8 12h8M11 19h2" /></svg>
+            <span>Strikes</span>
+          </div>
+          <div class="segmented-control">
         @for (item of strikeFilters; track item.value) {
           <button
-            class="chip"
+            class="segment"
             type="button"
             [class.active]="strikeFilter === item.value"
             (click)="strikeFilter = item.value"
           >
-            {{ item.label }}
+            {{ strikeLabel(item.value) }}
           </button>
         }
+          </div>
       </div>
-      <div class="chipbar">
-        <span class="chipgroup-label">Moneyness</span>
+        <div class="filter-group">
+          <div class="filter-group-label">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h10M5 17h6" /><circle cx="17" cy="12" r="2" /></svg>
+            <span>Moneyness</span>
+          </div>
+          <div class="segmented-control">
         @for (item of moneyFilters; track item.value) {
           <button
-            class="chip"
+            class="segment"
             type="button"
             [class.active]="moneyFilter === item.value"
             (click)="moneyFilter = item.value"
           >
-            {{ item.label }}
+            {{ moneyLabel(item.value) }}
           </button>
         }
+          </div>
       </div>
-      <div class="chipbar">
-        <span class="chipgroup-label">Columns</span>
-        @for (item of columnOptions; track item.key) {
+        <div class="filter-group columns-group">
+          <div class="filter-group-label">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1" /><rect x="14" y="4" width="6" height="6" rx="1" /><rect x="4" y="14" width="6" height="6" rx="1" /><rect x="14" y="14" width="6" height="6" rx="1" /></svg>
+            <span>Columns</span>
+          </div>
           <button
-            class="chip"
+            class="columns-trigger"
             type="button"
-            [class.active]="columns[item.key]"
-            [disabled]="columns[item.key] && visibleColumnCount === 1"
-            (click)="toggleColumn(item.key)"
+            aria-haspopup="dialog"
+            [attr.aria-expanded]="columnsMenuOpen"
+            (click)="$event.stopPropagation(); columnsMenuOpen = !columnsMenuOpen"
           >
-            {{ item.label }}
+            {{ visibleColumnCount }} selected
+            <span class="chevron" aria-hidden="true">⌄</span>
           </button>
-        }
+          @if (columnsMenuOpen) {
+            <div class="columns-menu" role="dialog" aria-label="Visible columns" (click)="$event.stopPropagation()">
+              <div class="columns-menu-list">
+                @for (item of columnOptions; track item.key) {
+                  <label class="column-option">
+                    <input
+                      type="checkbox"
+                      [checked]="columns[item.key]"
+                      [disabled]="columns[item.key] && visibleColumnCount === 1"
+                      (change)="toggleColumn(item.key)"
+                    />
+                    <span>{{ item.label }}</span>
+                  </label>
+                }
+              </div>
+            </div>
+          }
+        </div>
       </div>
     </div>
     <div class="stat-strip">
@@ -293,17 +347,59 @@ type SortKey = ColumnKey | 'strike';
     <div class="chart-grid">
       <div class="panel chart-panel">
         <p class="panel-title">Open Interest by Strike</p>
-        <svg viewBox="0 0 560 200" role="img" aria-label="Open interest by strike">
-          <path [attr.d]="chartPath(view?.chart?.callOi)" class="chart-line call-line"></path>
-          <path [attr.d]="chartPath(view?.chart?.putOi)" class="chart-line put-line"></path>
-        </svg>
+        <div class="chart-container">
+          <svg viewBox="0 0 560 200" role="img" aria-label="Open interest by strike">
+          <path [attr.d]="chartPath(chartSeries('oi', 'call'))" class="chart-line call-line"></path>
+          <path [attr.d]="chartPath(chartSeries('oi', 'put'))" class="chart-line put-line"></path>
+            @for (point of chartPointCoordinates('oi', 'call'); track point.index) {
+              <circle [attr.cx]="point.x" [attr.cy]="point.y" r="3" class="chart-point call-point"
+                [class.hovered]="isChartPointHovered('oi', point.index)"></circle>
+            }
+            @for (point of chartPointCoordinates('oi', 'put'); track point.index) {
+              <circle [attr.cx]="point.x" [attr.cy]="point.y" r="3" class="chart-point put-point"
+                [class.hovered]="isChartPointHovered('oi', point.index)"></circle>
+            }
+            @if (chartTooltip?.kind === 'oi') {
+              <line [attr.x1]="chartTooltip!.x" y1="10" [attr.x2]="chartTooltip!.x" y2="190" class="chart-guide"></line>
+            }
+            <rect class="chart-hit-area" x="0" y="0" width="560" height="200" tabindex="0"
+              aria-label="Hover to inspect open interest by strike"
+              (mousemove)="onChartPointer('oi', $event)" (mouseleave)="hideChartTooltip()"
+              (touchstart)="onChartPointer('oi', $event)" (focus)="onChartFocus('oi')"></rect>
+          </svg>
+          @if (chartTooltip?.kind === 'oi') {
+            <app-chart-tooltip [title]="'Strike ' + integer(chartTooltip!.strike)"
+              [rows]="chartTooltipRows('oi')" [left]="chartTooltip!.left" [top]="chartTooltip!.top"></app-chart-tooltip>
+          }
+        </div>
       </div>
       <div class="panel chart-panel">
         <p class="panel-title">Implied Volatility Smile</p>
-        <svg viewBox="0 0 560 200" role="img" aria-label="Implied volatility smile">
-          <path [attr.d]="chartPath(view?.chart?.callIv)" class="chart-line call-line"></path>
-          <path [attr.d]="chartPath(view?.chart?.putIv)" class="chart-line put-line"></path>
-        </svg>
+        <div class="chart-container">
+          <svg viewBox="0 0 560 200" role="img" aria-label="Implied volatility smile">
+          <path [attr.d]="chartPath(chartSeries('iv', 'call'))" class="chart-line call-line"></path>
+          <path [attr.d]="chartPath(chartSeries('iv', 'put'))" class="chart-line put-line"></path>
+            @for (point of chartPointCoordinates('iv', 'call'); track point.index) {
+              <circle [attr.cx]="point.x" [attr.cy]="point.y" r="3" class="chart-point call-point"
+                [class.hovered]="isChartPointHovered('iv', point.index)"></circle>
+            }
+            @for (point of chartPointCoordinates('iv', 'put'); track point.index) {
+              <circle [attr.cx]="point.x" [attr.cy]="point.y" r="3" class="chart-point put-point"
+                [class.hovered]="isChartPointHovered('iv', point.index)"></circle>
+            }
+            @if (chartTooltip?.kind === 'iv') {
+              <line [attr.x1]="chartTooltip!.x" y1="10" [attr.x2]="chartTooltip!.x" y2="190" class="chart-guide"></line>
+            }
+            <rect class="chart-hit-area" x="0" y="0" width="560" height="200" tabindex="0"
+              aria-label="Hover to inspect implied volatility by strike"
+              (mousemove)="onChartPointer('iv', $event)" (mouseleave)="hideChartTooltip()"
+              (touchstart)="onChartPointer('iv', $event)" (focus)="onChartFocus('iv')"></rect>
+          </svg>
+          @if (chartTooltip?.kind === 'iv') {
+            <app-chart-tooltip [title]="'Strike ' + integer(chartTooltip!.strike)"
+              [rows]="chartTooltipRows('iv')" [left]="chartTooltip!.left" [top]="chartTooltip!.top"></app-chart-tooltip>
+          }
+        </div>
       </div>
     </div>
   </section>`,
@@ -372,6 +468,8 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
   suggestionsOpen = false;
   highlightedIndex = -1;
   error = '';
+  columnsMenuOpen = false;
+  chartTooltip: ChartTooltipState | null = null;
   ngOnInit(): void {
     this.setupSelection();
     this.loadSymbols();
@@ -505,6 +603,15 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
     if (this.columns[key] && this.visibleColumnCount === 1) return;
     this.columns[key] = !this.columns[key];
   }
+  closeColumnsMenu(): void {
+    this.columnsMenuOpen = false;
+  }
+  strikeLabel(value: number): string {
+    return value ? `±${value}` : 'All';
+  }
+  moneyLabel(value: MoneyFilter): string {
+    return value === 'all' ? 'All' : value === 'call' ? 'ITM Calls' : 'ITM Puts';
+  }
   sortBy(key: SortKey, side: Side): void {
     if (this.sortKey === key && this.sortSide === side) this.sortDescending = !this.sortDescending;
     else {
@@ -536,19 +643,120 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
     return `bar-${Math.min(10, Math.max(0, Math.round((value / max) * 10)))}`;
   }
   chartPath(points: Array<{ x: number; y: number }> | undefined): string {
-    if (!points || points.length < 2) return '';
-    const xs = points.map((point) => point.x),
-      ys = points.map((point) => point.y),
-      minX = Math.min(...xs),
-      maxX = Math.max(...xs),
-      minY = Math.min(...ys),
-      maxY = Math.max(...ys);
-    return points
-      .map((point, index) => {
-        const x = 10 + ((point.x - minX) / (maxX - minX || 1)) * 540;
-        const y = 190 - ((point.y - minY) / (maxY - minY || 1)) * 170;
-        return `${index ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`;
-      })
+    return points && points.length >= 2 ? this.chartPointPath(points) : '';
+  }
+  chartPointCoordinates(kind: ChartKind, side: Side): ChartPointCoordinate[] {
+    return this.chartCoordinates(this.chartSeries(kind, side));
+  }
+  onChartPointer(kind: ChartKind, event: MouseEvent | TouchEvent): void {
+    const points = this.chartSeries(kind, 'call');
+    const putPoints = this.chartSeries(kind, 'put');
+    if (!points?.length || !putPoints?.length) return;
+
+    const target = event.currentTarget as SVGRectElement;
+    const bounds = target.getBoundingClientRect();
+    const clientX = 'touches' in event ? event.touches[0]?.clientX : event.clientX;
+    const clientY = 'touches' in event ? event.touches[0]?.clientY : event.clientY;
+    if (clientX == null || clientY == null || !bounds.width || !bounds.height) return;
+
+    const ratio = Math.max(0, Math.min(1, (clientX - bounds.left) / bounds.width));
+    const minX = Math.min(...points.map((point) => point.x));
+    const maxX = Math.max(...points.map((point) => point.x));
+    const dataX = minX + ratio * (maxX - minX);
+    const index = points.reduce(
+      (nearest, point, pointIndex) =>
+        Math.abs(point.x - dataX) < Math.abs(points[nearest].x - dataX) ? pointIndex : nearest,
+      0,
+    );
+    const point = points[index];
+    const putIndex = putPoints.reduce(
+      (nearest, putPoint, pointIndex) =>
+        Math.abs(putPoint.x - point.x) < Math.abs(putPoints[nearest].x - point.x)
+          ? pointIndex
+          : nearest,
+      0,
+    );
+    const relativeX = this.chartCoordinates(points)[index]?.x ?? 10;
+    const relativeY = Math.max(10, Math.min(190, clientY - bounds.top));
+    const container = target.parentElement?.parentElement?.getBoundingClientRect();
+    if (!container) return;
+    const tooltipWidth = 174;
+    const tooltipHeight = 78;
+    const left = Math.max(8, Math.min(container.width - tooltipWidth - 8, clientX - container.left + 12));
+    const top = relativeY < tooltipHeight ? relativeY + 16 : relativeY - tooltipHeight;
+    this.chartTooltip = {
+      kind,
+      index,
+      x: relativeX,
+      y: relativeY,
+      left,
+      top: Math.max(8, Math.min(container.height - tooltipHeight - 8, top)),
+      strike: point.x,
+      call: point.y,
+      put: putPoints[putIndex].y,
+    };
+  }
+  onChartFocus(kind: ChartKind): void {
+    const points = this.chartSeries(kind, 'call');
+    const putPoints = this.chartSeries(kind, 'put');
+    if (!points?.length || !putPoints?.length) return;
+    const point = points[0];
+    this.chartTooltip = {
+      kind,
+      index: 0,
+      x: this.chartCoordinates(points)[0].x,
+      y: this.chartCoordinates(points)[0].y,
+      left: 18,
+      top: 18,
+      strike: point.x,
+      call: point.y,
+      put: putPoints[0].y,
+    };
+  }
+  hideChartTooltip(): void {
+    this.chartTooltip = null;
+  }
+  isChartPointHovered(kind: ChartKind, index: number): boolean {
+    return this.chartTooltip?.kind === kind && this.chartTooltip.index === index;
+  }
+  chartTooltipRows(kind: ChartKind): ChartTooltipRow[] {
+    if (!this.chartTooltip) return [];
+    return kind === 'oi'
+      ? [
+          { label: 'Call OI', value: this.integer(this.chartTooltip.call), tone: 'call' },
+          { label: 'Put OI', value: this.integer(this.chartTooltip.put), tone: 'put' },
+        ]
+      : [
+          { label: 'Call IV', value: `${this.chartTooltip.call.toFixed(2)}%`, tone: 'call' },
+          { label: 'Put IV', value: `${this.chartTooltip.put.toFixed(2)}%`, tone: 'put' },
+        ];
+  }
+  chartSeries(kind: ChartKind, side: Side): Array<{ x: number; y: number }> {
+    if (kind === 'oi') {
+      const chartPoints = side === 'call' ? this.view?.chart.callOi : this.view?.chart.putOi;
+      if (chartPoints?.length) return chartPoints;
+      return this.rows.map((row) => ({ x: row.strike, y: side === 'call' ? row.call.oi : row.put.oi }));
+    }
+    return this.rows.map((row) => ({ x: row.strike, y: side === 'call' ? row.call.iv : row.put.iv }));
+  }
+  private chartCoordinates(points: Array<{ x: number; y: number }> | undefined): ChartPointCoordinate[] {
+    if (!points?.length) return [];
+    const xs = points.map((point) => point.x);
+    const ys = points.map((point) => point.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    return points.map((point, index) => ({
+      index,
+      x: 10 + ((point.x - minX) / (maxX - minX || 1)) * 540,
+      y: 190 - ((point.y - minY) / (maxY - minY || 1)) * 170,
+    }));
+  }
+  private chartPointPath(points: Array<{ x: number; y: number }> | undefined): string {
+    const coordinates = this.chartCoordinates(points);
+    return coordinates
+      .map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(1)},${point.y.toFixed(1)}`)
       .join(' ');
   }
   formatPrice(value: number): string {

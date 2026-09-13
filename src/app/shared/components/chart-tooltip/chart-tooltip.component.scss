@@ -1,0 +1,52 @@
+:host {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.chart-tooltip {
+    position: absolute;
+    display: grid;
+    width: 174px;
+    gap: 4px;
+    padding: 9px 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--ink-soft);
+    background: var(--panel);
+    box-shadow: 0 8px 18px rgba(28, 35, 27, .14);
+    font-family: var(--font-mono);
+    font-size: 11px;
+}
+
+strong {
+    margin-bottom: 2px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid var(--border);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 11px;
+}
+
+span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+b {
+    margin-left: auto;
+    color: var(--ink);
+    font-weight: 600;
+}
+
+i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+}
+
+.tone-call { background: var(--teal); }
+.tone-put { background: var(--red); }
+.tone-neutral { background: var(--muted-2); }

@@ -9,11 +9,12 @@ import { DataTableColumn } from '../../../shared/components/data-table/data-tabl
 import { GreeksSymbolDetails } from '../greeks/greeks.model';
 import { ImpliedVolatilityService } from './implied-volatility.service';
 import { ImpliedVolatilityChart, ImpliedVolatilityMode, ImpliedVolatilityOptionType, ImpliedVolatilityPriceSource, ImpliedVolatilityResult, ImpliedVolatilityTraceRow } from './implied-volatility.model';
+import { ChartTooltipComponent, ChartTooltipRow } from '../../../shared/components/chart-tooltip/chart-tooltip.component';
 
 @Component({
     selector: 'app-implied-volatility',
     standalone: true,
-    imports: [CommonModule, ReactiveFormsModule, DataTableComponent],
+    imports: [CommonModule, ReactiveFormsModule, DataTableComponent, ChartTooltipComponent],
     templateUrl: './implied-volatility.component.html',
     styleUrl: './implied-volatility.component.scss',
     changeDetection: ChangeDetectionStrategy.OnPush,
@@ -50,6 +51,7 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
     optionType: ImpliedVolatilityOptionType = 'call';
     priceSource: ImpliedVolatilityPriceSource = 'auto';
     liveUpgradeRequested = false;
+    chartTooltip: { index: number; left: number; top: number } | null = null;
     result: ImpliedVolatilityResult | null = null;
     chart: ImpliedVolatilityChart | null = null;
     traceRows: ImpliedVolatilityTraceRow[] = [];
@@ -320,9 +322,28 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
         const yAt = (value: number) => paddingTop + plotHeight - (value - yMin) / (yMax - yMin) * plotHeight;
         const gridLines = [0, 1, 2, 3, 4].map(step => { const value = yMin + (yMax - yMin) * step / 4; return { y: yAt(value), label: value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value.toFixed(0) }; });
         const xLabels = [0, 1, 2, 3, 4, 5].map(index => { const value = maxVol * index / 5; return { x: xAt(value), label: `${value.toFixed(0)}%` }; });
-        const curvePath = points.map((point, index) => `${index ? 'L' : 'M'}${xAt(point.volatility).toFixed(1)},${yAt(point.price).toFixed(1)}`).join(' ');
+        const chartPoints = points.map(point => ({ ...point, x: xAt(point.volatility), y: yAt(point.price) }));
+        const curvePath = chartPoints.map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
         const solvedPoint = { x: xAt(Math.min(result.ivPct, maxVol)), y: yAt(marketPrice) };
-        return { viewBox: `0 0 ${width} ${height}`, curvePath, marketLineY: yAt(marketPrice), solvedLineX: solvedPoint.x, solvedPoint, gridLines, xLabels, solvedLabel: `${result.ivPct.toFixed(2)}%` };
+        return { viewBox: `0 0 ${width} ${height}`, curvePath, marketLineY: yAt(marketPrice), solvedLineX: solvedPoint.x, solvedPoint, gridLines, xLabels, solvedLabel: `${result.ivPct.toFixed(2)}%`, points: chartPoints };
+    }
+
+    onChartPointer(event: MouseEvent | TouchEvent): void {
+        if (!this.chart?.points.length) return;
+        const target = event.currentTarget as SVGRectElement, bounds = target.getBoundingClientRect();
+        const clientX = 'touches' in event ? event.touches[0]?.clientX : event.clientX;
+        const clientY = 'touches' in event ? event.touches[0]?.clientY : event.clientY;
+        if (clientX == null || clientY == null || !bounds.width) return;
+        const ratio = Math.max(0, Math.min(1, (clientX - bounds.left) / bounds.width));
+        const index = Math.min(this.chart.points.length - 1, Math.max(0, Math.round(ratio * (this.chart.points.length - 1))));
+        const container = target.parentElement?.parentElement?.getBoundingClientRect();
+        if (!container) return;
+        this.chartTooltip = { index, left: Math.max(8, Math.min(container.width - 182, clientX - container.left + 12)), top: Math.max(8, clientY - container.top - 70) };
+    }
+    hideChartTooltip(): void { this.chartTooltip = null; }
+    chartTooltipRows(): ChartTooltipRow[] {
+        const point = this.chart?.points[this.chartTooltip?.index ?? -1];
+        return point ? [{ label: 'Volatility', value: `${point.volatility.toFixed(2)}%`, tone: 'neutral' }, { label: 'Model price', value: this.formatPrice(point.price), tone: 'neutral' }] : [];
     }
 
     private daysBetween(from: string, to: string): number {

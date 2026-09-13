@@ -88,12 +88,19 @@
                         }}</text>
                 </g>
                 <path [attr.d]="chart.path" fill="none" stroke="var(--accent)" stroke-width="2.5"></path>
+                <rect class="chart-hit-area" x="0" y="0" [attr.width]="chart.width" [attr.height]="chart.height" fill="none" tabindex="0"
+                    aria-label="Hover to inspect EOD price history" (mousemove)="onChartPointer($event)"
+                    (touchstart)="onChartPointer($event)" (mouseleave)="hideChartTooltip()"></rect>
                 <g *ngFor="let xt of chart.xTicks">
                     <text [attr.x]="xt.x" [attr.y]="(chart.height || 0) - 8" text-anchor="middle" class="legend">{{
                         xt.label
                         }}</text>
                 </g>
             </svg>
+            @if (chartTooltip) {
+            <app-chart-tooltip [title]="chartTooltipRow?.date || ''" [rows]="chartTooltipRows()"
+                [left]="chartTooltip.left" [top]="chartTooltip.top"></app-chart-tooltip>
+            }
         </div>
         <ng-template #emptyChart>
             <div class="empty">No EOD data is available for the selected filters.</div>

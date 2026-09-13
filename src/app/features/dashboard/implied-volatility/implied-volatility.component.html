@@ -100,7 +100,7 @@
                 </div>
             </div>
 
-            <div class="grid3">
+            <div class="grid4" style = "margin-top:28px">
                 <div class="field-block"><label>Option type</label>
                     <div class="seg type"><button type="button" [class.active]="optionType === 'call'"
                             (click)="selectOptionType('call')">Call</button><button type="button"
@@ -173,9 +173,16 @@
                     <circle [attr.cx]="chartData.solvedPoint.x" [attr.cy]="chartData.solvedPoint.y" r="5"
                         class="chart-point"></circle><text [attr.x]="chartData.solvedLineX" y="30" text-anchor="middle"
                         class="chart-solved-label">{{ chartData.solvedLabel }}</text>
+                    <rect class="chart-hit-area" x="0" y="0" width="900" height="300" fill="none" tabindex="0"
+                        aria-label="Hover to inspect price against volatility"
+                        (mousemove)="onChartPointer($event)" (touchstart)="onChartPointer($event)"
+                        (mouseleave)="hideChartTooltip()"></rect>
                     @for (label of chartData.xLabels; track label.x) { <text [attr.x]="label.x" y="290"
                         text-anchor="middle" class="chart-axis">{{ label.label }}</text> }
-                </svg></div>
+                </svg>
+                @if (chartTooltip) { <app-chart-tooltip [title]="'Volatility curve'" [rows]="chartTooltipRows()"
+                    [left]="chartTooltip.left" [top]="chartTooltip.top"></app-chart-tooltip> }
+            </div>
             <p class="chart-caption">The solver walks this curve until the model price meets the market price. Where the
                 curve is steep the volatility is well determined; where it flattens, the answer becomes unreliable.</p>
             } @else { <div class="chart-empty">Enter valid inputs to display the price-volatility curve.</div> }

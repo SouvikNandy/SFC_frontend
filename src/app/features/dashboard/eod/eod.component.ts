@@ -5,6 +5,7 @@ import { DdGreeksData, EodDataRow, EodRequest, EodSymbol } from './eod.model';
 import { buildEodChart, ChartResult } from './eod-chart.util';
 import { DataTableColumn } from '../../../shared/components/data-table/data-table.types';
 import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
+import { ChartTooltipComponent, ChartTooltipRow } from '../../../shared/components/chart-tooltip/chart-tooltip.component';
 import { ToastService } from '../../../core/services/toast.service';
 import { EMPTY, Subject } from 'rxjs';
 import { catchError, switchMap, takeUntil, tap } from 'rxjs/operators';
@@ -12,7 +13,7 @@ import { catchError, switchMap, takeUntil, tap } from 'rxjs/operators';
 @Component({
     selector: 'app-eod',
     standalone: true,
-    imports: [CommonModule, DataTableComponent],
+    imports: [CommonModule, DataTableComponent, ChartTooltipComponent],
     templateUrl: './eod.component.html',
     styleUrls: ['./eod.component.scss'],
     changeDetection: ChangeDetectionStrategy.OnPush,
@@ -48,6 +49,7 @@ export class EodComponent implements OnInit, OnDestroy {
     readonly pageSizes = [10, 25, 50];
     hasNextPage = false;
     hasPreviousPage = false;
+    chartTooltip: { index: number; left: number; top: number } | null = null;
 
     readonly eodColumns: DataTableColumn<EodDataRow>[] = [
         { key: 'date', label: 'Date', type: 'text' },
@@ -152,6 +154,31 @@ export class EodComponent implements OnInit, OnDestroy {
         this.destroy$.next();
         this.destroy$.complete();
         this.refresh$.complete();
+    }
+
+    onChartPointer(event: MouseEvent | TouchEvent): void {
+        if (!this.chart?.points.length) return;
+        const target = event.currentTarget as SVGRectElement;
+        const bounds = target.getBoundingClientRect();
+        const clientX = 'touches' in event ? event.touches[0]?.clientX : event.clientX;
+        const clientY = 'touches' in event ? event.touches[0]?.clientY : event.clientY;
+        if (clientX == null || clientY == null || !bounds.width) return;
+        const ratio = Math.max(0, Math.min(1, (clientX - bounds.left) / bounds.width));
+        const index = Math.min(this.chart.points.length - 1, Math.max(0, Math.round(ratio * (this.chart.points.length - 1))));
+        const container = target.parentElement?.parentElement?.getBoundingClientRect();
+        if (!container) return;
+        this.chartTooltip = { index, left: Math.max(8, Math.min(container.width - 182, clientX - container.left + 12)), top: Math.max(8, clientY - container.top - 70) };
+    }
+
+    hideChartTooltip(): void { this.chartTooltip = null; }
+
+    chartTooltipRows(): ChartTooltipRow[] {
+        const row = this.chartTooltipRow;
+        return row ? [{ label: 'LTP', value: this.formatPrice(row.ltp), tone: 'neutral' }] : [];
+    }
+    get chartTooltipRow(): EodDataRow | undefined {
+        if (!this.chart || !this.chartTooltip) return undefined;
+        return this.rows[this.rows.length - this.chart.points.length + this.chartTooltip.index];
     }
 
     private loadEod() {

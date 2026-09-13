@@ -110,6 +110,9 @@
                 <path [attr.d]="chart.pricePath" class="chart-line chart-line-close"></path>
                 <path [attr.d]="chart.hv10Path" class="chart-line chart-line-hv10"></path>
                 <path [attr.d]="chart.hv20Path" class="chart-line chart-line-hv20"></path>
+                <rect class="chart-hit-area" x="0" y="0" width="900" height="260" fill="none" tabindex="0"
+                    aria-label="Hover to inspect historical volatility" (mousemove)="onChartPointer($event)"
+                    (touchstart)="onChartPointer($event)" (mouseleave)="hideChartTooltip()"></rect>
                 @if (chart.marker; as marker) {
                 <line [attr.x1]="marker.x" y1="10" [attr.x2]="marker.x" y2="236" class="chart-marker-line"></line>
                 <circle [attr.cx]="marker.x" [attr.cy]="marker.y" r="4" class="chart-marker-dot"></circle>
@@ -118,6 +121,8 @@
                 <text [attr.x]="label.x" y="254" text-anchor="middle" class="chart-axis">{{ label.label }}</text>
                 }
             </svg>
+            @if (chartTooltip) { <app-chart-tooltip [title]="chart.points[chartTooltip.index]?.date || ''"
+                [rows]="chartTooltipRows()" [left]="chartTooltip.left" [top]="chartTooltip.top"></app-chart-tooltip> }
         </div>
 
         <div class="table-scroll">

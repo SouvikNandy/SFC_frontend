@@ -8,6 +8,7 @@ export interface ChartResult {
     width: number;
     height: number;
     yAxisLabelX: number;
+    points: Array<{ x: number; y: number; index: number }>;
 }
 
 const DEFAULT_W = 720;
@@ -33,6 +34,7 @@ export function buildEodChart(rows: EodDataRow[], width = DEFAULT_W, height = DE
     const yOf = (price: number) => marginTop + (1 - (price - min) / ((max - min) || 1)) * plotH;
 
     const pathPts = rows.map((r, i) => `${i === 0 ? 'M' : 'L'}${xOf(i).toFixed(1)},${yOf(r.ltp ?? r.close ?? 0).toFixed(1)}`).join(' ');
+    const chartPoints = rows.map((r, index) => ({ x: xOf(index), y: yOf(r.ltp ?? r.close ?? 0), index }));
 
     const yTicks = [0, 1, 2, 3, 4].map(k => {
         const price = min + (max - min) * (k / 4);
@@ -51,5 +53,6 @@ export function buildEodChart(rows: EodDataRow[], width = DEFAULT_W, height = DE
         width: chartW,
         height: chartH,
         yAxisLabelX: marginLeft - 8,
+        points: chartPoints,
     };
 }

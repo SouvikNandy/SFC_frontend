@@ -95,12 +95,18 @@
 }
 
 .chart {
+    position: relative;
     width: 100%;
     overflow: hidden;
 }
 
 .chart svg {
     overflow: visible;
+}
+
+.chart-hit-area {
+    fill: none;
+    pointer-events: all;
 }
 
 .num {

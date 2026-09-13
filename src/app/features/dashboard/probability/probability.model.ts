@@ -73,6 +73,7 @@ export interface ProbabilityChart {
     spotX: number;
     baseY: number;
     xLabels: Array<{ x: number; label: string }>;
+    points: Array<{ price: number; density: number; x: number; y: number }>;
 }
 
 export type ProbabilitySymbolDetails = GreeksSymbolDetails;

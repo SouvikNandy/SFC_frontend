@@ -44,4 +44,5 @@ export interface ImpliedVolatilityChart {
     gridLines: Array<{ y: number; label: string }>;
     xLabels: Array<{ x: number; label: string }>;
     solvedLabel: string;
+    points: Array<{ volatility: number; price: number; x: number; y: number }>;
 }

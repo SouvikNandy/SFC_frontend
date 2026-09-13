@@ -123,8 +123,8 @@ button:focus-visible {
 .badge {
     display: inline-flex;
     align-items: center;
-    align-self: stretch;
-    padding: 9px 10px;
+    align-self: end;
+    padding: 11px 10px;
     border-radius: 6px;
     color: var(--teal-dark);
     background: var(--teal-tint);
@@ -289,6 +289,7 @@ button:focus-visible {
 }
 
 .chart-wrap {
+    position: relative;
     margin-bottom: 22px;
     padding: 12px;
     border: 1px solid var(--border);
@@ -301,6 +302,11 @@ button:focus-visible {
     width: 100%;
     height: auto;
     overflow: visible;
+}
+
+.chart-hit-area {
+    fill: none;
+    pointer-events: all;
 }
 
 .chart-grid {

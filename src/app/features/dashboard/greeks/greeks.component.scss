@@ -230,9 +230,9 @@ input:focus {
     color: var(--teal-dark);
     background: var(--teal-tint);
     border-radius: 6px;
-    padding: 9px 10px;
+    padding: 13px 10px;
     white-space: nowrap;
-    align-self: stretch;
+    align-self: end;
     display: flex;
     align-items: center
 }
@@ -559,7 +559,7 @@ table.greeks tr:last-child td {
 
 @media (max-width:460px) {
     .grid-inputs {
-        grid-template-columns: 1fr
+        grid-template-columns: 1fr;
     }
 
     .strike-pair .row2 {

@@ -25,6 +25,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { DefaultStock } from '../../../shared/services/constantFile';
 import { GreeksSymbolDetails } from '../greeks/greeks.model';
 import { ProbabilityService } from './probability.service';
+import { ChartTooltipComponent, ChartTooltipRow } from '../../../shared/components/chart-tooltip/chart-tooltip.component';
 import {
   ProbabilityApiData,
   ProbabilityChart,
@@ -37,7 +38,7 @@ import {
 @Component({
   selector: 'app-probability',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, DataTableComponent],
+  imports: [CommonModule, ReactiveFormsModule, DataTableComponent, ChartTooltipComponent],
   templateUrl: './probability.component.html',
   styleUrl: './probability.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -96,6 +97,7 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
   data: ProbabilityApiData | null = null;
   chart: ProbabilityChart | null = null;
   detailRows: ProbabilityDetailRow[] = [];
+  chartTooltip: { index: number; left: number; top: number } | null = null;
 
   ngOnInit(): void {
     this.loadSymbols();
@@ -453,11 +455,9 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
       xAt = (price: number) =>
         padLeft + ((price - minPrice) / (maxPrice - minPrice || 1)) * plotWidth,
       yAt = (density: number) => padTop + plotHeight - (density / (maxDensity || 1)) * plotHeight;
-    const curvePath = points
-      .map(
-        (point, index) =>
-          `${index ? 'L' : 'M'}${xAt(point.price).toFixed(1)},${yAt(point.density).toFixed(1)}`,
-      )
+    const chartPoints = points.map((point) => ({ ...point, x: xAt(point.price), y: yAt(point.density) }));
+    const curvePath = chartPoints
+      .map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(1)},${point.y.toFixed(1)}`)
       .join(' ');
     const targetX = xAt(target),
       spotX = xAt(spot),
@@ -481,7 +481,30 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
       spotX,
       baseY,
       xLabels,
+      points: chartPoints,
     };
+  }
+
+  onChartPointer(event: MouseEvent | TouchEvent): void {
+    if (!this.chart?.points.length) return;
+    const target = event.currentTarget as SVGRectElement, bounds = target.getBoundingClientRect();
+    const clientX = 'touches' in event ? event.touches[0]?.clientX : event.clientX;
+    const clientY = 'touches' in event ? event.touches[0]?.clientY : event.clientY;
+    if (clientX == null || clientY == null || !bounds.width) return;
+    const ratio = Math.max(0, Math.min(1, (clientX - bounds.left) / bounds.width));
+    const index = Math.min(this.chart.points.length - 1, Math.max(0, Math.round(ratio * (this.chart.points.length - 1))));
+    const container = target.parentElement?.parentElement?.getBoundingClientRect();
+    if (!container) return;
+    this.chartTooltip = { index, left: Math.max(8, Math.min(container.width - 182, clientX - container.left + 12)), top: Math.max(8, clientY - container.top - 70) };
+  }
+  hideChartTooltip(): void { this.chartTooltip = null; }
+  chartTooltipRows(): ChartTooltipRow[] {
+    const point = this.chart?.points[this.chartTooltip?.index ?? -1];
+    return point ? [{ label: 'Probability density', value: point.density.toFixed(4), tone: 'neutral' }] : [];
+  }
+  chartTooltipTitle(): string {
+    const point = this.chart?.points[this.chartTooltip?.index ?? -1];
+    return point ? `Price ${Math.round(point.price).toLocaleString('en-IN')}` : 'Price distribution';
   }
 
   private daysBetween(from: string, to: string): number {

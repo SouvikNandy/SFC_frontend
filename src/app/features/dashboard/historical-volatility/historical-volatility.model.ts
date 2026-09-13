@@ -44,6 +44,7 @@ export interface HistoricalVolatilityChart {
     xLabels: HistoricalVolatilityChartLabel[];
     marker: HistoricalVolatilityMarker | null;
     viewBox: string;
+    points: Array<{ date: string; close: number; hv10: number | null; hv20: number | null; x: number; y: number }>;
 }
 
 export interface HistoricalVolatilityGridLine {
