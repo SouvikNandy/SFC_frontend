@@ -153,13 +153,6 @@
   margin-top: 12px;
 }
 
-.field-block {
-  display: flex;
-  position: relative;
-  flex-direction: column;
-  gap: 5px;
-}
-
 .field-block label {
   color: var(--muted-2);
   font-size: 10.5px;
@@ -375,22 +368,10 @@ select:focus {
 }
 
 .chart-wrap {
-  position: relative;
   padding: 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--head-bg);
-}
-
-.chart-wrap svg {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.chart-hit-area {
-  fill: none;
-  pointer-events: all;
 }
 
 .chart-grid {

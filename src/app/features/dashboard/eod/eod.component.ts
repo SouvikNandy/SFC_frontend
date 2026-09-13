@@ -79,6 +79,7 @@ export class EodComponent implements OnInit, OnDestroy {
   hasNextPage = false;
   hasPreviousPage = false;
   chartTooltip: { index: number; left: number; top: number } | null = null;
+  private restoreScrollTop: number | null = null;
 
   readonly eodColumns: DataTableColumn<EodDataRow>[] = [
     { key: 'date', label: 'Date', type: 'text' },
@@ -146,9 +147,9 @@ export class EodComponent implements OnInit, OnDestroy {
           this.isMetadataLoading = loadMetadata;
           this.isEodLoading = !loadMetadata;
           this.error = '';
-          this.rows = [];
-          this.chart = null;
           if (loadMetadata) {
+            this.rows = [];
+            this.chart = null;
             this.ddGreeksData = null;
             this.strikeOptions = [];
             this.expiryOptions = [];
@@ -192,9 +193,12 @@ export class EodComponent implements OnInit, OnDestroy {
         this.currentPage = paginatedData.page;
         this.hasNextPage = paginatedData.has_next;
         this.hasPreviousPage = paginatedData.has_previous;
-        this.rows = paginatedData.results.slice().sort((a, b) => a.date.localeCompare(b.date));
+        this.rows = paginatedData.results
+          .map((row) => this.normalizeEodRow(row))
+          .sort((a, b) => String(a.date).localeCompare(String(b.date)));
         this.chart = buildEodChart(this.rows.slice(-200));
         this.changeDetector.markForCheck();
+        this.restorePageScroll();
       });
   }
 
@@ -208,27 +212,61 @@ export class EodComponent implements OnInit, OnDestroy {
     }
     const value = payload as {
       results?: unknown;
+      rows?: unknown;
+      items?: unknown;
       data?: unknown;
       page?: unknown;
       has_next?: unknown;
       has_previous?: unknown;
     };
     if (value.data && typeof value.data === 'object' && !Array.isArray(value.data)) {
-      const nested = value.data as { results?: unknown; data?: unknown };
-      if (Array.isArray(nested.results) || Array.isArray(nested.data)) {
+      const nested = value.data as {
+        results?: unknown;
+        rows?: unknown;
+        items?: unknown;
+        data?: unknown;
+      };
+      if (
+        Array.isArray(nested.results) ||
+        Array.isArray(nested.rows) ||
+        Array.isArray(nested.items) ||
+        Array.isArray(nested.data)
+      ) {
         return this.normalizeEodData(value.data as EodResponse['data']);
       }
     }
     const results = Array.isArray(value.results)
       ? value.results
-      : Array.isArray(value.data)
-        ? value.data
-        : [];
+      : Array.isArray(value.rows)
+        ? value.rows
+        : Array.isArray(value.items)
+          ? value.items
+          : Array.isArray(value.data)
+            ? value.data
+            : [];
     return {
       results: results as EodDataRow[],
       page: typeof value.page === 'number' ? value.page : 1,
       has_next: value.has_next === true,
       has_previous: value.has_previous === true,
+    };
+  }
+
+  private normalizeEodRow(row: EodDataRow): EodDataRow {
+    const source = row as EodDataRow & {
+      trade_date?: string;
+      close_price?: number;
+    };
+    return {
+      ...row,
+      date: row.date ?? source.trade_date ?? '',
+      ltp: row.ltp ?? source.close_price ?? row.close ?? 0,
+      close: row.close ?? source.close_price ?? row.ltp ?? 0,
+      open: row.open ?? 0,
+      high: row.high ?? 0,
+      low: row.low ?? 0,
+      volume: row.volume ?? 0,
+      oi: row.oi ?? 0,
     };
   }
 
@@ -529,7 +567,17 @@ export class EodComponent implements OnInit, OnDestroy {
   }
 
   private refreshEod(): void {
-    if (!this.isMetadataLoading) this.refresh$.next({ loadMetadata: false });
+    if (!this.isMetadataLoading) {
+      this.restoreScrollTop = window.scrollY;
+      this.refresh$.next({ loadMetadata: false });
+    }
+  }
+
+  private restorePageScroll(): void {
+    if (this.restoreScrollTop === null) return;
+    const scrollTop = this.restoreScrollTop;
+    this.restoreScrollTop = null;
+    window.requestAnimationFrame(() => window.scrollTo({ top: scrollTop, behavior: 'auto' }));
   }
 
   private resetPageAndRefresh(): void {

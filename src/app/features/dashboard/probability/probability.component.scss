@@ -83,13 +83,6 @@
   border-bottom: 1px dashed var(--border);
 }
 
-.field-block {
-  display: flex;
-  position: relative;
-  flex-direction: column;
-  gap: 6px;
-}
-
 .field-block label {
   color: var(--muted);
   font-size: 12px;
@@ -357,23 +350,11 @@ select:focus {
 }
 
 .chart-wrap {
-  position: relative;
   padding: 12px;
   margin-bottom: 22px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--head-bg);
-}
-
-.chart-wrap svg {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.chart-hit-area {
-  fill: none;
-  pointer-events: all;
 }
 
 .chart-axis-line {
