@@ -365,7 +365,7 @@ button.calc.secondary:hover {
 
 .src-toggle {
     display: inline-flex;
-    background: var(--color-input-border);
+    background: var(--border-soft);
     border-radius: 7px;
     padding: 2px;
     gap: 2px;
@@ -571,3 +571,9 @@ table.greeks tr:last-child td {
     }
 }
 
+button.src-btn.active {
+    color: var(--teal-dark);
+    background: var(--panel);
+    box-shadow: 0 0 0 1px var(--border);
+    font-weight: 600;
+}

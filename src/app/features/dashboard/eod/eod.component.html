@@ -1,128 +1,274 @@
 <section class="sfc-page-pad eod-page">
-    <div class="head">
-        <p class="sub">5-year historical NSE F&O database, searchable by symbol, instrument, strike, expiry and date
-            range.</p>
+  <div class="head">
+    <p class="sub">
+      5-year historical NSE F&O database, searchable by symbol, instrument, strike, expiry and date
+      range.
+    </p>
+  </div>
+
+  <div class="card controls">
+    <div class="controls-row">
+      <div class="control">
+        <div class="label">Symbol</div>
+        <div class="seg">
+          <button *ngFor="let s of symbols" (click)="onSymbol(s)" [class.active]="symbol === s">
+            {{ s }}
+          </button>
+        </div>
+      </div>
+      <div class="control">
+        <div class="label">Instrument</div>
+        <div class="seg">
+          <button (click)="onInstrument('FUT')" [class.active]="instrument === 'FUT'">
+            Futures
+          </button>
+          <button (click)="onInstrument('CE')" [class.active]="instrument === 'CE'">Call</button>
+          <button (click)="onInstrument('PE')" [class.active]="instrument === 'PE'">Put</button>
+        </div>
+      </div>
+
+      <div class="control" *ngIf="instrument !== 'FUT'">
+        <div class="label">Strike</div>
+        <select (change)="onStrikeChange($event)" [disabled]="isMetadataLoading">
+          <option *ngFor="let r of strikeOptions" [value]="r" [selected]="strike === r">
+            {{ r }}
+          </option>
+        </select>
+      </div>
+
+      <div class="control" *ngIf="instrument !== 'FUT'">
+        <div class="label">Expiry</div>
+        <select (change)="onExpiryChange($event)" [disabled]="isMetadataLoading">
+          <option *ngFor="let e of expiryOptions" [value]="e" [selected]="expiry === e">
+            {{
+              e
+                | date
+                  : 'dd MMM
+                        yyyy'
+            }}
+          </option>
+        </select>
+      </div>
+
+      <div class="control">
+        <div class="label">Date range</div>
+        <div class="date-range-control">
+          <div class="seg date-range-segment">
+            <button *ngFor="let r of ranges" (click)="onRange(r)" [class.active]="range === r">
+              {{ r }}
+            </button>
+          </div>
+          <div class="date-range-picker" *ngIf="range === 'Custom'">
+            <button
+              class="date-range-input"
+              type="button"
+              [attr.aria-expanded]="dateRangeOpen"
+              aria-haspopup="dialog"
+              (click)="toggleDateRange()"
+            >
+              <span>{{ customRangeLabel }}</span>
+              <span class="calendar-icon" aria-hidden="true">▣</span>
+            </button>
+            <div
+              class="date-range-popover"
+              *ngIf="dateRangeOpen"
+              role="dialog"
+              aria-label="Select date range"
+            >
+              <div class="date-picker-head">
+                <strong>Select date range</strong>
+                <button type="button" aria-label="Close date picker" (click)="cancelDateRange()">
+                  ×
+                </button>
+              </div>
+              <p class="date-picker-hint">Choose a start date, then an end date.</p>
+              <div class="calendar-nav">
+                <button type="button" aria-label="Previous month" (click)="shiftCalendarMonth(-1)">
+                  ‹
+                </button>
+                <div class="calendar-selectors">
+                  <select
+                    aria-label="Calendar month"
+                    (change)="setCalendarMonthPart('month', $event)"
+                  >
+                    <option
+                      *ngFor="let month of calendarMonths"
+                      [value]="month.value"
+                      [selected]="month.value === calendarMonthNumber"
+                    >
+                      {{ month.label }}
+                    </option>
+                  </select>
+                  <select
+                    aria-label="Calendar year"
+                    (change)="setCalendarMonthPart('year', $event)"
+                  >
+                    <option
+                      *ngFor="let year of calendarYears"
+                      [value]="year"
+                      [selected]="year === calendarYear"
+                    >
+                      {{ year }}
+                    </option>
+                  </select>
+                </div>
+                <button type="button" aria-label="Next month" (click)="shiftCalendarMonth(1)">
+                  ›
+                </button>
+              </div>
+              <div class="calendar-weekdays">
+                <span *ngFor="let day of ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']">{{
+                  day
+                }}</span>
+              </div>
+              <div class="calendar-grid">
+                <button
+                  *ngFor="let day of calendarDays"
+                  type="button"
+                  [class]="calendarDayClass(day)"
+                  [disabled]="day.muted || day.value > todayStr"
+                  [attr.aria-label]="day.value || null"
+                  (click)="selectCalendarDay(day.value)"
+                >
+                  {{ day.label || '' }}
+                </button>
+              </div>
+              <div class="date-summary">
+                <div>
+                  <span>Start</span>
+                  <strong>{{ draftCustomFrom ? formatDateLabel(draftCustomFrom) : '—' }}</strong>
+                </div>
+                <div>
+                  <span>End</span>
+                  <strong>{{ draftCustomTill ? formatDateLabel(draftCustomTill) : '—' }}</strong>
+                </div>
+              </div>
+              <div class="date-picker-actions">
+                <button type="button" class="date-picker-cancel" (click)="cancelDateRange()">
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="date-picker-apply"
+                  [disabled]="!draftCustomFrom || !draftCustomTill"
+                  (click)="applyCustomDateRange()"
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn-export" (click)="downloadCsv()">Download CSV</button>
+    </div>
+  </div>
+
+  <div class="card chart-card">
+    <div class="chart-head">
+      <div class="title">
+        {{ symbol }}
+        {{
+          instrument !== 'FUT'
+            ? strike
+              ? ' ' + strike + ' ' + instrument
+              : ''
+            : '
+                Futures'
+        }}
+        — {{ range }}
+      </div>
+      <div class="legend">Price (₹)</div>
     </div>
 
-    <div class="card controls">
-        <div class="controls-row">
-            <div class="control">
-                <div class="label">Symbol</div>
-                <div class="seg">
-                    <button *ngFor="let s of symbols" (click)="onSymbol(s)" [class.active]="symbol===s">{{ s }}</button>
-                </div>
-            </div>
-            <div class="control">
-                <div class="label">Instrument</div>
-                <div class="seg">
-                    <button (click)="onInstrument('FUT')" [class.active]="instrument==='FUT'">Futures</button>
-                    <button (click)="onInstrument('CE')" [class.active]="instrument==='CE'">Call</button>
-                    <button (click)="onInstrument('PE')" [class.active]="instrument==='PE'">Put</button>
-                </div>
-            </div>
-
-            <div class="control" *ngIf="instrument!=='FUT'">
-                <div class="label">Strike</div>
-                <select (change)="onStrikeChange($event)" [disabled]="isMetadataLoading">
-                    <option *ngFor="let r of strikeOptions" [value]="r" [selected]="strike===r">{{ r }}</option>
-                </select>
-            </div>
-
-            <div class="control" *ngIf="instrument!=='FUT'">
-                <div class="label">Expiry</div>
-                <select (change)="onExpiryChange($event)" [disabled]="isMetadataLoading">
-                    <option *ngFor="let e of expiryOptions" [value]="e" [selected]="expiry===e">{{ e | date:'dd MMM
-                        yyyy' }}</option>
-                </select>
-            </div>
-
-            <div class="control">
-                <div class="label">Date range</div>
-                <div class="seg">
-                    <button *ngFor="let r of ranges" (click)="onRange(r)" [class.active]="range===r">{{ r }}</button>
-                </div>
-            </div>
-
-            <div class="control" *ngIf="range==='Custom'">
-                <div class="label">Date range</div>
-
-                <div class="date-range-picker">
-                    <input class="date-range-input" type="text" [value]="customRangeLabel" readonly
-                        aria-label="Custom date range" [attr.aria-expanded]="dateRangeOpen" (click)="toggleDateRange()">
-                    <div class="date-range-popover" *ngIf="dateRangeOpen">
-                        <label>
-                            <span>Start date</span>
-                            <input type="date" [max]="todayStr" [value]="customFrom"
-                                (change)="onCustomFromChange($event)">
-                        </label>
-                        <label>
-                            <span>End date</span>
-                            <input type="date" [max]="todayStr" [value]="customTill"
-                                (change)="onCustomTillChange($event)">
-                        </label>
-                        <button type="button" class="date-range-done" (click)="applyCustomDateRange()">Done</button>
-                    </div>
-                </div>
-            </div>
-
-            <button class="btn-export" (click)="downloadCsv()">Download CSV</button>
-        </div>
+    <div class="chart" *ngIf="chart; else emptyChart">
+      <svg
+        [attr.viewBox]="chart.viewBox"
+        preserveAspectRatio="xMidYMid meet"
+        width="100%"
+        [attr.height]="chart.height"
+      >
+        <g *ngFor="let t of chart.yTicks">
+          <line
+            [attr.x1]="58"
+            [attr.x2]="(chart.width || 0) - 12"
+            [attr.y1]="t.y"
+            [attr.y2]="t.y"
+            stroke="var(--border)"
+            stroke-width="1"
+          ></line>
+          <text [attr.x]="chart.yAxisLabelX" [attr.y]="t.y + 4" text-anchor="end" class="legend">
+            {{ t.price | number: '1.0-0' }}
+          </text>
+        </g>
+        <path [attr.d]="chart.path" fill="none" stroke="var(--accent)" stroke-width="2.5"></path>
+        <rect
+          class="chart-hit-area"
+          x="0"
+          y="0"
+          [attr.width]="chart.width"
+          [attr.height]="chart.height"
+          fill="none"
+          tabindex="0"
+          aria-label="Hover to inspect EOD price history"
+          (mousemove)="onChartPointer($event)"
+          (touchstart)="onChartPointer($event)"
+          (mouseleave)="hideChartTooltip()"
+        ></rect>
+        <g *ngFor="let xt of chart.xTicks">
+          <text
+            [attr.x]="xt.x"
+            [attr.y]="(chart.height || 0) - 8"
+            text-anchor="middle"
+            class="legend"
+          >
+            {{ xt.label }}
+          </text>
+        </g>
+      </svg>
+      @if (chartTooltip) {
+        <app-chart-tooltip
+          [title]="chartTooltipRow?.date || ''"
+          [rows]="chartTooltipRows()"
+          [left]="chartTooltip.left"
+          [top]="chartTooltip.top"
+        ></app-chart-tooltip>
+      }
     </div>
+    <ng-template #emptyChart>
+      <div class="empty">No EOD data is available for the selected filters.</div>
+    </ng-template>
+  </div>
 
-
-    <div class="card chart-card">
-        <div class="chart-head">
-            <div class="title">{{ symbol }} {{ instrument!=='FUT' ? (strike ? ' ' + strike + ' ' + instrument : '') : '
-                Futures' }} — {{ range }}</div>
-            <div class="legend">Price (₹)</div>
-        </div>
-
-        <div class="chart" *ngIf="chart; else emptyChart">
-            <svg [attr.viewBox]="chart.viewBox" preserveAspectRatio="xMidYMid meet" width="100%"
-                [attr.height]="chart.height">
-                <g *ngFor="let t of chart.yTicks">
-                    <line [attr.x1]="58" [attr.x2]="(chart.width || 0) - 12" [attr.y1]="t.y" [attr.y2]="t.y"
-                        stroke="var(--border)" stroke-width="1"></line>
-                    <text [attr.x]="chart.yAxisLabelX" [attr.y]="t.y + 4" text-anchor="end" class="legend">{{ t.price |
-                        number:'1.0-0'
-                        }}</text>
-                </g>
-                <path [attr.d]="chart.path" fill="none" stroke="var(--accent)" stroke-width="2.5"></path>
-                <rect class="chart-hit-area" x="0" y="0" [attr.width]="chart.width" [attr.height]="chart.height" fill="none" tabindex="0"
-                    aria-label="Hover to inspect EOD price history" (mousemove)="onChartPointer($event)"
-                    (touchstart)="onChartPointer($event)" (mouseleave)="hideChartTooltip()"></rect>
-                <g *ngFor="let xt of chart.xTicks">
-                    <text [attr.x]="xt.x" [attr.y]="(chart.height || 0) - 8" text-anchor="middle" class="legend">{{
-                        xt.label
-                        }}</text>
-                </g>
-            </svg>
-            @if (chartTooltip) {
-            <app-chart-tooltip [title]="chartTooltipRow?.date || ''" [rows]="chartTooltipRows()"
-                [left]="chartTooltip.left" [top]="chartTooltip.top"></app-chart-tooltip>
-            }
-        </div>
-        <ng-template #emptyChart>
-            <div class="empty">No EOD data is available for the selected filters.</div>
-        </ng-template>
+  <div class="card table-card">
+    <div class="table-note">
+      <span>Showing {{ rows.length }} sessions — latest first</span>
+      <div class="pagination-controls" aria-label="EOD pagination">
+        <label
+          >Rows
+          <select
+            [value]="currentPageSize"
+            (change)="onPageSizeChange($event)"
+            [disabled]="loading"
+          >
+            <option *ngFor="let size of pageSizes" [value]="size">{{ size }}</option>
+          </select>
+        </label>
+        <span>Page {{ currentPage }}</span>
+        <button type="button" (click)="goToPreviousPage()" [disabled]="!hasPreviousPage || loading">
+          Previous
+        </button>
+        <button type="button" (click)="goToNextPage()" [disabled]="!hasNextPage || loading">
+          Next
+        </button>
+      </div>
     </div>
-
-    <div class="card table-card">
-        <div class="table-note">
-            <span>Showing {{ rows.length }} sessions — latest first</span>
-            <div class="pagination-controls" aria-label="EOD pagination">
-                <label>Rows
-                    <select [value]="currentPageSize" (change)="onPageSizeChange($event)" [disabled]="loading">
-                        <option *ngFor="let size of pageSizes" [value]="size">{{ size }}</option>
-                    </select>
-                </label>
-                <span>Page {{ currentPage }}</span>
-                <button type="button" (click)="goToPreviousPage()"
-                    [disabled]="!hasPreviousPage || loading">Previous</button>
-                <button type="button" (click)="goToNextPage()" [disabled]="!hasNextPage || loading">Next</button>
-            </div>
-        </div>
-        <app-data-table [columns]="displayColumns" [data]="displayRows" [loading]="loading"
-            emptyMessage="No EOD data is available for the selected filters."></app-data-table>
-    </div>
+    <app-data-table
+      [columns]="displayColumns"
+      [data]="displayRows"
+      [loading]="loading"
+      emptyMessage="No EOD data is available for the selected filters."
+    ></app-data-table>
+  </div>
 </section>
