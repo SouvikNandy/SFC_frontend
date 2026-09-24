@@ -46,20 +46,11 @@
             <div class="badge">{{ instrumentLabel }} · EOD historical closes</div>
         </div>
         } @else {
-        <div class="live-lock">
-            <div class="live-lock-icon" aria-hidden="true">▣</div>
-            <div class="live-lock-copy">
-                <p class="live-lock-title">Live historical data is a Premium feature</p>
-                <p class="live-lock-desc">Get a continuously updating series that includes today's live tick, instead of
-                    only yesterday's official close. Upgrade to enable this for your account.</p>
-            </div>
-            <button type="button" class="calc" [disabled]="liveUpgradeRequested" (click)="requestUpgrade()">
-                {{ liveUpgradeRequested ? 'Request sent — our team will reach out' : 'Upgrade to Premium' }}
-            </button>
-        </div>
+        <app-live-data-access description="price series that include today's live tick"></app-live-data-access>
         }
     </div>
 
+    @if (mode === 'eod') {
     <div class="panel">
         <p class="panel-title">Date selection</p>
         <p class="panel-hint">Pick the "as of" date — HV-10 and HV-20 are calculated using the 10 / 20 trading days
@@ -130,4 +121,5 @@
                 emptyMessage="No historical volatility data is available."></app-data-table>
         </div>
     </div>
+    }
 </section>

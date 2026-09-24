@@ -26,6 +26,9 @@ import { DefaultStock } from '../../../shared/services/constantFile';
 import { GreeksSymbolDetails } from '../greeks/greeks.model';
 import { ProbabilityService } from './probability.service';
 import { ChartTooltipComponent, ChartTooltipRow } from '../../../shared/components/chart-tooltip/chart-tooltip.component';
+import { ActivatedRoute } from '@angular/router';
+import { LiveDataAccessComponent } from '../live-data/live-data-access.component';
+import { LiveDataAccessService } from '../live-data/live-data-access.service';
 import {
   ProbabilityApiData,
   ProbabilityChart,
@@ -38,7 +41,7 @@ import {
 @Component({
   selector: 'app-probability',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, DataTableComponent, ChartTooltipComponent],
+  imports: [CommonModule, ReactiveFormsModule, DataTableComponent, ChartTooltipComponent, LiveDataAccessComponent],
   templateUrl: './probability.component.html',
   styleUrl: './probability.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -47,6 +50,8 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
   private readonly probability = inject(ProbabilityService);
   private readonly toast = inject(ToastService);
   private readonly changeDetector = inject(ChangeDetectorRef);
+  private readonly route = inject(ActivatedRoute);
+  private readonly liveAccess = inject(LiveDataAccessService);
   private readonly symbolSelection$ = new Subject<string>();
   private readonly calculationRequest$ = new Subject<void>();
   private readonly destroy$ = new Subject<void>();
@@ -91,16 +96,18 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
   calculating = false;
   suggestionsOpen = false;
   highlightedSymbolIndex = -1;
-  liveUpgradeRequested = false;
   sourceNote = '';
   error = '';
   data: ProbabilityApiData | null = null;
   chart: ProbabilityChart | null = null;
   detailRows: ProbabilityDetailRow[] = [];
   chartTooltip: { index: number; left: number; top: number } | null = null;
+  private symbolsRequested = false;
 
   ngOnInit(): void {
-    this.loadSymbols();
+    if (this.liveAccess.requestedLive(this.route.snapshot)) this.modeControl.setValue('live', { emitEvent: false });
+    // Live Data is a separate view: symbol/EOD APIs load only when EOD or Custom is opened.
+    if (this.modeControl.value !== 'live') this.loadSymbols();
     this.setupSymbolDetails();
     this.setupCalculation();
   }
@@ -137,6 +144,12 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
     this.data = null;
     this.chart = null;
     this.detailRows = [];
+    if (mode === 'live') {
+      // Cancel any in-flight EOD request; EOD reloads when its tab is reopened.
+      this.symbolSelection$.next('');
+      return;
+    }
+    if (!this.symbolsRequested) this.loadSymbols();
     if (mode === 'custom') {
       this.sourceNote = 'Manual entry';
       this.symbolDetails = null;
@@ -214,9 +227,6 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
   onFieldChange(): void {
     if (!this.detailsLoading && this.modeControl.value !== 'live') this.calculate();
   }
-  requestUpgrade(): void {
-    this.liveUpgradeRequested = true;
-  }
 
   probabilityAtExpiry(): number | null {
     if (!this.data) return null;
@@ -238,6 +248,7 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
   }
 
   private loadSymbols(): void {
+    this.symbolsRequested = true;
     this.probability
       .getSymbols()
       .pipe(
@@ -255,7 +266,9 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
         this.symbols = symbols;
         this.filteredSymbols = symbols;
         const initialSymbol = symbols.includes(DefaultStock) ? DefaultStock : symbols[0];
-        if (initialSymbol) this.selectSymbol(initialSymbol);
+        if (!initialSymbol) return;
+        if (this.modeControl.value === 'eod') this.selectSymbol(initialSymbol);
+        else if (!this.symbolControl.value) this.symbolControl.setValue(initialSymbol, { emitEvent: false });
       });
   }
 

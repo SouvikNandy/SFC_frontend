@@ -17,7 +17,7 @@
         </thead>
         <tbody>
             @if (data().length > 0) {
-            @for (row of data(); track row) {
+            @for (row of data(); track trackRow($index, row); let rowIndex = $index) {
             <tr [class.data-table__row--clickable]="rowClickable()" [class]="rowClass(row)"
                 (click)="rowClickable() && emitRowClick(row)">
                 @if (selectable()) {
@@ -33,7 +33,10 @@
                     [class.data-table__change--positive]="cellType(column) === 'change' && numericValueForClass(value) > 0"
                     [class.data-table__change--negative]="cellType(column) === 'change' && numericValueForClass(value) < 0"
                     [class.data-table__change--neutral]="cellType(column) === 'change' && numericValueForClass(value) === 0">
-                    @if (column.secondaryFormatter) {
+                    @if (column.template) {
+                    <ng-container [ngTemplateOutlet]="column.template"
+                        [ngTemplateOutletContext]="cellContext(row, value, rowIndex, column)"></ng-container>
+                    } @else if (column.secondaryFormatter) {
                     <div class="data-table__cell-primary">{{ formatCell(value, row, column) }}</div>
                     <div class="data-table__cell-secondary">{{ column.secondaryFormatter(row) }}</div>
                     } @else if (cellType(column) === 'badge') {

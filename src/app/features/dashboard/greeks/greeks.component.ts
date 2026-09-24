@@ -6,11 +6,14 @@ import { GreeksCalculatorService, GreeksInput } from './greeks-calculator.servic
 import { GreeksSymbolDetails } from './greeks.model';
 import { ToastService } from '../../../core/services/toast.service';
 import { DefaultStock } from '../../../shared/services/constantFile';
+import { ActivatedRoute } from '@angular/router';
+import { LiveDataAccessComponent } from '../live-data/live-data-access.component';
+import { LiveDataAccessService } from '../live-data/live-data-access.service';
 
 @Component({
     selector: 'app-greeks',
     standalone: true,
-    imports: [CommonModule, ReactiveFormsModule],
+    imports: [CommonModule, ReactiveFormsModule, LiveDataAccessComponent],
     templateUrl: './greeks.component.html',
     styleUrls: ['./greeks.component.scss'],
     changeDetection: ChangeDetectionStrategy.OnPush
@@ -32,11 +35,13 @@ export class GreeksComponent implements OnInit, OnDestroy {
     highlightedSymbolIndex = -1;
     historicalVolatility20: number | null = null;
     symbolDetails: GreeksSymbolDetails | null = null;
+    private symbolsRequested = false;
     private readonly symbolSelection$ = new Subject<string>();
     private readonly destroy$ = new Subject<void>();
     private lastSolvedIv: number | null = null;
 
-    constructor(private fb: FormBuilder, public svc: GreeksCalculatorService, private readonly toast: ToastService, private readonly changeDetector: ChangeDetectorRef) {
+    constructor(private fb: FormBuilder, public svc: GreeksCalculatorService, private readonly toast: ToastService, private readonly changeDetector: ChangeDetectorRef,
+        private readonly route: ActivatedRoute, private readonly liveAccess: LiveDataAccessService) {
         this.form = this.fb.group({
             sourceMode: ['eod'],
             symbol: ['', Validators.required],
@@ -56,7 +61,9 @@ export class GreeksComponent implements OnInit, OnDestroy {
     }
 
     ngOnInit() {
-        this.loadSymbols();
+        if (this.liveAccess.requestedLive(this.route.snapshot)) this.setMode('live');
+        // Live Data is a separate view: symbol/EOD APIs load only when EOD is opened.
+        if (this.form.value.sourceMode === 'eod') this.loadSymbols();
         this.setupSymbolDetailsLoading();
         // subscribe individually to replicate prototype 'input' behaviour and sync logic
         const spotCtrl = this.form.get('spot')!;
@@ -132,9 +139,14 @@ export class GreeksComponent implements OnInit, OnDestroy {
             ['spot', 'strike', 'rate', 'vol', 'expiry', 'dividend', 'ivType'].forEach((c: string) => this.form.get(c)?.enable());
         } else if (mode === 'eod') {
             ['spot', 'strike', 'rate', 'vol', 'expiry', 'dividend', 'ivType'].forEach((c: string) => this.form.get(c)?.enable());
+            // EOD APIs run only while the EOD tab is active.
+            const symbol = this.form.value.symbol;
+            if (!this.symbolsRequested) this.loadSymbols();
+            else if (!this.symbolDetails && !this.symbolDetailsLoading && symbol) this.selectSymbol(symbol);
         } else if (mode === 'live') {
-            // disable inputs in live lock
+            // Live Data is a separate view; cancel any in-flight EOD request.
             ['spot', 'strike', 'rate', 'vol', 'expiry', 'dividend', 'ivType'].forEach((c: string) => this.form.get(c)?.disable());
+            if (this.symbolDetailsLoading) this.symbolSelection$.next('');
         }
     }
 
@@ -269,6 +281,7 @@ export class GreeksComponent implements OnInit, OnDestroy {
     }
 
     private loadSymbols(): void {
+        this.symbolsRequested = true;
         this.svc.getSymbols().pipe(
             takeUntil(this.destroy$),
             catchError(() => {
@@ -283,7 +296,7 @@ export class GreeksComponent implements OnInit, OnDestroy {
             this.symbols = symbols;
             this.filteredSymbols = symbols;
             const initialSymbol = symbols.includes(DefaultStock) ? DefaultStock : symbols[0];
-            if (initialSymbol) this.selectSymbol(initialSymbol);
+            if (initialSymbol && this.form.value.sourceMode === 'eod') this.selectSymbol(initialSymbol);
         });
     }
 
@@ -317,7 +330,8 @@ export class GreeksComponent implements OnInit, OnDestroy {
         const expiryDays = this.resolveExpiryDays(details);
         this.strikeOptions = details.strike;
         this.form.patchValue({
-            sourceMode: 'eod',
+            // Stay on the Live tab if it is open (e.g. reopened after sign-in).
+            sourceMode: this.form.value.sourceMode === 'live' ? 'live' : 'eod',
             spot: details.underlying,
             strike: details.strike.includes(selectedStrike) ? selectedStrike : details.atm_strike,
             expiry: expiryDays,
@@ -349,5 +363,4 @@ export class GreeksComponent implements OnInit, OnDestroy {
     }
     onStrikeSelectChange(val: string) { if (val === 'custom') return; this.form.patchValue({ strike: Number(val) }); }
     onIvSrcClick(src: string) { this.form.patchValue({ ivSource: src }); this.autofillIvPrice(); }
-    onLiveUpgrade() { /* stub - no backend */ this.inputError = 'Upgrade request sent'; }
 }

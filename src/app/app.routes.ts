@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
 
-import { authGuard, guestGuard, registrationGuard } from './core/guards/auth.guard';
+import { guestGuard, registrationGuard } from './core/guards/auth.guard';
 import { AuthLayoutComponent } from './layouts/auth-layout/auth-layout.component';
 import { DashboardLayoutComponent } from './layouts/dashboard-layout/dashboard-layout.component';
 import { PublicLayoutComponent } from './layouts/public-layout/public-layout.component';
@@ -88,8 +88,8 @@ export const routes: Routes = [
   },
   {
     path: 'dashboard',
+    // Public dashboard: restricted features (Live Data) enforce access themselves.
     component: DashboardLayoutComponent,
-    canActivate: [authGuard],
     children: [
       { path: '', redirectTo: 'home', pathMatch: 'full' },
       { path: 'home', loadComponent: () => import('./features/dashboard/dashboard-home/dashboard-home.component').then((m) => m.DashboardHomeComponent) },

@@ -2,9 +2,11 @@
     <form [formGroup]="form">
         <div class="titlebar">
             <h1>Implied Volatility</h1>
+            @if (modeControl.value !== 'live') {
             <span class="ticker">{{ modeControl.value === 'custom' ? 'CUSTOM' : (symbolControl.value || '—') }}</span>
             <span class="lastpx">{{ formatPrice(underlyingControl.value) }}</span>
             <span class="srcnote">{{ sourceNote }}</span>
+            }
         </div>
         <p class="sub">Solves the volatility that reproduces an observed option price, and reports how reliable that
             solve
@@ -28,18 +30,8 @@
                 observed. Nothing is pulled from a data feed.</div>
             }
             @if (modeControl.value === 'live') {
-            <div class="live-lock">
-                <div class="live-lock-icon" aria-hidden="true">▣</div>
-                <div class="live-lock-copy">
-                    <p class="live-lock-title">Live data is a Premium feature</p>
-                    <p class="live-lock-desc">Solve against the real-time underlying and streaming option quotes instead
-                        of
-                        the previous close.</p>
-                </div>
-                <button type="button" class="calc" [disabled]="liveUpgradeRequested" (click)="requestUpgrade()">{{
-                    liveUpgradeRequested ? 'Request sent — our team will reach out' : 'Upgrade to Premium' }}</button>
-            </div>
-            }
+            <app-live-data-access description="underlying prices and option quotes"></app-live-data-access>
+            } @else {
 
             <p class="sect-label">Contract</p>
             <div class="grid4">
@@ -113,7 +105,7 @@
                             [class.active]="priceSource === 'manual'"
                             (click)="selectPriceSource('manual')">Manual</button></div> }
                     <input id="marketPrice" type="number" formControlName="marketPrice" step="0.05"
-                        [readonly]="priceSource === 'auto' || modeControl.value === 'live'"
+                        [readonly]="priceSource === 'auto'"
                         (input)="onFieldChange()"><span class="field-hint">{{ priceSource === 'auto' ? (optionType ===
                         'call' ? 'API market_price.CE' : 'API
                         market_price.PE') : 'Entered manually' }}</span>
@@ -124,8 +116,10 @@
                         used in discounting</span></div>
             </div>
             @if (error) { <p class="input-error" role="alert">{{ error }}</p> }
+            }
         </div>
 
+        @if (modeControl.value !== 'live') {
         <div class="panel">
             <p class="sect-label">Result</p>
             <div class="result-grid">
@@ -199,5 +193,6 @@
                 === 'bisection' ? 'Newton-Raphson could not converge here, so the solver fell back to bisection, which
                 halves the search interval each step.' : 'Solver steps will appear after a valid calculation.' }}</p>
         </div>
+        }
     </form>
 </section>

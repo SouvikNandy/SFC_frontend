@@ -10,11 +10,14 @@ import { GreeksSymbolDetails } from '../greeks/greeks.model';
 import { ImpliedVolatilityService } from './implied-volatility.service';
 import { ImpliedVolatilityChart, ImpliedVolatilityMode, ImpliedVolatilityOptionType, ImpliedVolatilityPriceSource, ImpliedVolatilityResult, ImpliedVolatilityTraceRow } from './implied-volatility.model';
 import { ChartTooltipComponent, ChartTooltipRow } from '../../../shared/components/chart-tooltip/chart-tooltip.component';
+import { ActivatedRoute } from '@angular/router';
+import { LiveDataAccessComponent } from '../live-data/live-data-access.component';
+import { LiveDataAccessService } from '../live-data/live-data-access.service';
 
 @Component({
     selector: 'app-implied-volatility',
     standalone: true,
-    imports: [CommonModule, ReactiveFormsModule, DataTableComponent, ChartTooltipComponent],
+    imports: [CommonModule, ReactiveFormsModule, DataTableComponent, ChartTooltipComponent, LiveDataAccessComponent],
     templateUrl: './implied-volatility.component.html',
     styleUrl: './implied-volatility.component.scss',
     changeDetection: ChangeDetectionStrategy.OnPush,
@@ -23,6 +26,8 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
     private readonly volatility = inject(ImpliedVolatilityService);
     private readonly toast = inject(ToastService);
     private readonly changeDetector = inject(ChangeDetectorRef);
+    private readonly route = inject(ActivatedRoute);
+    private readonly liveAccess = inject(LiveDataAccessService);
     private readonly symbolSelection$ = new Subject<string>();
     private readonly destroy$ = new Subject<void>();
 
@@ -50,7 +55,6 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
     detailsLoading = false;
     optionType: ImpliedVolatilityOptionType = 'call';
     priceSource: ImpliedVolatilityPriceSource = 'auto';
-    liveUpgradeRequested = false;
     chartTooltip: { index: number; left: number; top: number } | null = null;
     result: ImpliedVolatilityResult | null = null;
     chart: ImpliedVolatilityChart | null = null;
@@ -63,9 +67,12 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
         { key: 'vega', label: 'Vega', formatter: value => Number(value).toFixed(4), align: 'right' },
     ];
     error = '';
+    private symbolsRequested = false;
 
     ngOnInit(): void {
-        this.loadSymbols();
+        if (this.liveAccess.requestedLive(this.route.snapshot)) this.modeControl.setValue('live', { emitEvent: false });
+        // Live Data is a separate view: symbol/EOD APIs load only when EOD or Custom is opened.
+        if (this.modeControl.value !== 'live') this.loadSymbols();
         this.setupDetailsLoading();
         this.setupCalculationInputs();
     }
@@ -90,6 +97,12 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
         this.result = null;
         this.chart = null;
         this.traceRows = [];
+        if (mode === 'live') {
+            // Cancel any in-flight EOD request; EOD reloads when its tab is reopened.
+            this.symbolSelection$.next('');
+            return;
+        }
+        if (!this.symbolsRequested) this.loadSymbols();
         if (mode === 'custom') {
             this.priceSource = 'manual';
             this.sourceNote = 'Manual entry';
@@ -186,7 +199,6 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
         this.expiryControl.setValue(this.daysBetween(this.tradeDate, this.expiryDate));
     }
     onFieldChange(): void { this.calculate(); }
-    requestUpgrade(): void { this.liveUpgradeRequested = true; }
 
     statusLabel(): string {
         if (!this.result) return '';
@@ -216,6 +228,7 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
     vegaHint(): string { return this.result?.vega === undefined ? '' : `IV move per ₹0.05 tick · vega ${(this.result.vega / 100).toFixed(3)}`; }
 
     private loadSymbols(): void {
+        this.symbolsRequested = true;
         this.volatility.getSymbols().pipe(
             takeUntil(this.destroy$),
             catchError(() => {

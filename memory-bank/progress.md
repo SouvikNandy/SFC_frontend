@@ -12,9 +12,16 @@
 - Greeks now uses the real symbol list and symbol-details APIs with local autocomplete, typed metadata, ATM strike selection, and stale-request protection.
 - Implied Volatility now has API-backed symbol autocomplete/details, Custom/EOD/Live modes, Auto/Manual market price, prototype-equivalent IV solving, dynamic chart, and calculation trace.
 - Probability now has API-backed symbol autocomplete/details, Custom/EOD/Live modes, debounced calculation, authoritative result cards, dynamic terminal distribution chart, validation, and a reusable DataTable for supporting calculations.
+- Payoff Tool implemented: EOD/Custom/Live modes, symbol autocomplete, 16 strategy presets, editable legs in DataTable, single calculation engine feeding strike ladder, summary strip, SVG graph with hover tooltip, and heat-map table; validation, loading/error/empty states, and switchMap stale-request protection.
 - Authentication now enforces dashboard/guest/registration guards, preserves registration context, uses real login/register/forgot/reset/logout/refresh endpoints, coordinates concurrent refreshes, and centralizes temporary OTP handling.
 
+- Public dashboard + authenticated Live Data section across Options Chain, Greeks, Probability, HV, IV and Payoff; login returnUrl; logout stays on dashboard.
+
 **Not started / backlog**
+
+- Live market feed (REST/WebSocket) — no backend contract yet; plug into `LiveDataService`.
+- Subscription layer (out of scope) — extend `LiveDataAccess` in `LiveDataAccessService`.
+- Tabler icon CDN link in `src/index.html` returns 404, so all `ti ti-*` icons are blank app-wide (pre-existing).
 
 - Add focused EOD service/component tests when the test matcher setup is repaired.
 - Consider a projected-cell extension only if a future grouped table needs migration without visual changes.
@@ -22,6 +29,7 @@
 - Add focused Greeks service/component tests when the test matcher setup is repaired.
 - Add focused Implied Volatility solver/component tests when the test matcher setup is repaired.
 - Add focused Probability service/component tests when the test matcher setup is repaired.
+- Payoff: backend should expose expiry-specific CE/PE settlements for accurate calendar premiums; add engine unit tests when test matcher setup is repaired.
 - Add focused authentication service/guard/interceptor tests when the test matcher setup is repaired.
 
 **Known issues**

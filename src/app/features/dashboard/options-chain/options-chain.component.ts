@@ -8,25 +8,41 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { EMPTY, Subject, catchError, finalize, of, switchMap, takeUntil, tap } from 'rxjs';
+import { EMPTY, Subject, Subscription, catchError, finalize, of, switchMap, takeUntil, tap } from 'rxjs';
 import { ToastService } from '../../../core/services/toast.service';
 import { GreeksCalculatorService } from '../greeks/greeks-calculator.service';
 import { GreeksSymbolDetails } from '../greeks/greeks.model';
 import { DefaultStock } from '../../../shared/services/constantFile';
 import { OptionsChainService } from './options-chain.service';
+import { ActivatedRoute } from '@angular/router';
+import { LiveDataAccessComponent } from '../live-data/live-data-access.component';
+import { LiveDataAccessService } from '../live-data/live-data-access.service';
 import { OptionsChainRow, OptionsChainSide, OptionsChainViewModel } from './models/chain.model';
-import { ChartTooltipComponent, ChartTooltipRow } from '../../../shared/components/chart-tooltip/chart-tooltip.component';
+import {
+  ChartTooltipComponent,
+  ChartTooltipRow,
+} from '../../../shared/components/chart-tooltip/chart-tooltip.component';
 
 type Side = 'call' | 'put';
 type ColumnKey = 'oi' | 'oiChange' | 'volume' | 'iv' | 'ltp' | 'delta' | 'gamma' | 'theta' | 'vega';
 type MoneyFilter = 'all' | 'call' | 'put';
 type SortKey = ColumnKey | 'strike';
-type ChartKind = 'oi' | 'iv';
+type ChartKind = 'oi' | 'oiChange';
 
 interface ChartPointCoordinate {
   index: number;
   x: number;
   y: number;
+}
+
+interface ChartBarCoordinate {
+  index: number;
+  x: number;
+  callY: number;
+  putY: number;
+  callHeight: number;
+  putHeight: number;
+  width: number;
 }
 
 interface ChartTooltipState {
@@ -44,13 +60,15 @@ interface ChartTooltipState {
 @Component({
   selector: 'app-options-chain',
   standalone: true,
-  imports: [CommonModule, FormsModule, ChartTooltipComponent],
+  imports: [CommonModule, FormsModule, ChartTooltipComponent, LiveDataAccessComponent],
   template: ` <section class="sfc-page-pad options-chain-page">
     <div class="titlebar">
       <h1>Options Chain</h1>
+      @if (!live) {
       <span class="ticker">{{ symbol || '—' }}</span
       ><span class="lastpx">{{ spot === null ? '—' : formatPrice(spot) }}</span
       ><span class="srcnote">{{ sourceNote }}</span>
+      }
     </div>
     <p class="sub">
       Full call and put ladder with open interest, volume, implied volatility and Greeks.
@@ -75,17 +93,8 @@ interface ChartTooltipState {
         </button>
       </div>
       @if (live) {
-        <div class="live-lock">
-          <div>
-            <p class="live-lock-title">Live chain is a Premium feature</p>
-            <p class="live-lock-desc">
-              Stream real-time LTP, open interest and volume with intraday OI change, instead of the
-              previous close.
-            </p>
-          </div>
-          <button type="button" class="calc" (click)="upgrade()">Upgrade to Premium</button>
-        </div>
-      }
+        <app-live-data-access description="LTP, open interest and volume with intraday OI change"></app-live-data-access>
+      } @else {
       <div class="topgrid">
         <div class="field-block autocomplete-field">
           <label for="chain-symbol">Script</label
@@ -155,7 +164,9 @@ interface ChartTooltipState {
           ><input id="strike-search" [(ngModel)]="strikeSearch" placeholder="e.g. 24800" />
         </div>
       </div>
+      }
     </div>
+    @if (!live) {
     <div class="panel filters-panel" (document:click)="closeColumnsMenu()">
       <div class="filter-toolbar">
         <div class="filter-heading">
@@ -168,39 +179,47 @@ interface ChartTooltipState {
             <span>Strikes</span>
           </div>
           <div class="segmented-control">
-        @for (item of strikeFilters; track item.value) {
-          <button
-            class="segment"
-            type="button"
-            [class.active]="strikeFilter === item.value"
-            (click)="strikeFilter = item.value"
-          >
-            {{ strikeLabel(item.value) }}
-          </button>
-        }
+            @for (item of strikeFilters; track item.value) {
+              <button
+                class="segment"
+                type="button"
+                [class.active]="strikeFilter === item.value"
+                (click)="strikeFilter = item.value"
+              >
+                {{ strikeLabel(item.value) }}
+              </button>
+            }
           </div>
-      </div>
+        </div>
         <div class="filter-group">
           <div class="filter-group-label">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h10M5 17h6" /><circle cx="17" cy="12" r="2" /></svg>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5 7h14M5 12h10M5 17h6" />
+              <circle cx="17" cy="12" r="2" />
+            </svg>
             <span>Moneyness</span>
           </div>
           <div class="segmented-control">
-        @for (item of moneyFilters; track item.value) {
-          <button
-            class="segment"
-            type="button"
-            [class.active]="moneyFilter === item.value"
-            (click)="moneyFilter = item.value"
-          >
-            {{ moneyLabel(item.value) }}
-          </button>
-        }
+            @for (item of moneyFilters; track item.value) {
+              <button
+                class="segment"
+                type="button"
+                [class.active]="moneyFilter === item.value"
+                (click)="moneyFilter = item.value"
+              >
+                {{ moneyLabel(item.value) }}
+              </button>
+            }
           </div>
-      </div>
+        </div>
         <div class="filter-group columns-group">
           <div class="filter-group-label">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1" /><rect x="14" y="4" width="6" height="6" rx="1" /><rect x="4" y="14" width="6" height="6" rx="1" /><rect x="14" y="14" width="6" height="6" rx="1" /></svg>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="4" y="4" width="6" height="6" rx="1" />
+              <rect x="14" y="4" width="6" height="6" rx="1" />
+              <rect x="4" y="14" width="6" height="6" rx="1" />
+              <rect x="14" y="14" width="6" height="6" rx="1" />
+            </svg>
             <span>Columns</span>
           </div>
           <button
@@ -214,7 +233,12 @@ interface ChartTooltipState {
             <span class="chevron" aria-hidden="true">⌄</span>
           </button>
           @if (columnsMenuOpen) {
-            <div class="columns-menu" role="dialog" aria-label="Visible columns" (click)="$event.stopPropagation()">
+            <div
+              class="columns-menu"
+              role="dialog"
+              aria-label="Visible columns"
+              (click)="$event.stopPropagation()"
+            >
               <div class="columns-menu-list">
                 @for (item of columnOptions; track item.key) {
                   <label class="column-option">
@@ -349,59 +373,114 @@ interface ChartTooltipState {
         <p class="panel-title">Open Interest by Strike</p>
         <div class="chart-container">
           <svg viewBox="0 0 560 200" role="img" aria-label="Open interest by strike">
-          <path [attr.d]="chartPath(chartSeries('oi', 'call'))" class="chart-line call-line"></path>
-          <path [attr.d]="chartPath(chartSeries('oi', 'put'))" class="chart-line put-line"></path>
-            @for (point of chartPointCoordinates('oi', 'call'); track point.index) {
-              <circle [attr.cx]="point.x" [attr.cy]="point.y" r="3" class="chart-point call-point"
-                [class.hovered]="isChartPointHovered('oi', point.index)"></circle>
-            }
-            @for (point of chartPointCoordinates('oi', 'put'); track point.index) {
-              <circle [attr.cx]="point.x" [attr.cy]="point.y" r="3" class="chart-point put-point"
-                [class.hovered]="isChartPointHovered('oi', point.index)"></circle>
+            @for (bar of chartBarCoordinates(); track bar.index) {
+              <rect
+                [attr.x]="bar.x - bar.width - 1"
+                [attr.y]="bar.callY"
+                [attr.width]="bar.width"
+                [attr.height]="bar.callHeight"
+                class="oi-bar-chart call-bar"
+                [class.hovered]="isChartPointHovered('oi', bar.index)"
+              ></rect>
+              <rect
+                [attr.x]="bar.x + 1"
+                [attr.y]="bar.putY"
+                [attr.width]="bar.width"
+                [attr.height]="bar.putHeight"
+                class="oi-bar-chart put-bar"
+                [class.hovered]="isChartPointHovered('oi', bar.index)"
+              ></rect>
             }
             @if (chartTooltip?.kind === 'oi') {
-              <line [attr.x1]="chartTooltip!.x" y1="10" [attr.x2]="chartTooltip!.x" y2="190" class="chart-guide"></line>
+              <line
+                [attr.x1]="chartTooltip!.x"
+                y1="10"
+                [attr.x2]="chartTooltip!.x"
+                y2="190"
+                class="chart-guide"
+              ></line>
             }
-            <rect class="chart-hit-area" x="0" y="0" width="560" height="200" tabindex="0"
+            <rect
+              class="chart-hit-area"
+              x="0"
+              y="0"
+              width="560"
+              height="200"
+              tabindex="0"
               aria-label="Hover to inspect open interest by strike"
-              (mousemove)="onChartPointer('oi', $event)" (mouseleave)="hideChartTooltip()"
-              (touchstart)="onChartPointer('oi', $event)" (focus)="onChartFocus('oi')"></rect>
+              (mousemove)="onChartPointer('oi', $event)"
+              (mouseleave)="hideChartTooltip()"
+              (touchstart)="onChartPointer('oi', $event)"
+              (focus)="onChartFocus('oi')"
+            ></rect>
           </svg>
           @if (chartTooltip?.kind === 'oi') {
-            <app-chart-tooltip [title]="'Strike ' + integer(chartTooltip!.strike)"
-              [rows]="chartTooltipRows('oi')" [left]="chartTooltip!.left" [top]="chartTooltip!.top"></app-chart-tooltip>
+            <app-chart-tooltip
+              [title]="'Strike ' + integer(chartTooltip!.strike)"
+              [rows]="chartTooltipRows('oi')"
+              [left]="chartTooltip!.left"
+              [top]="chartTooltip!.top"
+            ></app-chart-tooltip>
           }
         </div>
       </div>
       <div class="panel chart-panel">
-        <p class="panel-title">Implied Volatility Smile</p>
+        <p class="panel-title">Open Interest Change by Strike</p>
         <div class="chart-container">
-          <svg viewBox="0 0 560 200" role="img" aria-label="Implied volatility smile">
-          <path [attr.d]="chartPath(chartSeries('iv', 'call'))" class="chart-line call-line"></path>
-          <path [attr.d]="chartPath(chartSeries('iv', 'put'))" class="chart-line put-line"></path>
-            @for (point of chartPointCoordinates('iv', 'call'); track point.index) {
-              <circle [attr.cx]="point.x" [attr.cy]="point.y" r="3" class="chart-point call-point"
-                [class.hovered]="isChartPointHovered('iv', point.index)"></circle>
+          <svg viewBox="0 0 560 200" role="img" aria-label="Open interest change by strike">
+            @for (bar of chartBarCoordinates('oiChange'); track bar.index) {
+              <rect
+                [attr.x]="bar.x - bar.width - 1"
+                [attr.y]="bar.callY"
+                [attr.width]="bar.width"
+                [attr.height]="bar.callHeight"
+                class="oi-bar-chart call-bar"
+                [class.hovered]="isChartPointHovered('oiChange', bar.index)"
+              ></rect>
+              <rect
+                [attr.x]="bar.x + 1"
+                [attr.y]="bar.putY"
+                [attr.width]="bar.width"
+                [attr.height]="bar.putHeight"
+                class="oi-bar-chart put-bar"
+                [class.hovered]="isChartPointHovered('oiChange', bar.index)"
+              ></rect>
             }
-            @for (point of chartPointCoordinates('iv', 'put'); track point.index) {
-              <circle [attr.cx]="point.x" [attr.cy]="point.y" r="3" class="chart-point put-point"
-                [class.hovered]="isChartPointHovered('iv', point.index)"></circle>
+            @if (chartTooltip?.kind === 'oiChange') {
+              <line
+                [attr.x1]="chartTooltip!.x"
+                y1="15"
+                [attr.x2]="chartTooltip!.x"
+                y2="185"
+                class="chart-guide"
+              ></line>
             }
-            @if (chartTooltip?.kind === 'iv') {
-              <line [attr.x1]="chartTooltip!.x" y1="10" [attr.x2]="chartTooltip!.x" y2="190" class="chart-guide"></line>
-            }
-            <rect class="chart-hit-area" x="0" y="0" width="560" height="200" tabindex="0"
-              aria-label="Hover to inspect implied volatility by strike"
-              (mousemove)="onChartPointer('iv', $event)" (mouseleave)="hideChartTooltip()"
-              (touchstart)="onChartPointer('iv', $event)" (focus)="onChartFocus('iv')"></rect>
+            <rect
+              class="chart-hit-area"
+              x="0"
+              y="0"
+              width="560"
+              height="200"
+              tabindex="0"
+              aria-label="Hover to inspect open interest change by strike"
+              (mousemove)="onChartPointer('oiChange', $event)"
+              (mouseleave)="hideChartTooltip()"
+              (touchstart)="onChartPointer('oiChange', $event)"
+              (focus)="onChartFocus('oiChange')"
+            ></rect>
           </svg>
-          @if (chartTooltip?.kind === 'iv') {
-            <app-chart-tooltip [title]="'Strike ' + integer(chartTooltip!.strike)"
-              [rows]="chartTooltipRows('iv')" [left]="chartTooltip!.left" [top]="chartTooltip!.top"></app-chart-tooltip>
+          @if (chartTooltip?.kind === 'oiChange') {
+            <app-chart-tooltip
+              [title]="'Strike ' + integer(chartTooltip!.strike)"
+              [rows]="chartTooltipRows('oiChange')"
+              [left]="chartTooltip!.left"
+              [top]="chartTooltip!.top"
+            ></app-chart-tooltip>
           }
         </div>
       </div>
     </div>
+    }
   </section>`,
   styleUrls: ['./options-chain.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -411,6 +490,8 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
   private readonly chainApi = inject(OptionsChainService);
   private readonly toast = inject(ToastService);
   private readonly cd = inject(ChangeDetectorRef);
+  private readonly route = inject(ActivatedRoute);
+  private readonly liveAccess = inject(LiveDataAccessService);
   private readonly selection$ = new Subject<string>();
   private readonly destroy$ = new Subject<void>();
   readonly strikeFilters = [
@@ -470,9 +551,13 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
   error = '';
   columnsMenuOpen = false;
   chartTooltip: ChartTooltipState | null = null;
+  private symbolsRequested = false;
+  private chainRequest: Subscription | null = null;
   ngOnInit(): void {
+    if (this.liveAccess.requestedLive(this.route.snapshot)) this.live = true;
     this.setupSelection();
-    this.loadSymbols();
+    // Live Data is a separate view: symbol/EOD APIs load only when EOD is opened.
+    if (!this.live) this.loadSymbols();
   }
   ngOnDestroy(): void {
     this.destroy$.next();
@@ -583,7 +668,7 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
   }
   loadChain(): void {
     if (this.symbol && this.expiry && !this.live)
-      this.chainApi
+      this.chainRequest = this.chainApi
         .getOptionChain({ symbol: this.symbol, expiry: this.expiry })
         .pipe(takeUntil(this.destroy$))
         .subscribe((view) => {
@@ -648,6 +733,34 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
   chartPointCoordinates(kind: ChartKind, side: Side): ChartPointCoordinate[] {
     return this.chartCoordinates(this.chartSeries(kind, side));
   }
+  chartBarCoordinates(kind: 'oi' | 'oiChange' = 'oi'): ChartBarCoordinate[] {
+    const call = this.chartSeries(kind, 'call');
+    const put = this.chartSeries(kind, 'put');
+    if (!call.length || !put.length) return [];
+    const isChange = kind === 'oiChange';
+    const max = isChange
+      ? Math.max(
+          1,
+          ...call.map((point) => Math.abs(point.y)),
+          ...put.map((point) => Math.abs(point.y)),
+        )
+      : Math.max(1, ...call.map((point) => point.y), ...put.map((point) => point.y));
+    const baseline = isChange ? 100 : 190;
+    const extent = isChange ? 85 : 170;
+    const width = Math.max(2, Math.min(9, 520 / call.length));
+    return call.map((point, index) => ({
+      index,
+      x: 10 + (index / Math.max(1, call.length - 1)) * 540,
+      callY: this.barY(point.y, max, baseline, extent),
+      putY: this.barY(put[index]?.y ?? 0, max, baseline, extent),
+      callHeight: (Math.abs(point.y) / max) * extent,
+      putHeight: (Math.abs(put[index]?.y ?? 0) / max) * extent,
+      width,
+    }));
+  }
+  private barY(value: number, max: number, baseline: number, extent: number): number {
+    return value >= 0 ? baseline - (value / max) * extent : baseline;
+  }
   onChartPointer(kind: ChartKind, event: MouseEvent | TouchEvent): void {
     const points = this.chartSeries(kind, 'call');
     const putPoints = this.chartSeries(kind, 'put');
@@ -682,7 +795,10 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
     if (!container) return;
     const tooltipWidth = 174;
     const tooltipHeight = 78;
-    const left = Math.max(8, Math.min(container.width - tooltipWidth - 8, clientX - container.left + 12));
+    const left = Math.max(
+      8,
+      Math.min(container.width - tooltipWidth - 8, clientX - container.left + 12),
+    );
     const top = relativeY < tooltipHeight ? relativeY + 16 : relativeY - tooltipHeight;
     this.chartTooltip = {
       kind,
@@ -727,19 +843,35 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
           { label: 'Put OI', value: this.integer(this.chartTooltip.put), tone: 'put' },
         ]
       : [
-          { label: 'Call IV', value: `${this.chartTooltip.call.toFixed(2)}%`, tone: 'call' },
-          { label: 'Put IV', value: `${this.chartTooltip.put.toFixed(2)}%`, tone: 'put' },
+          {
+            label: 'Call Chg OI',
+            value: `${this.chartTooltip.call >= 0 ? '+' : ''}${this.integer(this.chartTooltip.call)}`,
+            tone: 'call',
+          },
+          {
+            label: 'Put Chg OI',
+            value: `${this.chartTooltip.put >= 0 ? '+' : ''}${this.integer(this.chartTooltip.put)}`,
+            tone: 'put',
+          },
         ];
   }
   chartSeries(kind: ChartKind, side: Side): Array<{ x: number; y: number }> {
     if (kind === 'oi') {
       const chartPoints = side === 'call' ? this.view?.chart.callOi : this.view?.chart.putOi;
       if (chartPoints?.length) return chartPoints;
-      return this.rows.map((row) => ({ x: row.strike, y: side === 'call' ? row.call.oi : row.put.oi }));
+      return this.rows.map((row) => ({
+        x: row.strike,
+        y: side === 'call' ? row.call.oi : row.put.oi,
+      }));
     }
-    return this.rows.map((row) => ({ x: row.strike, y: side === 'call' ? row.call.iv : row.put.iv }));
+    return this.rows.map((row) => ({
+      x: row.strike,
+      y: side === 'call' ? row.call.oiChange : row.put.oiChange,
+    }));
   }
-  private chartCoordinates(points: Array<{ x: number; y: number }> | undefined): ChartPointCoordinate[] {
+  private chartCoordinates(
+    points: Array<{ x: number; y: number }> | undefined,
+  ): ChartPointCoordinate[] {
     if (!points?.length) return [];
     const xs = points.map((point) => point.x);
     const ys = points.map((point) => point.y);
@@ -768,12 +900,17 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
   decimal(value: number | null): string {
     return value == null ? '—' : value.toFixed(2);
   }
-  upgrade(): void {
-    this.toast.success('Live chain is available with a Premium subscription.');
-  }
   setLive(live: boolean): void {
     this.live = live;
-    if (this.view) this.rows = this.view.rows.map((row) => this.calculateRowGreeks(row));
+    this.chartTooltip = null;
+    if (live) {
+      // Cancel in-flight EOD requests; nothing from EOD runs while Live Data is shown.
+      this.chainRequest?.unsubscribe();
+      if (this.detailsLoading || this.loading) this.selection$.next('');
+      return;
+    }
+    if (!this.symbolsRequested) this.loadSymbols();
+    else if (!this.view && this.symbol) this.selectSymbol(this.symbol);
   }
   private setupSelection(): void {
     this.selection$
@@ -820,7 +957,7 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
     const baseVolPct = this.volatility;
     if (spot === null || spot <= 0 || expiryDays <= 0 || baseVolPct === null) return row;
 
-    const iv = this.chainIV(spot, row.strike, baseVolPct, this.live) * 100;
+    const iv = this.chainIV(spot, row.strike, baseVolPct) * 100;
     const callGreeks = this.calculateSideGreeks('call', row.strike, iv, spot, expiryDays);
     const putGreeks = this.calculateSideGreeks('put', row.strike, iv, spot, expiryDays);
     return {
@@ -829,12 +966,12 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
       put: { ...row.put, iv, ...putGreeks },
     };
   }
-  private chainIV(spot: number, strike: number, baseVolPct: number, live: boolean): number {
+  // No live feed exists yet, so IV is always derived from the EOD base volatility.
+  private chainIV(spot: number, strike: number, baseVolPct: number): number {
     const base = baseVolPct / 100;
     const moneyness = Math.log(strike / spot);
     const adjustment = Math.max(-0.45, Math.min(1.2, -2 * moneyness + 25 * moneyness * moneyness));
-    const iv = base * (1 + adjustment);
-    return live ? iv * 1.03 : iv;
+    return base * (1 + adjustment);
   }
   private calculateSideGreeks(
     side: Side,
@@ -869,6 +1006,7 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
     return Number.isFinite(numericExpiry) ? Math.max(1, numericExpiry) : 0;
   }
   private loadSymbols(): void {
+    this.symbolsRequested = true;
     this.api
       .getSymbols()
       .pipe(

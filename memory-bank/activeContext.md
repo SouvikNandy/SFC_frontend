@@ -13,6 +13,7 @@ Historical Volatility, Greeks, Implied Volatility, Probability, and the authenti
 - [x] Replace Greeks mock metadata with `/fo/dd_list` autocomplete and `/fo/dd_symbol_details` details.
 - [x] Replace Implied Volatility placeholder with API-backed EOD/custom/live modes, IV solver, chart, and calculation trace.
 - [x] Replace Probability placeholder with API-backed EOD/custom/live modes, results, chart, validation, and supporting DataTable.
+- [x] Replace Payoff placeholder with prototype-equivalent Payoff Tool (`/tools/payoff` + `/fo/dd_symbol_details`, 16 strategies, graph/heat-map table, strike ladder).
 - [x] Complete authentication guards, registration context, login/session handling, logout cleanup, refresh coordination, password APIs, and temporary OTP flow.
 
 **Decisions (recent)**:
@@ -33,6 +34,12 @@ Historical Volatility, Greeks, Implied Volatility, Probability, and the authenti
 - Implied Volatility uses q=0, exact prototype Newton/bisection constants, API expiry-to-days conversion, and dynamic SVG chart data from the solver.
 - Probability uses `POST /tools/probability` with `{ symbol, spot, target, expiry, iv }`; verified response values are under `data.results` and curve points under `data.charts.curve`.
 - Probability reuses the Greeks symbol/details service integration and does not carry prototype synthetic instrument/history data into production.
+- Payoff uses `POST /tools/payoff` `{ symbol }` → `data.strikes["<strike>"] = { CE?, PE? }` (no expiry dimension; same settle for all expiries). Spot/expiries/lot/HV20 come from `/fo/dd_symbol_details` (`lot` field added in `PayoffSymbolDetails`).
+- Payoff math lives in `payoff/payoff-engine.ts` (`computePayoff`), verified numerically identical to `prototype/payoff-tool-pro_11.html`.
+- DataTable gained optional `column.template` (cell `TemplateRef`) and `trackBy` input; both backward-compatible.
+- Access model (2026-09-24): `/dashboard/**` is PUBLIC (no `authGuard`); only Live Data is restricted. Each screen's "Live data" tab renders `app-live-data-access` (`features/dashboard/live-data/`), which reads `LiveDataAccessService.access()` (derived from `AuthService.isAuthenticated`). Future subscription check belongs in that service. `LiveDataService.status` is 'unavailable' until a live API/WebSocket contract exists — never show mock data as live.
+- Live Data is a separate view per screen: when the Live tab is active, NO EOD/Custom UI renders (feature-level `@if`/`*ngIf`, not CSS) and no symbol/EOD API runs; switching to Live cancels in-flight EOD requests, and EOD reloads when its tab reopens. `app-live-data-access` → `LiveDataLoginRequiredComponent` | `LiveDataUnavailableComponent`.
+- Sign-in from Live Data goes to `/login?returnUrl=<page>?source=live`; screens reopen their Live tab when `source=live`. Logout keeps the user on the current dashboard page.
 - Authentication uses `sessionStorage` for non-sensitive registration context only; passwords are never persisted.
 - OTP is intentionally local and accepts only `DEFAULT_OTP = '0000'` until the backend verification contract is confirmed.
 

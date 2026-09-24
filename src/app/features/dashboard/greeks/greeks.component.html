@@ -116,18 +116,10 @@
       </div>
     </div>
 
-    <div class="live-lock" *ngIf="form.value.sourceMode === 'live'">
-      <div class="live-lock-icon"><i class="ti ti-lock" aria-hidden="true"></i></div>
-      <div class="live-lock-copy">
-        <p class="live-lock-title">Live data is a Premium feature</p>
-        <p class="live-lock-desc">
-          Stream real-time spot, strike chains and volatility from the live market feed instead of
-          the previous close. Upgrade to enable this for your account.
-        </p>
-      </div>
-      <button class="calc" type="button" (click)="onLiveUpgrade()">Upgrade to Premium</button>
-    </div>
+    <app-live-data-access *ngIf="form.value.sourceMode === 'live'"
+      description="spot, strike chains and volatility"></app-live-data-access>
 
+    <ng-container *ngIf="form.value.sourceMode !== 'live'">
     <div class="grid-inputs" id="gridInputs">
       <div class="field-block strike-pair">
         <label for="spotSelect">Price of the underlying</label>
@@ -235,7 +227,7 @@
             form.value.ivSource === 'auto'
               ? form.value.sourceMode === 'eod'
                 ? 'Auto-filled from BhavCopy EOD'
-                : 'Streamed from live market feed (Premium)'
+                : 'Auto-fill uses EOD data — enter the price manually'
               : 'Custom price —
                         auto-fill paused'
           }}</span>
@@ -267,8 +259,10 @@
         ><span class="live-dot"></span>Results update as you change any value</span
       >
     </div>
+    </ng-container>
   </form>
 
+  <ng-container *ngIf="form.value.sourceMode !== 'live'">
   <div class="panel">
     <div class="results-head">
       <div>
@@ -343,4 +337,5 @@
       </tbody>
     </table>
   </div>
+  </ng-container>
 </section>

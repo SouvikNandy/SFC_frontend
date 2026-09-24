@@ -41,7 +41,7 @@ export class TopbarComponent {
     };
 
     get title(): string {
-        const url = this.currentUrl() || '';
+        const url = (this.currentUrl() || '').split(/[?#]/)[0];
         const seg = url.split('/').filter(Boolean)[1] ?? 'home';
         return this.labels[seg] ?? 'Workspace';
     }
@@ -52,9 +52,7 @@ export class TopbarComponent {
     }
 
     logout(): void {
-        this.auth.logout().subscribe({
-            next: () => this.router.navigate(['/login']),
-            error: () => this.router.navigate(['/login'])
-        });
+        // Dashboard is public: stay on the current page after signing out.
+        this.auth.logout().subscribe();
     }
 }

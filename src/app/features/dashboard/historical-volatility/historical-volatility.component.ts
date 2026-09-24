@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Subject, catchError, finalize, of, takeUntil } from 'rxjs';
+import { Subject, Subscription, catchError, finalize, of, takeUntil } from 'rxjs';
 import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
 import { DataTableColumn } from '../../../shared/components/data-table/data-table.types';
 import { ToastService } from '../../../core/services/toast.service';
@@ -9,10 +9,13 @@ import { HistoricalVolatilityService } from './historical-volatility.service';
 import { formatHistoricalVolatilityDate } from './historical-volatility-date.util';
 import { HistoricalVolatilityApiRow, HistoricalVolatilityChart, HistoricalVolatilityMode, HistoricalVolatilityRow } from './historical-volatility.model';
 import { ChartTooltipComponent, ChartTooltipRow } from '../../../shared/components/chart-tooltip/chart-tooltip.component';
+import { ActivatedRoute } from '@angular/router';
+import { LiveDataAccessComponent } from '../live-data/live-data-access.component';
+import { LiveDataAccessService } from '../live-data/live-data-access.service';
 
 @Component({
     selector: 'app-historical-volatility',
-    imports: [ReactiveFormsModule, DataTableComponent, ChartTooltipComponent],
+    imports: [ReactiveFormsModule, DataTableComponent, ChartTooltipComponent, LiveDataAccessComponent],
     templateUrl: './historical-volatility.component.html',
     styleUrl: './historical-volatility.component.scss',
     changeDetection: ChangeDetectionStrategy.OnPush,
@@ -21,6 +24,8 @@ export class HistoricalVolatilityComponent implements OnInit, OnDestroy {
     private readonly volatility = inject(HistoricalVolatilityService);
     private readonly toast = inject(ToastService);
     private readonly changeDetector = inject(ChangeDetectorRef);
+    private readonly route = inject(ActivatedRoute);
+    private readonly liveAccess = inject(LiveDataAccessService);
     private readonly destroy$ = new Subject<void>();
 
     readonly form = new FormGroup({
@@ -42,14 +47,19 @@ export class HistoricalVolatilityComponent implements OnInit, OnDestroy {
     selectedIndex = -1;
     rows: HistoricalVolatilityRow[] = [];
     chart: HistoricalVolatilityChart = this.buildChart();
-    liveUpgradeRequested = false;
     error = '';
     chartTooltip: { index: number; left: number; top: number } | null = null;
     symbolsLoading = true;
     calculating = false;
     suggestionsOpen = false;
+    private symbolsRequested = false;
+    private calculation: Subscription | null = null;
 
-    ngOnInit(): void { this.loadSymbols(); }
+    ngOnInit(): void {
+        if (this.liveAccess.requestedLive(this.route.snapshot)) this.mode = 'live';
+        // Live Data is a separate view: EOD APIs load only when the EOD tab is active.
+        if (this.mode === 'eod') this.loadSymbols();
+    }
 
     ngOnDestroy(): void {
         this.destroy$.next();
@@ -63,7 +73,18 @@ export class HistoricalVolatilityComponent implements OnInit, OnDestroy {
     get hv20Value(): number | null { return this.series[this.selectedIndex]?.hv20 ?? null; }
     get instrumentLabel(): string { return this.symbolControl.value || 'Select a symbol'; }
 
-    selectMode(mode: HistoricalVolatilityMode): void { this.mode = mode; }
+    selectMode(mode: HistoricalVolatilityMode): void {
+        this.mode = mode;
+        this.chartTooltip = null;
+        if (mode === 'live') {
+            // Drop any in-flight EOD request; nothing from EOD runs while Live Data is shown.
+            this.calculation?.unsubscribe();
+            this.calculating = false;
+            return;
+        }
+        if (!this.symbolsRequested) this.loadSymbols();
+        else if (!this.series.length) this.tryAutoCalculate();
+    }
 
     onSymbolInput(): void {
         const query = this.symbolControl.value.trim().toLowerCase();
@@ -114,7 +135,7 @@ export class HistoricalVolatilityComponent implements OnInit, OnDestroy {
         if (this.form.invalid || this.calculating) return;
 
         this.calculating = true;
-        this.volatility.calculate({ symbol, date }).pipe(
+        this.calculation = this.volatility.calculate({ symbol, date }).pipe(
             takeUntil(this.destroy$),
             catchError(() => {
                 this.error = 'Unable to calculate historical volatility. Please try again.';
@@ -138,7 +159,6 @@ export class HistoricalVolatilityComponent implements OnInit, OnDestroy {
         });
     }
 
-    requestUpgrade(): void { this.liveUpgradeRequested = true; }
 
     formatMetric(value: number | null): string { return value === null ? '—' : `${value.toFixed(2)}%`; }
 
@@ -153,6 +173,7 @@ export class HistoricalVolatilityComponent implements OnInit, OnDestroy {
     }
 
     private loadSymbols(): void {
+        this.symbolsRequested = true;
         this.volatility.getSymbols().pipe(
             takeUntil(this.destroy$),
             catchError(() => {

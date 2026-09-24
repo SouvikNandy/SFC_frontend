@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { AbstractControl, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink, RouterLinkActive } from '@angular/router';
 
 import { ForgotPasswordDialogComponent } from '../components/forgot-password-dialog/forgot-password-dialog.component';
 import { AuthService } from '../../../core/services/auth.service';
@@ -17,6 +17,7 @@ import { ToastService } from '../../../core/services/toast.service';
 export class LoginComponent {
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly toast = inject(ToastService);
 
   readonly form = new FormGroup({
@@ -28,6 +29,13 @@ export class LoginComponent {
   readonly showPassword = signal(false);
   readonly forgotPasswordMessage = signal<string | null>(null);
   readonly forgotPasswordDialogOpen = signal(false);
+
+  /** Page the user was on before signing in; only same-app paths are honoured. */
+  private returnUrl(): string {
+    const requested = this.route.snapshot.queryParamMap.get('returnUrl');
+    const isSafe = !!requested && requested.startsWith('/') && !requested.startsWith('//') && !requested.startsWith('/login');
+    return isSafe ? requested : '/dashboard';
+  }
 
   get emailControl(): AbstractControl {
     return this.form.controls.email;
@@ -59,8 +67,9 @@ export class LoginComponent {
 
         window.setTimeout(() => {
           this.isSubmitting.set(false);
-          console.log('[LoginComponent] Attempting navigation to /dashboard');
-          this.router.navigateByUrl('/dashboard').then(
+          const target = this.returnUrl();
+          console.log('[LoginComponent] Attempting navigation to', target);
+          this.router.navigateByUrl(target).then(
             (success) => console.log('[LoginComponent] Navigation result:', success),
             (error) => console.error('[LoginComponent] Navigation error:', error)
           );

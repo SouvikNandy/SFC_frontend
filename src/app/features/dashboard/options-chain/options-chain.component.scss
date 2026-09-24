@@ -160,7 +160,12 @@ h1 {
 }
 
 .autocomplete-field {
-  z-index: 5;
+  z-index: 30;
+}
+
+.topgrid {
+  position: relative;
+  z-index: 20;
 }
 
 .empty,
@@ -658,6 +663,21 @@ table.chain td.itm {
   opacity: 1;
 }
 
+.oi-bar-chart {
+  opacity: 0.78;
+  transition: opacity 0.12s ease;
+}
+
+.oi-bar-chart.call-bar {
+  fill: var(--teal);
+}
+.oi-bar-chart.put-bar {
+  fill: var(--red);
+}
+.oi-bar-chart.hovered {
+  opacity: 1;
+}
+
 .chart-guide {
   pointer-events: none;
   stroke: var(--muted-2);
@@ -833,5 +853,5 @@ table.chain thead tr:nth-child(2) th.puthdr {
 }
 
 table.chain tr.atm:hover td {
-  background: var(--teal-tint) !important;
+  background: var(--teal-tint);
 }

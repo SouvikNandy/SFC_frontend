@@ -1,0 +1,343 @@
+<section class="payoff-page">
+    <div class="head">
+        @if (mode() !== 'live') {
+        <div class="titlebar">
+            <h2 class="strategy-name">{{ strategyName() }}</h2>
+            <span class="ticker">{{ tickerLabel() }}</span>
+            <span class="last-price">{{ lastPrice() }}</span>
+            <span class="source-note">{{ sourceNote() }}</span>
+        </div>
+        }
+        <p class="sub">Multi-leg positions with mixed expiries, probability-weighted outcomes, and a date × price P&amp;L
+            grid.</p>
+    </div>
+
+    <!-- Live Data is a separate view: none of the EOD/Custom panels render in Live mode -->
+    @if (mode() !== 'live') {
+    <!-- STRIKE LADDER -->
+    <div class="panel">
+        <p class="panel-title">Strikes</p>
+        @if (ladder(); as lad) {
+        <div class="ladder-wrap">
+            <svg [attr.viewBox]="lad.viewBox" role="img" aria-label="Strike ladder for the current position">
+                <line class="ladder-axis" [attr.x1]="lad.axisX1" [attr.y1]="lad.axisY" [attr.x2]="lad.axisX2"
+                    [attr.y2]="lad.axisY"></line>
+                @for (tick of lad.ticks; track tick.x1) {
+                <line [class]="tick.major ? 'ladder-tick major' : 'ladder-tick'" [attr.x1]="tick.x1"
+                    [attr.y1]="tick.y1" [attr.x2]="tick.x2" [attr.y2]="tick.y2"></line>
+                }
+                @for (label of lad.labels; track label.x) {
+                <text class="ladder-label" [attr.x]="label.x" [attr.y]="label.y" text-anchor="middle"
+                    [attr.font-size]="lad.tickFont">{{ label.text }}</text>
+                }
+                <polygon class="ladder-spot" [attr.points]="lad.spotMarker"></polygon>
+                @for (pill of lad.pills; track pill.key) {
+                <path [class]="'ladder-connector tone-' + pill.tone" [attr.d]="pill.connector"></path>
+                <rect [class]="'ladder-pill tone-' + pill.tone" [attr.x]="pill.x" [attr.y]="pill.y"
+                    [attr.width]="pill.width" [attr.height]="pill.height" rx="5"></rect>
+                <text class="ladder-pill-text" [attr.x]="pill.cx" [attr.y]="pill.textY" text-anchor="middle"
+                    [attr.font-size]="lad.pillFont">{{ pill.label }}</text>
+                <rect [class]="pill.near ? 'ladder-badge near' : 'ladder-badge far'" [attr.x]="pill.badgeX"
+                    [attr.y]="pill.badgeY" [attr.width]="pill.badgeWidth" [attr.height]="pill.badgeHeight" rx="4">
+                </rect>
+                <text class="ladder-badge-text" [attr.x]="pill.cx" [attr.y]="pill.badgeTextY" text-anchor="middle"
+                    [attr.font-size]="lad.badgeFont">{{ pill.badgeText }}</text>
+                }
+            </svg>
+        </div>
+        } @else {
+        <div class="chart-empty">{{ emptyMessage() }}</div>
+        }
+    </div>
+
+    <!-- SUMMARY -->
+    <div class="stat-strip">
+        <div class="stat">
+            <div class="stat-label"><span aria-hidden="true">▣</span> Net {{ summary()?.premiumWord ?? 'debit' }}</div>
+            <div [class]="'stat-value ' + (summary()?.premiumTone ?? '')">{{ summary()?.premium ?? '–' }}</div>
+            <div class="stat-hint">{{ summary()?.premiumHint ?? '' }}</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label"><span aria-hidden="true">↘</span> Max loss</div>
+            <div class="stat-value loss">{{ summary()?.maxLoss ?? '–' }}</div>
+            <div class="stat-hint">{{ summary()?.maxLossHint ?? '' }}</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label"><span aria-hidden="true">↗</span> Max profit</div>
+            <div class="stat-value profit">{{ summary()?.maxProfit ?? '–' }}</div>
+            <div class="stat-hint">{{ summary()?.maxProfitHint ?? '' }}</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label"><span aria-hidden="true">◔</span> Chance of profit</div>
+            <div class="stat-value">{{ summary()?.chance ?? '–' }}</div>
+            <div class="stat-hint">{{ summary()?.chanceHint ?? '' }}</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label"><span aria-hidden="true">→</span> Breakevens</div>
+            <div class="stat-zones">
+                @for (zone of summary()?.zones ?? ['–']; track $index) { <div>{{ zone }}</div> }
+            </div>
+            <div class="stat-hint">{{ summary()?.zonesHint ?? '' }}</div>
+        </div>
+    </div>
+
+    <!-- MAIN VIEW -->
+    <div class="panel">
+        @if (view() === 'graph') {
+        <div class="chart-legend">
+            <span><i class="legend-expiry"></i>Expiration ({{ summary()?.nearDays ?? '–' }}d)</span>
+            <span><i class="legend-eval"></i>Selected date</span>
+            <span><i class="legend-fill"></i>Probability</span>
+            <span><i class="legend-spot"></i>Spot</span>
+        </div>
+        @if (chart(); as c) {
+        <div class="chart-wrap">
+            <svg [attr.viewBox]="c.viewBox" role="img" aria-label="Payoff chart" [attr.font-size]="c.fontSize">
+                @for (grid of c.gridLines; track $index) {
+                <line class="chart-grid" [attr.x1]="grid.x1" [attr.y1]="grid.y1" [attr.x2]="grid.x2"
+                    [attr.y2]="grid.y2"></line>
+                }
+                @for (label of c.yLabels; track $index) {
+                <text class="chart-axis" [attr.x]="label.x" [attr.y]="label.y" text-anchor="end">{{ label.text }}</text>
+                }
+                <path class="chart-density" [attr.d]="c.densityPath"></path>
+                <path class="chart-profit" [attr.d]="c.profitPath"></path>
+                <path class="chart-loss" [attr.d]="c.lossPath"></path>
+                @for (line of c.breakevenLines; track $index) {
+                <line class="chart-breakeven" [attr.x1]="line.x1" [attr.y1]="line.y1" [attr.x2]="line.x2"
+                    [attr.y2]="line.y2"></line>
+                }
+                @for (label of c.breakevenLabels; track $index) {
+                <text class="chart-breakeven-label" [attr.x]="label.x" [attr.y]="label.y" text-anchor="middle">{{
+                    label.text }}</text>
+                }
+                <line class="chart-zero" [attr.x1]="c.padLeft" [attr.y1]="c.zeroY" [attr.x2]="c.padLeft + c.plotWidth"
+                    [attr.y2]="c.zeroY"></line>
+                @if (c.evalPath) { <path class="chart-eval" [attr.d]="c.evalPath"></path> }
+                <path class="chart-expiry" [attr.d]="c.expiryPath"></path>
+                <line class="chart-spot" [attr.x1]="c.spotX" [attr.y1]="c.padTop" [attr.x2]="c.spotX"
+                    [attr.y2]="c.plotBottom"></line>
+                @for (mark of c.strikeMarks; track $index) {
+                <line class="chart-strike" [attr.x1]="mark.x1" [attr.y1]="mark.y1" [attr.x2]="mark.x2"
+                    [attr.y2]="mark.y2"></line>
+                }
+                @for (label of c.xLabels; track $index) {
+                <text class="chart-axis" [attr.x]="label.x" [attr.y]="label.y" [attr.text-anchor]="label.anchor">{{
+                    label.text }}</text>
+                }
+                @if (hoverPoint(); as p) {
+                <line class="chart-crosshair" [attr.x1]="p.x" [attr.y1]="c.padTop" [attr.x2]="p.x"
+                    [attr.y2]="c.plotBottom"></line>
+                @if (p.showEval) { <circle class="chart-dot eval" [attr.cx]="p.x" [attr.cy]="p.yEval" r="3.5"></circle> }
+                <circle class="chart-dot" [attr.cx]="p.x" [attr.cy]="p.yExpiry" r="4"></circle>
+                }
+                <rect class="chart-hit-area" x="0" y="0" [attr.width]="c.width" [attr.height]="c.height" tabindex="0"
+                    aria-label="Hover to inspect profit and loss by underlying price"
+                    (mousemove)="onChartPointer($event)" (touchstart)="onChartPointer($event)"
+                    (touchmove)="onChartPointer($event)" (mouseleave)="hideChartTooltip()"
+                    (blur)="hideChartTooltip()"></rect>
+            </svg>
+            @if (hoverPoint(); as p) {
+            <app-chart-tooltip [title]="tooltipTitle()" [rows]="tooltipRows()" [left]="p.left"
+                [top]="p.top"></app-chart-tooltip>
+            }
+        </div>
+        <div class="date-caption"><span>{{ dateCaption().left }}</span><span>{{ dateCaption().right }}</span></div>
+        } @else {
+        <div class="chart-empty">{{ emptyMessage() }}</div>
+        }
+        } @else {
+        @if (result()) {
+        <app-data-table class="heat-table" [columns]="heatColumns()" [data]="heatRows()"
+            emptyMessage="No P&L grid available."></app-data-table>
+        } @else {
+        <div class="chart-empty">{{ emptyMessage() }}</div>
+        }
+        }
+
+        <div class="controls">
+            <div class="ctl-row">
+                <label for="evalSlider">Date</label>
+                <input id="evalSlider" type="range" min="0" step="1" [max]="evalMax()" [value]="evalValue()"
+                    (input)="onEvalInput($any($event.target).value)">
+                <span class="ctl-val">{{ evalLabel() }}</span>
+            </div>
+            <div class="ctl-row">
+                <label for="rangeSlider">Range</label>
+                <input id="rangeSlider" type="range" min="1" max="25" step="1" [value]="rangePct()"
+                    (input)="onRangeInput($any($event.target).value)">
+                <span class="ctl-val">±{{ rangePct() }}%</span>
+            </div>
+            <div class="ctl-row">
+                <label for="ivSlider">Implied vol</label>
+                <input id="ivSlider" type="range" min="50" max="300" step="5" [value]="ivMultiplier()"
+                    (input)="onIvInput($any($event.target).value)">
+                <span class="ctl-val">{{ ivLabel() }}</span>
+            </div>
+            <div class="iv-marks" aria-hidden="true"><span>×0.5</span><span>×2</span><span>×3</span></div>
+        </div>
+
+        <div class="view-tabs" role="tablist" aria-label="Result view">
+            <button type="button" role="tab" [class.active]="view() === 'table'" [attr.aria-selected]="view() === 'table'"
+                (click)="setView('table')">Table</button>
+            <button type="button" role="tab" [class.active]="view() === 'graph'" [attr.aria-selected]="view() === 'graph'"
+                (click)="setView('graph')">Graph</button>
+        </div>
+        @if (calendarNote()) { <p class="note">{{ calendarNote() }}</p> }
+    </div>
+    }
+
+    <!-- POSITION -->
+    <div class="panel">
+        <p class="panel-title">Data source</p>
+        <div class="source-tabs" role="tablist" aria-label="Data source">
+            <button type="button" role="tab" [class.active]="mode() === 'custom'" [attr.aria-selected]="mode() === 'custom'"
+                (click)="selectMode('custom')">Custom</button>
+            <button type="button" role="tab" [class.active]="mode() === 'eod'" [attr.aria-selected]="mode() === 'eod'"
+                (click)="selectMode('eod')">EOD data <em>from BhavCopy</em></button>
+            <button type="button" role="tab" [class.active]="mode() === 'live'" [attr.aria-selected]="mode() === 'live'"
+                (click)="selectMode('live')">Live data <em>Premium</em></button>
+        </div>
+        @if (mode() === 'custom') {
+        <div class="mode-note">Enter the underlying price and volatility by hand. Nothing is pulled from a data feed in
+            this mode.</div>
+        }
+        @if (mode() === 'live') {
+        <app-live-data-access description="underlying prices and implied volatility"></app-live-data-access>
+        } @else {
+
+        <p class="panel-title position-title">Position</p>
+        <div class="position-grid">
+            @if (mode() !== 'custom') {
+            <div class="field-block autocomplete-field">
+                <label for="payoff-instrument">Instrument</label>
+                <input id="payoff-instrument" type="text" [formControl]="symbolControl" autocomplete="off"
+                    placeholder="Search symbol" role="combobox" [attr.aria-expanded]="suggestionsOpen()"
+                    aria-controls="payoff-symbol-options" (input)="onSymbolInput()" (focus)="onSymbolInput()"
+                    (blur)="onSymbolBlur()" (keydown)="onSymbolKeydown($event)">
+                @if (symbolControl.value) {
+                <button class="autocomplete-clear" type="button" aria-label="Clear selection"
+                    (mousedown)="$event.preventDefault()" (click)="clearSymbol()">×</button>
+                }
+                @if (suggestionsOpen()) {
+                <div id="payoff-symbol-options" class="autocomplete-options" role="listbox">
+                    @for (symbol of filteredSymbols(); track symbol; let index = $index) {
+                    <button type="button" role="option" [class.highlighted]="index === highlightedSymbolIndex()"
+                        (mousedown)="$event.preventDefault()" (click)="selectSymbol(symbol)">{{ symbol }}</button>
+                    } @empty { <div class="combo-empty">No script matches</div> }
+                </div>
+                }
+                <span class="field-hint">{{ symbolsLoading() ? 'Loading symbol list…' : marketLoading() ? 'Loading
+                    payoff data…' : '' }}</span>
+            </div>
+            }
+            <div class="field-block">
+                <label for="payoff-strategy">Strategy</label>
+                <select id="payoff-strategy" (change)="onStrategyChange($any($event.target).value)">
+                    @for (group of strategyGroups; track group.label) {
+                    <optgroup [label]="group.label">
+                        @for (option of group.options; track option.value) {
+                        <option [value]="option.value" [selected]="option.value === strategy()">{{ option.label }}</option>
+                        }
+                    </optgroup>
+                    }
+                </select>
+            </div>
+            <div class="field-block">
+                <label for="payoff-spot">Underlying price</label>
+                <input id="payoff-spot" type="number" step="1" [value]="displayNumber(spot())"
+                    [readonly]="mode() !== 'custom'" (input)="onSpotInput($any($event.target).value)">
+                <span class="field-hint">{{ mode() === 'custom' ? 'Entered manually' : 'BhavCopy EOD close' }}</span>
+            </div>
+            <div class="field-block">
+                <label for="payoff-vol">Base volatility %</label>
+                <input id="payoff-vol" type="number" step="0.1" [value]="displayNumber(vol())"
+                    [readonly]="mode() !== 'custom' && !volUnavailable()" (input)="onVolInput($any($event.target).value)">
+                <span class="field-hint">{{ mode() === 'custom' ? 'Entered manually' : volUnavailable() ? 'HV-20
+                    unavailable — enter manually' : 'HV-20 from BhavCopy EOD' }}</span>
+            </div>
+            <div class="field-block">
+                <label for="payoff-lot">Lot size</label>
+                <input id="payoff-lot" type="number" step="1" min="1" [value]="displayNumber(lotSize())"
+                    (input)="onLotInput($any($event.target).value)">
+                <span class="field-hint">{{ lotFromFeed() && mode() !== 'custom' ? 'Contract multiplier · from symbol
+                    details' : 'Contract multiplier' }}</span>
+            </div>
+        </div>
+
+        <div class="legs-table">
+            <app-data-table [columns]="legColumns()" [data]="legs()" [trackBy]="legTrackBy" [actions]="legActions"
+                [loading]="marketLoading()" (actionClick)="onLegAction($event)"
+                emptyMessage="No legs yet. Select an instrument or add a leg."></app-data-table>
+        </div>
+        <div class="leg-actions">
+            <button type="button" class="ghost" [disabled]="marketLoading()" (click)="addLeg()">+ Add
+                leg</button>
+            @if (mode() === 'custom') {
+            <button type="button" class="ghost" [disabled]="!legs().length" (click)="reprice()">Reprice at current
+                vol</button>
+            }
+            @if (expiryPill(); as pill) { <span class="pill" [class.calendar]="pill.calendar">{{ pill.text }}</span> }
+        </div>
+        @if (validationError()) { <p class="input-error" role="alert">{{ validationError() }}</p> }
+        }
+    </div>
+</section>
+
+<!-- Leg editor cells rendered inside the shared DataTable -->
+<ng-template #typeCell let-leg>
+    <select class="cell-input" aria-label="Call or put" (change)="onLegType(leg.id, $any($event.target).value)">
+        <option value="call" [selected]="leg.type === 'call'">Call</option>
+        <option value="put" [selected]="leg.type === 'put'">Put</option>
+    </select>
+</ng-template>
+<ng-template #directionCell let-leg>
+    <select class="cell-input" aria-label="Long or short" (change)="onLegDirection(leg.id, $any($event.target).value)">
+        <option value="long" [selected]="leg.direction === 'long'">Long</option>
+        <option value="short" [selected]="leg.direction === 'short'">Short</option>
+    </select>
+</ng-template>
+<ng-template #strikeCell let-leg>
+    @if (mode() === 'custom') {
+    <input class="cell-input" type="number" step="1" aria-label="Strike" [value]="displayNumber(leg.strike)"
+        (input)="onLegStrike(leg.id, $any($event.target).value)">
+    } @else {
+    <select class="cell-input" aria-label="Strike" (change)="onLegStrike(leg.id, $any($event.target).value)">
+        @if (!hasListedStrike(leg)) { <option [value]="leg.strike" selected>{{ leg.strike }} (no quote)</option> }
+        @for (strike of leg.type === 'call' ? callStrikes() : putStrikes(); track strike) {
+        <option [value]="strike" [selected]="strike === leg.strike">{{ strike }}</option>
+        }
+    </select>
+    }
+</ng-template>
+<ng-template #premiumCell let-leg>
+    <input class="cell-input" type="number" step="0.05" aria-label="Premium" [value]="displayNumber(leg.premium)"
+        [readonly]="mode() !== 'custom'" [placeholder]="mode() === 'custom' ? '' : 'N/A'"
+        (input)="onLegPremium(leg.id, $any($event.target).value)">
+</ng-template>
+<ng-template #quantityCell let-leg>
+    <input class="cell-input narrow" type="number" step="1" min="1" aria-label="Quantity"
+        [value]="displayNumber(leg.quantity)" (input)="onLegQuantity(leg.id, $any($event.target).value)">
+</ng-template>
+<ng-template #expiryCell let-leg>
+    @if (mode() === 'custom') {
+    <input class="cell-input narrow" type="number" step="1" min="1" aria-label="Days to expiry"
+        [value]="displayNumber(leg.expiryDays)" (input)="onLegExpiry(leg.id, $any($event.target).value)">
+    } @else {
+    <select class="cell-input" aria-label="Expiry" (change)="onLegExpiry(leg.id, $any($event.target).value)">
+        @if (!hasListedExpiry(leg)) { <option [value]="leg.expiryDays" selected>{{ expiryOptionLabel(leg.expiryDays) }}</option> }
+        @for (expiry of expiries(); track expiry.days) {
+        <option [value]="expiry.days" [selected]="expiry.days === leg.expiryDays">{{ expiryOptionLabel(expiry.days) }}</option>
+        }
+    </select>
+    }
+</ng-template>
+
+<!-- Heat-map cells: values come from the same PayoffResult as the graph -->
+<ng-template #heatPriceCell let-row>
+    <span class="heat-price" [class.at-spot]="row.isSpot">{{ formatRupee(row.price) }}<small>{{ movePct(row) }}</small>
+        @if (row.isSpot) { <em>Spot</em> }</span>
+</ng-template>
+<ng-template #heatValueCell let-cell="value">
+    <span [class]="heatClass(cell)">{{ formatMoney(cell.pnl) }}</span>
+</ng-template>

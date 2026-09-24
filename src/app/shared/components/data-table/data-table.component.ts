@@ -1,7 +1,9 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import {
     DataTableAction,
     DataTableActionEvent,
+    DataTableCellContext,
     DataTableCellType,
     DataTableColumn,
     DataTableAlign,
@@ -9,7 +11,7 @@ import {
 
 @Component({
     selector: 'app-data-table',
-    imports: [],
+    imports: [NgTemplateOutlet],
     templateUrl: './data-table.component.html',
     styleUrl: './data-table.component.scss',
     changeDetection: ChangeDetectionStrategy.OnPush,
@@ -22,12 +24,22 @@ export class DataTableComponent<T extends object> {
     readonly selectable = input(false);
     readonly rowClickable = input(false);
     readonly actions = input<DataTableAction<T>[]>([]);
+    /** Row identity for DOM reuse; defaults to object identity. */
+    readonly trackBy = input<(index: number, row: T) => unknown>((_index, row) => row);
 
     readonly actionClick = output<DataTableActionEvent<T>>();
     readonly rowClick = output<T>();
     readonly selectionChange = output<T[]>();
 
     private selectedRows = new Set<T>();
+
+    trackRow(index: number, row: T): unknown {
+        return this.trackBy()(index, row);
+    }
+
+    cellContext(row: T, value: unknown, index: number, column: DataTableColumn<T>): DataTableCellContext<T> {
+        return { $implicit: row, value, index, column };
+    }
 
     getCellValue(row: T, column: DataTableColumn<T>): unknown {
         return column.value ? column.value(row) : (row as unknown as Record<string, unknown>)[String(column.key)];
