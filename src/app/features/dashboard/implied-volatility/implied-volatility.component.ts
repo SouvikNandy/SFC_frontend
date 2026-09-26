@@ -204,7 +204,7 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
         if (!this.result) return '';
         switch (this.result.status) {
             case 'ok': return 'Converged';
-            case 'low_vega': return 'Converged — low sensitivity';
+            case 'low_vega': return 'Converged (low sensitivity)';
             case 'poor_fit': return 'Poor fit';
             case 'invalid_input': return 'Invalid input';
             case 'below_intrinsic': return 'Below no-arbitrage floor';
@@ -218,9 +218,9 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
         return this.result.ok ? (this.result.status === 'ok' ? 'status ok' : 'status warn') : 'status err';
     }
 
-    formatPrice(value: number | null | undefined): string { return value == null ? '—' : `₹${value.toFixed(2)}`; }
+    formatPrice(value: number | null | undefined): string { return value == null ? '–' : `₹${value.toFixed(2)}`; }
     formatSensitivity(value: number | null | undefined): string {
-        if (value == null) return '—';
+        if (value == null) return '–';
         if (!Number.isFinite(value)) return '>100 pts';
         return `${value > 100 ? '>100' : value.toFixed(3)} pts`;
     }

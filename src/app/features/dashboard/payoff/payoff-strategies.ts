@@ -36,15 +36,19 @@ export interface StrategyContext {
     existing: PayoffLeg[];
     /** Premium source: API settlement in EOD, Black-Scholes theoretical in Custom. */
     premium: (type: OptionType, strike: number, days: number) => number | null;
-    /** Maps a target strike onto a tradable strike (identity in Custom). */
-    strike: (target: number, type: OptionType) => number;
+    /** Maps a target strike onto a strike quoted for that expiry (identity in Custom). */
+    strike: (target: number, type: OptionType, days: number) => number;
     nextId: () => number;
 }
 
-/** Nearest listed expiry to the target number of days (prototype: pickExpiry). */
-export function pickExpiry(targetDays: number, expiries: number[]): number {
-    if (!expiries.length) return targetDays;
-    return expiries.reduce((best, days) => (Math.abs(days - targetDays) < Math.abs(best - targetDays) ? days : best), expiries[0]);
+/**
+ * Expiries used by presets and new legs: the nearest listed expiry, and the next listed expiry for
+ * two-expiry strategies. Without listed expiries (Custom, no symbol) the prototype's 16d / 23d are used.
+ */
+export function nearAndNextExpiry(expiries: number[]): { near: number; next: number } {
+    const listed = [...new Set(expiries.filter(days => days > 0))].sort((a, b) => a - b);
+    if (!listed.length) return { near: 16, next: 23 };
+    return { near: listed[0], next: listed[1] ?? listed[0] };
 }
 
 /** Double calendar / diagonal wing distance: 0.8 s.d. to expiry, rounded to the strike step. */
@@ -57,10 +61,9 @@ export function wingOffset(spot: number, step: number, days: number, sigma: numb
 export function buildStrategy(name: PayoffStrategy, ctx: StrategyContext): PayoffLeg[] {
     const { spot, step } = ctx;
     const atm = Math.round(spot / step) * step;
-    const near = pickExpiry(16, ctx.expiries);
-    const far = pickExpiry(near + 7, ctx.expiries);
+    const { near, next: far } = nearAndNextExpiry(ctx.expiries);
     const leg = (type: OptionType, target: number, direction: LegDirection, days = near, quantity = 1): PayoffLeg => {
-        const strike = ctx.strike(target, type);
+        const strike = ctx.strike(target, type, days);
         return { id: ctx.nextId(), type, direction, strike, premium: ctx.premium(type, strike, days), quantity, expiryDays: days, lotSize: ctx.lotSize };
     };
     switch (name) {

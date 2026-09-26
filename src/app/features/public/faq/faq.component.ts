@@ -64,7 +64,7 @@ export class FaqComponent {
     {
       id: 4,
       question: 'What training programs do you offer?',
-      answer: 'We offer three main training programs: Advanced Derivatives Course, SAP Treasury & Risk Management (TRM), and Corporate Finance — Financial Analysis and Valuation. All programs are led by professionals with 16+ years of capital markets experience.'
+      answer: 'We offer three main training programs: Advanced Derivatives Course, SAP Treasury & Risk Management (TRM), and Corporate Finance: Financial Analysis and Valuation. All programs are led by professionals with 16+ years of capital markets experience.'
     },
     {
       id: 5,

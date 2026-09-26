@@ -29,7 +29,7 @@
 - Add focused Greeks service/component tests when the test matcher setup is repaired.
 - Add focused Implied Volatility solver/component tests when the test matcher setup is repaired.
 - Add focused Probability service/component tests when the test matcher setup is repaired.
-- Payoff: backend should expose expiry-specific CE/PE settlements for accurate calendar premiums; add engine unit tests when test matcher setup is repaired.
+- Payoff: confirm with backend whether options-chain `c_ltp/p_ltp` are BhavCopy settlement or close prices (UI labels them "BhavCopy settle"); decide whether `/tools/payoff` should be fixed or retired; add engine unit tests when test matcher setup is repaired.
 - Add focused authentication service/guard/interceptor tests when the test matcher setup is repaired.
 
 **Known issues**

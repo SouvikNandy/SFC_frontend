@@ -13,7 +13,7 @@ Historical Volatility, Greeks, Implied Volatility, Probability, and the authenti
 - [x] Replace Greeks mock metadata with `/fo/dd_list` autocomplete and `/fo/dd_symbol_details` details.
 - [x] Replace Implied Volatility placeholder with API-backed EOD/custom/live modes, IV solver, chart, and calculation trace.
 - [x] Replace Probability placeholder with API-backed EOD/custom/live modes, results, chart, validation, and supporting DataTable.
-- [x] Replace Payoff placeholder with prototype-equivalent Payoff Tool (`/tools/payoff` + `/fo/dd_symbol_details`, 16 strategies, graph/heat-map table, strike ladder).
+- [x] Replace Payoff placeholder with prototype-equivalent Payoff Tool (`/fo/dd_symbol_details` + per-expiry `/tools/options-chain` prices, 16 strategies, graph/heat-map table, strike ladder).
 - [x] Complete authentication guards, registration context, login/session handling, logout cleanup, refresh coordination, password APIs, and temporary OTP flow.
 
 **Decisions (recent)**:
@@ -34,7 +34,7 @@ Historical Volatility, Greeks, Implied Volatility, Probability, and the authenti
 - Implied Volatility uses q=0, exact prototype Newton/bisection constants, API expiry-to-days conversion, and dynamic SVG chart data from the solver.
 - Probability uses `POST /tools/probability` with `{ symbol, spot, target, expiry, iv }`; verified response values are under `data.results` and curve points under `data.charts.curve`.
 - Probability reuses the Greeks symbol/details service integration and does not carry prototype synthetic instrument/history data into production.
-- Payoff uses `POST /tools/payoff` `{ symbol }` → `data.strikes["<strike>"] = { CE?, PE? }` (no expiry dimension; same settle for all expiries). Spot/expiries/lot/HV20 come from `/fo/dd_symbol_details` (`lot` field added in `PayoffSymbolDetails`).
+- Payoff EOD premiums (2026-09-26, user decision): per-expiry prices from `POST /tools/options-chain {symbol, expiry}` (CE→c_ltp, PE→p_ltp), cached per expiry, re-quoted for every leg on type/strike/expiry change (prototype refreshPremiums). Presets + Add leg use the nearest listed expiry; two-expiry strategies use nearest + next listed expiry (user decision 2026-09-26, replaces prototype 16d/near+7d). `/tools/payoff` is no longer called: it ignores expiry and its PE values did not match any expiry chain. Spot/expiries/lot/HV20 still from `/fo/dd_symbol_details`. EOD refresh button intentionally absent (Custom keeps "Reprice at current vol"). Base volatility is editable in EOD (pre-filled from HV-20, reset on symbol load); it affects valuation/probability only, not BhavCopy premiums.
 - Payoff math lives in `payoff/payoff-engine.ts` (`computePayoff`), verified numerically identical to `prototype/payoff-tool-pro_11.html`.
 - DataTable gained optional `column.template` (cell `TemplateRef`) and `trackBy` input; both backward-compatible.
 - Access model (2026-09-24): `/dashboard/**` is PUBLIC (no `authGuard`); only Live Data is restricted. Each screen's "Live data" tab renders `app-live-data-access` (`features/dashboard/live-data/`), which reads `LiveDataAccessService.access()` (derived from `AuthService.isAuthenticated`). Future subscription check belongs in that service. `LiveDataService.status` is 'unavailable' until a live API/WebSocket contract exists — never show mock data as live.

@@ -1,5 +1,5 @@
 /*
- * SVG geometry for the payoff chart and strike ladder. Pure layout only —
+ * SVG geometry for the payoff chart and strike ladder. Pure layout only;
  * every P&L value comes from the PayoffResult computed by payoff-engine.ts.
  * Dimensions and layout rules follow prototype/payoff-tool-pro_11.html.
  */
@@ -61,8 +61,8 @@ export function buildPayoffChart(result: PayoffResult, legs: PayoffLeg[], spot: 
     const visibleBreakevens = result.breakevens.filter(b => b >= lo && b <= hi);
     const breakevenLines = visibleBreakevens.map(b => ({ x1: xAt(b), y1: padTop, x2: xAt(b), y2: plotBottom }));
     // On a phone the breakeven labels collide; the values are listed in the summary strip.
-    const breakevenLabels: ChartLabel[] = narrow ? [] :
-        visibleBreakevens.map(b => ({ x: xAt(b), y: padTop - 8, anchor: 'middle', text: formatRupee(Math.round(b)) }));
+    const breakevenLabels = narrow ? [] : placeBreakevenLabels(visibleBreakevens.map(xAt), visibleBreakevens,
+        padTop, padLeft, width - padRight, 9.5);
     const strikeMarks = Array.from(new Set(legs.map(leg => leg.strike)))
         .filter(k => k >= lo && k <= hi)
         .map(k => ({ x1: xAt(k), y1: plotBottom - 7, x2: xAt(k), y2: plotBottom }));
@@ -82,6 +82,30 @@ export function buildPayoffChart(result: PayoffResult, legs: PayoffLeg[], spot: 
             yExpiry: yAt(p.pnl), yEval: yAt(evaluation[i].pnl),
         })),
     };
+}
+
+/**
+ * Breakeven price labels above the plot. Close breakevens (e.g. calendar spreads) would print on top of
+ * each other, so labels are packed greedily into two rows; a label that fits neither row is dropped
+ * (its line stays, and every value is listed in the Breakevens summary card).
+ */
+function placeBreakevenLabels(xs: number[], values: number[], padTop: number, minX: number, maxX: number, fontSize: number): ChartLabel[] {
+    const rows = [padTop - 8, padTop - 12 - fontSize];
+    const rowEnds = rows.map(() => -Infinity);
+    const gap = 6;
+    const labels: ChartLabel[] = [];
+    xs.forEach((x, i) => {
+        const text = formatRupee(Math.round(values[i]));
+        const width = text.length * fontSize * 0.62;
+        // Keep the label inside the plot: anchor to the edge when centring would overflow.
+        const anchor: ChartLabel['anchor'] = x - width / 2 < minX ? 'start' : x + width / 2 > maxX ? 'end' : 'middle';
+        const left = anchor === 'start' ? x : anchor === 'end' ? x - width : x - width / 2;
+        const row = rowEnds.findIndex(end => left >= end + gap);
+        if (row < 0) return;
+        rowEnds[row] = left + width;
+        labels.push({ x, y: rows[row], anchor, text });
+    });
+    return labels;
 }
 
 export function buildStrikeLadder(result: PayoffResult, legs: PayoffLeg[], spot: number, strikeStep: number,

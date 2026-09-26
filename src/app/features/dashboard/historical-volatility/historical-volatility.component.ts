@@ -160,7 +160,7 @@ export class HistoricalVolatilityComponent implements OnInit, OnDestroy {
     }
 
 
-    formatMetric(value: number | null): string { return value === null ? '—' : `${value.toFixed(2)}%`; }
+    formatMetric(value: number | null): string { return value === null ? '–' : `${value.toFixed(2)}%`; }
 
     metricMeta(value: number | null, window: number): string {
         return value === null ? `Need ${window + 1} closes ending on this date` : `${window}-day realised volatility, annualised, as of ${this.selectedDate}`;
@@ -264,16 +264,16 @@ export class HistoricalVolatilityComponent implements OnInit, OnDestroy {
 
     private formatClose(value: unknown): string {
         const numericValue = Number(value);
-        return Number.isFinite(numericValue) ? `₹${numericValue.toLocaleString('en-IN')}` : '—';
+        return Number.isFinite(numericValue) ? `₹${numericValue.toLocaleString('en-IN')}` : '–';
     }
 
     private formatReturn(value: unknown): string {
         const numericValue = Number(value);
-        return Number.isFinite(numericValue) ? `${numericValue >= 0 ? '+' : ''}${(numericValue * 100).toFixed(2)}%` : '—';
+        return Number.isFinite(numericValue) ? `${numericValue >= 0 ? '+' : ''}${(numericValue * 100).toFixed(2)}%` : '–';
     }
 
     private formatVolatility(value: unknown): string {
         const numericValue = Number(value);
-        return Number.isFinite(numericValue) ? `${numericValue.toFixed(2)}%` : '—';
+        return Number.isFinite(numericValue) ? `${numericValue.toFixed(2)}%` : '–';
     }
 }

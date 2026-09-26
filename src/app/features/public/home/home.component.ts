@@ -15,12 +15,12 @@ import { CardComponent } from '../../../shared/components/card/card.component';
           <p class="home__eyebrow">Independent Markets Consulting</p>
           <h1 id="home-hero-title">Markets clarity,<br /><span>built on trust.</span></h1>
           <p class="home__hero-copy">
-            QuantSFC partners with clients to create significant, lasting value — pairing three decades of capital-markets expertise with sharp, data-driven F&amp;O analytics.
+            QuantSFC partners with clients to create significant, lasting value by pairing three decades of capital-markets expertise with sharp, data-driven F&amp;O analytics.
           </p>
 
           <div class="home__actions">
             <app-button variant="primary" size="lg" [pill]="true" (click)="goToData()">
-              Browse F&amp;O EOD data — free
+              Browse F&amp;O EOD data for free
             </app-button>
             <app-button variant="secondary" size="lg" [pill]="true" (click)="goToLogin()">
               Create a free account
@@ -150,9 +150,9 @@ Our firm has been set up by a group of professionals who have rich experience in
       <section class="home__testimonial" aria-labelledby="home-testimonial-title">
         <div class="home__testimonial-card">
           <p class="home__testimonial-quote">
-            “Like so many people I was disappointed in stock market investments. I attended the Derivatives course and my investment knowledge was truly enriched — they made the complex options very simple to understand.”
+            “Like so many people I was disappointed in stock market investments. I attended the Derivatives course and my investment knowledge was truly enriched. They made the complex options very simple to understand.”
           </p>
-          <p class="home__testimonial-author">— Verified client, Delhi</p>
+          <p class="home__testimonial-author">Verified client, Delhi</p>
         </div>
       </section>
 

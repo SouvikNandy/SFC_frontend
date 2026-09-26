@@ -12,45 +12,23 @@ export type PayoffStrategy =
     | 'call_calendar' | 'put_calendar' | 'diagonal_call' | 'double_calendar' | 'double_diagonal'
     | 'custom_position';
 
-/* ---------- /tools/payoff contract (verified against the live API) ---------- */
+/* ---------- EOD option prices per expiry (from /tools/options-chain) ---------- */
 
-export interface PayoffRequest {
-    symbol: string;
-}
-
-/** Settlement prices keyed by option side; either side may be absent for a strike. */
-export interface PayoffStrikeSettlement {
-    CE?: number;
-    PE?: number;
-}
-
-export interface PayoffApiData {
-    symbol: string;
-    trade_date: string;
-    /** Keyed by strike formatted as a decimal string, e.g. "24800.00". */
-    strikes: Record<string, PayoffStrikeSettlement>;
-}
-
-export interface PayoffResponse {
-    success: boolean;
-    message?: string;
-    data?: PayoffApiData | '';
-    timestamp?: string;
-    path?: string;
-}
-
-/* ---------- normalised market data ---------- */
-
-export interface PayoffChainRow {
+/** CE/PE price for one strike of one expiry; null when the chain has no price for that side. */
+export interface PayoffQuote {
     strike: number;
     ce: number | null;
     pe: number | null;
 }
 
-export interface PayoffChain {
-    symbol: string;
-    tradeDate: string;
-    rows: PayoffChainRow[];
+export type ExpiryQuoteStatus = 'loading' | 'ready' | 'error';
+
+/** Quotes for one expiry of the selected symbol (the prototype's chain for a given expiryDays). */
+export interface ExpiryQuotes {
+    status: ExpiryQuoteStatus;
+    byStrike: ReadonlyMap<number, PayoffQuote>;
+    callStrikes: number[];
+    putStrikes: number[];
 }
 
 /** `/fo/dd_symbol_details` also returns `lot`, which the shared Greeks model does not declare. */
@@ -61,6 +39,8 @@ export interface PayoffSymbolDetails extends GreeksSymbolDetails {
 export interface PayoffExpiry {
     days: number;
     date: Date;
+    /** Expiry as returned by the API (YYYY-MM-DD), used to request that expiry's chain. */
+    iso: string;
 }
 
 /* ---------- position ---------- */

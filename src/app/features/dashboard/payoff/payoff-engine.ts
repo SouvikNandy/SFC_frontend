@@ -1,5 +1,5 @@
 /*
- * Payoff calculation engine — the single source of truth for the Payoff Tool.
+ * Payoff calculation engine: the single source of truth for the Payoff Tool.
  * Ported from prototype/payoff-tool-pro_11.html; constants, grid sizes and
  * formulas are kept identical so numerical output matches the prototype.
  * The graph, heat-map table, summary strip and strike ladder all read the

@@ -28,12 +28,19 @@ import { AuthService } from '../../../core/services/auth.service';
         <a class="header__link" routerLink="/contact" routerLinkActive="active">Contact</a>
         <!-- <a class="header__link" routerLink="/data" routerLinkActive="active">Data</a> -->
         <a class="header__link" routerLink="/tools" routerLinkActive="active">Tools</a>
-        
-        @if (!(authService.isAuthenticated())) {
-          <a class="header__link header__login-btn" routerLink="/login" routerLinkActive="active">Log in</a>
-        } @else {
-                    <a class="header__link header__login-btn" routerLink="/dashboard" routerLinkActive="active">{{ getUserDisplayName() }}</a>
+        <a class="header__link" routerLink="/dashboard/home" routerLinkActive="active">Dashboard</a>
 
+        @if (!authService.isAuthenticated()) {
+          <a class="header__link header__login-btn" routerLink="/login" routerLinkActive="active"
+            >Log in</a
+          >
+        } @else {
+          <a
+            class="header__link header__login-btn"
+            routerLink="/dashboard"
+            routerLinkActive="active"
+            >{{ getUserDisplayName() }}</a
+          >
         }
       </nav>
 
@@ -93,8 +100,15 @@ import { AuthService } from '../../../core/services/auth.service';
           (click)="toggleMobileNav()"
           >Tools</a
         >
+        <a
+          class="mobile-nav__link"
+          routerLink="/dashboard/home"
+          routerLinkActive="active"
+          (click)="toggleMobileNav()"
+          >Dashboard</a
+        >
 
-        @if (!(authService.isAuthenticated())) {
+        @if (!authService.isAuthenticated()) {
           <a
             class="mobile-nav__link"
             routerLink="/login"
@@ -103,8 +117,12 @@ import { AuthService } from '../../../core/services/auth.service';
             ><span class="header__login-btn">Log in</span></a
           >
         } @else {
-                              <a class="header__link header__login-btn" routerLink="/dashboard" routerLinkActive="active">{{ getUserDisplayName() }}</a>
-
+          <a
+            class="header__link header__login-btn"
+            routerLink="/dashboard"
+            routerLinkActive="active"
+            >{{ getUserDisplayName() }}</a
+          >
         }
       </div>
     }

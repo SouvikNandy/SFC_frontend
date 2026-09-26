@@ -48,7 +48,7 @@ import { AuthService } from '../../../core/services/auth.service';
 
       <div class="dh-section-heading">Platform overview</div>
       <div class="platform-overview">
-        <p>QuantSFC is an NSE F&amp;O analytics platform: a 5-year historical futures &amp; options database with daily EOD auto-updates, a live options chain, and a full suite of statistical tools — Probability, Greeks, Payoff, Historical Volatility and Implied Volatility — each with a table and chart view.</p>
+        <p>QuantSFC is an NSE F&amp;O analytics platform: a 5-year historical futures &amp; options database with daily EOD auto-updates, a live options chain, and a full suite of statistical tools (Probability, Greeks, Payoff, Historical Volatility and Implied Volatility), each with a table and chart view.</p>
         <p>Live broker-fed price and Greeks updates are planned for Stage 2. Everything on this page currently reflects the most recent EOD sync.</p>
       </div>
     </section>

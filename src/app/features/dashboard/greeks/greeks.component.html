@@ -227,9 +227,8 @@
             form.value.ivSource === 'auto'
               ? form.value.sourceMode === 'eod'
                 ? 'Auto-filled from BhavCopy EOD'
-                : 'Auto-fill uses EOD data — enter the price manually'
-              : 'Custom price —
-                        auto-fill paused'
+                : 'Auto-fill uses EOD data, so enter the price manually'
+              : 'Custom price (auto-fill paused)'
           }}</span>
         </div>
         <button class="calc secondary" type="button" (click)="solveIv()">Solve IV</button>

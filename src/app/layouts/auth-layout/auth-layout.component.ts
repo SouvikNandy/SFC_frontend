@@ -16,7 +16,7 @@ import { RouterOutlet } from '@angular/router';
           </div>
           <p class="auth-hero__eyebrow">NSE F&amp;O · Live Terminal</p>
           <h1>Derivatives analytics, without the noise.</h1>
-          <p class="auth-hero__copy">5 years of NSE F&amp;O history, live Greeks, and options chains — built for traders who read the tape, not the headlines.</p>
+          <p class="auth-hero__copy">5 years of NSE F&amp;O history, live Greeks, and options chains. Built for traders who read the tape, not the headlines.</p>
           <div class="auth-hero__points">
             <div class="auth-hero__point">
               <span></span>

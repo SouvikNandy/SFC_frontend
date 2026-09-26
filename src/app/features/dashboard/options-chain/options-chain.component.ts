@@ -65,8 +65,8 @@ interface ChartTooltipState {
     <div class="titlebar">
       <h1>Options Chain</h1>
       @if (!live) {
-      <span class="ticker">{{ symbol || '—' }}</span
-      ><span class="lastpx">{{ spot === null ? '—' : formatPrice(spot) }}</span
+      <span class="ticker">{{ symbol || '–' }}</span
+      ><span class="lastpx">{{ spot === null ? '–' : formatPrice(spot) }}</span
       ><span class="srcnote">{{ sourceNote }}</span>
       }
     </div>
@@ -716,12 +716,12 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
     if (key === 'oiChange')
       return `${value.oiChange >= 0 ? '+' : ''}${this.integer(value.oiChange)}`;
     if (key === 'volume') return this.integer(value.volume);
-    if (key === 'iv') return value.iv > 0 ? `${value.iv.toFixed(2)}%` : '—';
+    if (key === 'iv') return value.iv > 0 ? `${value.iv.toFixed(2)}%` : '–';
     if (key === 'ltp') return value.ltp.toFixed(2);
-    if (key === 'delta') return value.delta == null ? '—' : value.delta.toFixed(3);
-    if (key === 'gamma') return value.gamma == null ? '—' : value.gamma.toFixed(5);
-    if (key === 'theta') return value.theta == null ? '—' : value.theta.toFixed(2);
-    return value.vega == null ? '—' : value.vega.toFixed(2);
+    if (key === 'delta') return value.delta == null ? '–' : value.delta.toFixed(3);
+    if (key === 'gamma') return value.gamma == null ? '–' : value.gamma.toFixed(5);
+    if (key === 'theta') return value.theta == null ? '–' : value.theta.toFixed(2);
+    return value.vega == null ? '–' : value.vega.toFixed(2);
   }
   barClass(value: number): string {
     const max = Math.max(1, ...this.visibleRows.flatMap((row) => [row.call.oi, row.put.oi]));
@@ -895,10 +895,10 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
     return `₹${value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
   integer(value: number | null): string {
-    return value == null ? '—' : Math.round(value).toLocaleString('en-IN');
+    return value == null ? '–' : Math.round(value).toLocaleString('en-IN');
   }
   decimal(value: number | null): string {
-    return value == null ? '—' : value.toFixed(2);
+    return value == null ? '–' : value.toFixed(2);
   }
   setLive(live: boolean): void {
     this.live = live;

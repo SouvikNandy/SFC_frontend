@@ -136,11 +136,11 @@
               <div class="date-summary">
                 <div>
                   <span>Start</span>
-                  <strong>{{ draftCustomFrom ? formatDateLabel(draftCustomFrom) : '—' }}</strong>
+                  <strong>{{ draftCustomFrom ? formatDateLabel(draftCustomFrom) : '–' }}</strong>
                 </div>
                 <div>
                   <span>End</span>
-                  <strong>{{ draftCustomTill ? formatDateLabel(draftCustomTill) : '—' }}</strong>
+                  <strong>{{ draftCustomTill ? formatDateLabel(draftCustomTill) : '–' }}</strong>
                 </div>
               </div>
               <div class="date-picker-actions">
@@ -177,7 +177,7 @@
             : '
                 Futures'
         }}
-        — {{ range }}
+        ({{ range }})
       </div>
       <div class="legend">Price (₹)</div>
     </div>
@@ -243,7 +243,7 @@
 
   <div class="card table-card">
     <div class="table-note">
-      <span>Showing {{ rows.length }} sessions — latest first</span>
+      <span>Showing {{ rows.length }} sessions, latest first</span>
       <div class="pagination-controls" aria-label="EOD pagination">
         <label
           >Rows

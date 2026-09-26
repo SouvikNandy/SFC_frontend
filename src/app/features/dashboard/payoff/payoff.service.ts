@@ -1,12 +1,12 @@
 import { Injectable } from '@angular/core';
 import { Observable, map } from 'rxjs';
-import { ApiService } from '../../../core/services/api.service';
 import { GreeksCalculatorService } from '../greeks/greeks-calculator.service';
-import { PayoffChain, PayoffChainRow, PayoffRequest, PayoffResponse, PayoffSymbolDetails } from './payoff.model';
+import { OptionsChainService } from '../options-chain/options-chain.service';
+import { ExpiryQuotes, PayoffQuote, PayoffSymbolDetails } from './payoff.model';
 
 @Injectable({ providedIn: 'root' })
 export class PayoffService {
-    constructor(private readonly api: ApiService, private readonly greeks: GreeksCalculatorService) { }
+    constructor(private readonly greeks: GreeksCalculatorService, private readonly chains: OptionsChainService) { }
 
     getSymbols(): Observable<string[]> {
         return this.greeks.getSymbols();
@@ -17,26 +17,30 @@ export class PayoffService {
         return this.greeks.getSymbolDetails({ symbol });
     }
 
-    /** Strike-wise CE/PE settlement prices for the selected symbol. */
-    getPayoff(symbol: string): Observable<PayoffChain> {
-        return this.api.post<PayoffResponse, PayoffRequest>('/tools/payoff', { symbol }).pipe(
-            map(response => {
-                const data = response.data;
-                if (!response.success || !data || typeof data !== 'object') throw new Error('Invalid payoff response');
-                const rows: PayoffChainRow[] = Object.entries(data.strikes ?? {})
-                    .map(([strike, settlement]) => ({
-                        strike: Number(strike),
-                        ce: this.price(settlement?.CE),
-                        pe: this.price(settlement?.PE),
-                    }))
-                    .filter(row => Number.isFinite(row.strike) && row.strike > 0 && (row.ce !== null || row.pe !== null))
+    /**
+     * EOD CE/PE prices for every strike of one expiry, via the existing option-chain API.
+     * This is the real equivalent of the prototype's chainPremium(type, K, days): the price
+     * depends on option type, strike and expiry.
+     */
+    getExpiryQuotes(symbol: string, expiry: string): Observable<ExpiryQuotes> {
+        return this.chains.getOptionChain({ symbol, expiry }).pipe(
+            map(view => {
+                const quotes: PayoffQuote[] = view.rows
+                    .map(row => ({ strike: row.strike, ce: this.price(row.call.ltp), pe: this.price(row.put.ltp) }))
+                    .filter(quote => Number.isFinite(quote.strike) && quote.strike > 0 && (quote.ce !== null || quote.pe !== null))
                     .sort((a, b) => a.strike - b.strike);
-                return { symbol: data.symbol || symbol, tradeDate: data.trade_date, rows };
+                return {
+                    status: 'ready' as const,
+                    byStrike: new Map(quotes.map(quote => [quote.strike, quote])),
+                    callStrikes: quotes.filter(quote => quote.ce !== null).map(quote => quote.strike),
+                    putStrikes: quotes.filter(quote => quote.pe !== null).map(quote => quote.strike),
+                };
             })
         );
     }
 
+    /** A zero or missing price means the contract has no quote. */
     private price(value: unknown): number | null {
-        return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+        return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
     }
 }

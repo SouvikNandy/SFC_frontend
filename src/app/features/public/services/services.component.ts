@@ -148,7 +148,7 @@ export class ServicesComponent {
     {
       title: 'SAP TRM',
       description:
-        'Description of the core treasury processes for money market, foreign exchange, derivatives, commodities and securities. End-to-end treasury process, including integration with other SAP modules (e.g. FI, CM, BCM, IHC). Risk management process — Market Risk Analyzer, Credit Risk Analyzer, Portfolio Analyzer, Hedge Management, Exposure Management.',
+        'Description of the core treasury processes for money market, foreign exchange, derivatives, commodities and securities. End-to-end treasury process, including integration with other SAP modules (e.g. FI, CM, BCM, IHC). Risk management process: Market Risk Analyzer, Credit Risk Analyzer, Portfolio Analyzer, Hedge Management, Exposure Management.',
       icon: this.sanitizer.bypassSecurityTrustHtml(`
       <svg xmlns="http://www.w3.org/2000/svg"
            width="24"
@@ -169,7 +169,7 @@ export class ServicesComponent {
     `),
     },
     {
-      title: 'Corporate Finance — Financial Analysis and Valuation',
+      title: 'Corporate Finance: Financial Analysis and Valuation',
       description:
         'The course is designed to offer students the intensive instruction and training needed to successfully compete in rapidly developing global financial markets. Advanced coursework in the theories and practice of financial analysis, valuation, credit analysis, and financial instruments and markets expands their analytical capacities to better understand and develop strategic financial decisions.',
       icon: this.sanitizer.bypassSecurityTrustHtml(`

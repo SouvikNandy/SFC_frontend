@@ -108,7 +108,7 @@
                     [attr.y2]="line.y2"></line>
                 }
                 @for (label of c.breakevenLabels; track $index) {
-                <text class="chart-breakeven-label" [attr.x]="label.x" [attr.y]="label.y" text-anchor="middle">{{
+                <text class="chart-breakeven-label" [attr.x]="label.x" [attr.y]="label.y" [attr.text-anchor]="label.anchor">{{
                     label.text }}</text>
                 }
                 <line class="chart-zero" [attr.x1]="c.padLeft" [attr.y1]="c.zeroY" [attr.x2]="c.padLeft + c.plotWidth"
@@ -252,9 +252,8 @@
             <div class="field-block">
                 <label for="payoff-vol">Base volatility %</label>
                 <input id="payoff-vol" type="number" step="0.1" [value]="displayNumber(vol())"
-                    [readonly]="mode() !== 'custom' && !volUnavailable()" (input)="onVolInput($any($event.target).value)">
-                <span class="field-hint">{{ mode() === 'custom' ? 'Entered manually' : volUnavailable() ? 'HV-20
-                    unavailable — enter manually' : 'HV-20 from BhavCopy EOD' }}</span>
+                    (input)="onVolInput($any($event.target).value)">
+                <span class="field-hint">{{ volHint() }}</span>
             </div>
             <div class="field-block">
                 <label for="payoff-lot">Lot size</label>
@@ -304,7 +303,7 @@
     } @else {
     <select class="cell-input" aria-label="Strike" (change)="onLegStrike(leg.id, $any($event.target).value)">
         @if (!hasListedStrike(leg)) { <option [value]="leg.strike" selected>{{ leg.strike }} (no quote)</option> }
-        @for (strike of leg.type === 'call' ? callStrikes() : putStrikes(); track strike) {
+        @for (strike of strikeOptions(leg); track strike) {
         <option [value]="strike" [selected]="strike === leg.strike">{{ strike }}</option>
         }
     </select>

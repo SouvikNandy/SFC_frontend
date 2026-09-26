@@ -40,7 +40,7 @@ import { DataTableAction, DataTableActionEvent, DataTableColumn } from '../../..
         </div>
       </div>
       <app-data-table [columns]="positionColumns" [data]="positions" [loading]="isLoading"
-        [actions]="positionActions" emptyMessage="No open positions — add a trade to get started."
+        [actions]="positionActions" emptyMessage="No open positions. Add a trade to get started."
         (actionClick)="onTableAction($event)"></app-data-table>
     </div>
   </section>

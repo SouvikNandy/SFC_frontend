@@ -3,7 +3,7 @@
         <div class="titlebar">
             <h1>Implied Volatility</h1>
             @if (modeControl.value !== 'live') {
-            <span class="ticker">{{ modeControl.value === 'custom' ? 'CUSTOM' : (symbolControl.value || '—') }}</span>
+            <span class="ticker">{{ modeControl.value === 'custom' ? 'CUSTOM' : (symbolControl.value || '–') }}</span>
             <span class="lastpx">{{ formatPrice(underlyingControl.value) }}</span>
             <span class="srcnote">{{ sourceNote }}</span>
             }
@@ -25,7 +25,7 @@
                     <em>Premium</em></button>
             </div>
             @if (modeControl.value === 'custom') {
-            <div class="mode-note">Enter every value by hand — underlying, strike, days to expiry and the market price
+            <div class="mode-note">Enter every value by hand: underlying, strike, days to expiry and the market price
                 you
                 observed. Nothing is pulled from a data feed.</div>
             }
@@ -126,7 +126,7 @@
                 <div class="result-cell">
                     <div class="result-label">Implied volatility</div>
                     <div class="result-big" [class.na]="!result?.ok">{{ result?.ok ? (result?.ivPct?.toFixed(2) + '%') :
-                        (result ? 'No solution' : '—') }}</div>
+                        (result ? 'No solution' : '–') }}</div>
                     <div class="result-hint">{{ result?.ok ? (optionType === 'call' ? 'Call contract' : 'Put contract')
                         : ''
                         }}</div>

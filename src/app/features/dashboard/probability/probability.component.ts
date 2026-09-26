@@ -239,11 +239,11 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
     return this.data?.results.direction === 'below' ? 'below' : 'beyond';
   }
   formatPercent(value: number | null | undefined): string {
-    return value == null || !Number.isFinite(value) ? '—' : `${value.toFixed(2)}%`;
+    return value == null || !Number.isFinite(value) ? '–' : `${value.toFixed(2)}%`;
   }
   formatPrice(value: number | null | undefined): string {
     return value == null || !Number.isFinite(value)
-      ? '—'
+      ? '–'
       : `₹${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
   }
 
@@ -427,7 +427,7 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
       {
         label: '1 s.d. range at expiry',
         description: 'About 68% of outcomes fall in this band',
-        value: `${this.formatPrice(results.oneSdLower)} — ${this.formatPrice(results.oneSdUpper)}`,
+        value: `${this.formatPrice(results.oneSdLower)} – ${this.formatPrice(results.oneSdUpper)}`,
       },
       {
         label: 'Move required to target',

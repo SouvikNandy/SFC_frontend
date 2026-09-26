@@ -11,7 +11,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
-import { EMPTY, Subject, catchError, finalize, forkJoin, map, switchMap, tap } from 'rxjs';
+import { EMPTY, Observable, Subject, catchError, finalize, forkJoin, map, merge, of, switchMap, takeUntil, tap, throwError } from 'rxjs';
 import { ToastService } from '../../../core/services/toast.service';
 import { ChartTooltipComponent, ChartTooltipRow } from '../../../shared/components/chart-tooltip/chart-tooltip.component';
 import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
@@ -31,15 +31,14 @@ import {
   buildStrategy,
   defaultStrikeStep,
   deriveStrikeStep,
-  pickExpiry,
+  nearAndNextExpiry,
 } from './payoff-strategies';
 import {
+  ExpiryQuotes,
   HeatCell,
   HeatColumn,
   HeatRow,
   OptionType,
-  PayoffChain,
-  PayoffChainRow,
   PayoffExpiry,
   PayoffLeg,
   PayoffMode,
@@ -62,6 +61,10 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const NARROW_QUERY = '(max-width: 640px)';
 
 const isPricedLeg = (leg: PayoffLeg): leg is PricedLeg => leg.premium !== null;
+const EMPTY_QUOTES: Omit<ExpiryQuotes, 'status'> = { byStrike: new Map(), callStrikes: [], putStrikes: [] };
+
+/** Market-data problems that are reported to the user as-is (not generic API failures). */
+class MarketDataError extends Error { }
 const formatDay = (date: Date) => `${date.getDate()} ${MONTHS[date.getMonth()]}`;
 const formatMoney = (value: number) =>
   (value < 0 ? '-₹' : '₹') + Math.abs(value).toLocaleString('en-IN', { maximumFractionDigits: 0 });
@@ -81,6 +84,8 @@ export class PayoffComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly liveAccess = inject(LiveDataAccessService);
   private readonly symbolSelection$ = new Subject<string>();
+  /** Fires on every symbol change so expiry-quote requests for the previous symbol are dropped. */
+  private readonly quoteReset$ = new Subject<void>();
   private legId = 0;
   private symbolsRequested = false;
 
@@ -101,8 +106,9 @@ export class PayoffComponent implements OnInit {
   readonly marketLoading = signal(false);
   readonly marketError = signal('');
   readonly details = signal<PayoffSymbolDetails | null>(null);
-  readonly chain = signal<PayoffChain | null>(null);
   readonly expiries = signal<PayoffExpiry[]>([]);
+  /** EOD prices keyed by expiryDays: the real counterpart of the prototype's chainPremium(type, K, days). */
+  readonly quotes = signal<ReadonlyMap<number, ExpiryQuotes>>(new Map());
   readonly volUnavailable = signal(false);
   readonly lotFromFeed = signal(false);
 
@@ -136,26 +142,32 @@ export class PayoffComponent implements OnInit {
   ];
 
   /* ---------- derived market data ---------- */
-  readonly chainByStrike = computed(() => new Map((this.chain()?.rows ?? []).map(row => [row.strike, row])));
-  readonly callStrikes = computed(() => (this.chain()?.rows ?? []).filter(row => row.ce !== null).map(row => row.strike));
-  readonly putStrikes = computed(() => (this.chain()?.rows ?? []).filter(row => row.pe !== null).map(row => row.strike));
+  /** Instrument strike spacing from the nearest loaded expiry; the prototype uses it in every mode. */
   readonly strikeStep = computed(() => {
-    const rows = this.chain()?.rows ?? [];
     const spot = this.spot();
-    if (this.mode() !== 'custom' && rows.length) return deriveStrikeStep(rows.map(row => row.strike), spot);
+    const listed = this.expiries().map(expiry => this.quotes().get(expiry.days)).find(quotes => quotes?.status === 'ready');
+    if (listed?.byStrike.size) return deriveStrikeStep([...listed.byStrike.keys()], spot);
     return spot > 0 ? defaultStrikeStep(spot) : 1;
   });
-  readonly baseDate = computed(() => {
-    const tradeDate = this.mode() === 'custom' ? null : this.parseLocalDate(this.details()?.trade_date ?? this.chain()?.tradeDate);
-    return tradeDate ?? this.today();
-  });
+  readonly baseDate = computed(() => this.parseLocalDate(this.details()?.trade_date) ?? this.today());
+  /** EOD legs whose expiry prices are still being fetched. */
+  readonly quotesLoading = computed(() =>
+    this.mode() === 'eod' && this.legs().some(leg => this.quotes().get(leg.expiryDays)?.status === 'loading'));
   readonly effVol = computed(() => this.vol() * (this.ivMultiplier() / 100));
+  /** EOD pre-fills HV-20 but lets the user override it; the hint keeps the feed value visible. */
+  readonly volHint = computed(() => {
+    if (this.mode() === 'custom') return 'Entered manually';
+    const hv = this.details()?.hv20;
+    if (this.volUnavailable() || typeof hv !== 'number') return 'HV-20 unavailable, enter manually';
+    const feed = Math.round(hv * 100) / 100;
+    return this.vol() === feed ? 'HV-20 from BhavCopy EOD · editable' : `Edited · HV-20 from BhavCopy EOD is ${feed}%`;
+  });
 
   /* ---------- validation → single calculation → views ---------- */
   readonly validationError = computed(() => this.validate());
 
   readonly result = computed<PayoffResult | null>(() => {
-    if (this.mode() === 'live' || this.marketLoading() || this.validationError()) return null;
+    if (this.mode() === 'live' || this.marketLoading() || this.quotesLoading() || this.validationError()) return null;
     const legs = this.legs();
     if (!legs.length || !legs.every(isPricedLeg)) return null;
     return computePayoff({
@@ -210,8 +222,8 @@ export class PayoffComponent implements OnInit {
 
   /* ---------- labels ---------- */
   readonly strategyName = computed(() => STRATEGY_NAMES[this.strategy()] ?? 'Position');
-  readonly tickerLabel = computed(() => (this.mode() === 'custom' ? 'CUSTOM' : this.selectedSymbol() || '—'));
-  readonly lastPrice = computed(() => (this.spot() > 0 ? formatRupee(this.spot()) : '—'));
+  readonly tickerLabel = computed(() => (this.mode() === 'custom' ? 'CUSTOM' : this.selectedSymbol() || '–'));
+  readonly lastPrice = computed(() => (this.spot() > 0 ? formatRupee(this.spot()) : '–'));
   readonly sourceNote = computed(() => {
     if (this.mode() === 'custom') return 'Manual entry';
     if (this.mode() === 'live') return 'Live feed · Premium';
@@ -222,7 +234,7 @@ export class PayoffComponent implements OnInit {
   readonly evalValue = computed(() => this.result()?.evalDay ?? this.evalDay());
   readonly evalLabel = computed(() => {
     const result = this.result();
-    if (!result) return '—';
+    if (!result) return '–';
     return result.evalDay >= result.near ? 'At expiration' : `${formatDay(addDays(this.baseDate(), result.evalDay))} · T+${result.evalDay}`;
   });
   readonly dateCaption = computed(() => {
@@ -247,11 +259,8 @@ export class PayoffComponent implements OnInit {
     if (!result?.isCalendar) return '';
     const nearLabel = formatDay(addDays(this.baseDate(), result.near));
     const farLabel = formatDay(addDays(this.baseDate(), result.far));
-    const note = `Mixed expiries: the expiration line is drawn at ${nearLabel} (T+${result.near}), where the ${farLabel} leg still holds time value. ` +
-      `That residual is priced with Black-Scholes at ${result.effVol.toFixed(2)}% volatility, so this curve moves with the IV slider — unlike a single-expiry position.`;
-    return this.mode() === 'eod'
-      ? `${note} BhavCopy settlement prices are quoted per strike, not per expiry, so legs on the same strike carry the same premium.`
-      : note;
+    return `Mixed expiries: the expiration line is drawn at ${nearLabel} (T+${result.near}), where the ${farLabel} leg still holds time value. ` +
+      `That residual is priced with Black-Scholes at ${result.effVol.toFixed(2)}% volatility, so this curve moves with the IV slider, unlike a single-expiry position.`;
   });
   readonly summary = computed(() => {
     const result = this.result();
@@ -267,7 +276,7 @@ export class PayoffComponent implements OnInit {
       maxProfit: metrics.profitUnlimited ? 'Unlimited' : formatMoney(metrics.maxProfit),
       maxProfitHint: metrics.profitUnlimited ? 'Beyond charted range' : nearLabel,
       maxLoss: metrics.lossUnlimited ? 'Margin dependent' : formatMoney(Math.abs(metrics.maxLoss)),
-      maxLossHint: metrics.lossUnlimited ? 'Undefined risk — set by margin' : nearLabel,
+      maxLossHint: metrics.lossUnlimited ? 'Undefined risk, set by margin' : nearLabel,
       chance: `${metrics.chanceOfProfit.toFixed(0)}%`,
       chanceHint: `${result.effVol.toFixed(1)}% vol · ${result.near}d`,
       zones: metrics.zones.length
@@ -280,6 +289,7 @@ export class PayoffComponent implements OnInit {
   readonly emptyMessage = computed(() => {
     if (this.mode() === 'live') return 'Live pricing needs the live market feed. Switch to EOD or Custom to price the position.';
     if (this.marketLoading()) return 'Loading payoff data…';
+    if (this.quotesLoading()) return 'Loading BhavCopy prices for the selected expiry…';
     return this.validationError() || 'Enter valid inputs to display the payoff.';
   });
   readonly hoverPoint = computed(() => {
@@ -329,7 +339,7 @@ export class PayoffComponent implements OnInit {
     if (mode === 'custom') {
       this.loadStrategy();
     } else if (mode === 'eod') {
-      if (this.details() && this.chain()) this.applyFeedValues();
+      if (this.details() && this.quotes().size) this.applyFeedValues();
       else {
         const symbol = this.selectedSymbol() || (this.symbols().includes(DefaultStock) ? DefaultStock : this.symbols()[0]);
         if (symbol) this.selectSymbol(symbol);
@@ -462,8 +472,8 @@ export class PayoffComponent implements OnInit {
 
   addLeg(): void {
     const spot = this.spot(), step = this.strikeStep();
-    const expiryDays = pickExpiry(16, this.expiryDays());
-    const strike = this.resolveStrike(Math.round(spot / step) * step, 'call');
+    const expiryDays = nearAndNextExpiry(this.expiryDays()).near;
+    const strike = this.resolveStrike(Math.round(spot / step) * step, 'call', expiryDays);
     const lotSize = this.lotSize() > 0 ? this.lotSize() : 1;
     this.commitLegs([...this.legs(), {
       id: ++this.legId, type: 'call', direction: 'long', strike,
@@ -477,8 +487,14 @@ export class PayoffComponent implements OnInit {
     this.legs.update(legs => legs.map(leg => ({ ...leg, premium: this.premiumFor(leg.type, leg.strike, leg.expiryDays) })));
   }
 
+  /** Strikes quoted for this leg's option type on this leg's expiry. */
+  strikeOptions(leg: PayoffLeg): number[] {
+    const quotes = this.quotes().get(leg.expiryDays);
+    return quotes?.status === 'ready' ? (leg.type === 'call' ? quotes.callStrikes : quotes.putStrikes) : [];
+  }
+
   hasListedStrike(leg: PayoffLeg): boolean {
-    return (leg.type === 'call' ? this.chainByStrike().get(leg.strike)?.ce : this.chainByStrike().get(leg.strike)?.pe) != null;
+    return this.quoteFor(leg.type, leg.strike, leg.expiryDays) !== null;
   }
 
   hasListedExpiry(leg: PayoffLeg): boolean {
@@ -548,7 +564,10 @@ export class PayoffComponent implements OnInit {
     });
   }
 
-  /** switchMap drops responses for superseded selections, so a slow request can never overwrite a newer symbol. */
+  /**
+   * symbol → symbol details (spot, expiries, lot, HV-20) → prices for the preset near/far expiries.
+   * switchMap drops responses for superseded selections, so a slow request can never overwrite a newer symbol.
+   */
   private setupMarketData(): void {
     this.symbolSelection$.pipe(
       tap(symbol => {
@@ -556,25 +575,87 @@ export class PayoffComponent implements OnInit {
         this.marketLoading.set(Boolean(symbol));
       }),
       switchMap(symbol => symbol
-        ? forkJoin({ details: this.payoff.getSymbolDetails(symbol), chain: this.payoff.getPayoff(symbol) }).pipe(
-          map(data => ({ symbol, ...data })),
-          catchError(() => {
+        ? this.payoff.getSymbolDetails(symbol).pipe(
+          switchMap(details => this.loadInitialQuotes(symbol, details)),
+          catchError((error: unknown) => {
             this.marketLoading.set(false);
-            this.failMarketData(`Unable to load payoff data for ${symbol}. Please try again.`);
+            this.failMarketData(error instanceof MarketDataError ? error.message : `Unable to load payoff data for ${symbol}. Please try again.`);
             return EMPTY;
           }),
         )
         : EMPTY),
       takeUntilDestroyed(this.destroyRef),
-    ).subscribe(({ symbol, details, chain }) => {
+    ).subscribe(({ symbol, details, expiries, quotes }) => {
       this.marketLoading.set(false);
-      if (symbol === this.selectedSymbol()) this.storeMarketData(symbol, details, chain);
+      if (symbol !== this.selectedSymbol()) return;
+      this.details.set(details);
+      this.expiries.set(expiries);
+      this.quotes.set(quotes);
+      if (this.mode() === 'eod') this.applyFeedValues();
     });
   }
 
+  /** Presets use the nearest listed expiry and the next one, so both are priced before the legs are built. */
+  private loadInitialQuotes(symbol: string, details: PayoffSymbolDetails): Observable<{
+    symbol: string; details: PayoffSymbolDetails; expiries: PayoffExpiry[]; quotes: Map<number, ExpiryQuotes>;
+  }> {
+    if (!(typeof details.underlying === 'number' && details.underlying > 0)) {
+      return throwError(() => new MarketDataError(`Underlying price is not available for ${symbol}.`));
+    }
+    const expiries = this.parseExpiries(details.expiry_date, this.parseLocalDate(details.trade_date) ?? this.today());
+    if (!expiries.length) return throwError(() => new MarketDataError(`No upcoming expiries are available for ${symbol}.`));
+    const days = expiries.map(expiry => expiry.days);
+    const { near, next } = nearAndNextExpiry(days);
+    const wanted = expiries.filter(expiry => expiry.days === near || expiry.days === next);
+    return forkJoin(wanted.map(expiry => this.payoff.getExpiryQuotes(symbol, expiry.iso).pipe(
+      map(quotes => [expiry.days, quotes] as const)))).pipe(
+      map(entries => {
+        if (entries.every(([, quotes]) => !quotes.byStrike.size)) {
+          throw new MarketDataError(`No BhavCopy option prices are available for ${symbol}.`);
+        }
+        return { symbol, details, expiries, quotes: new Map(entries) };
+      }),
+    );
+  }
+
+  /** Loads prices for any expiry a leg uses that is not cached yet, then re-quotes the legs. */
+  private ensureQuotes(days: number[]): void {
+    const symbol = this.selectedSymbol();
+    const cache = this.quotes();
+    const missing = this.expiries().filter(expiry => days.includes(expiry.days) && !cache.has(expiry.days));
+    if (!symbol || !missing.length) return;
+    const next = new Map(cache);
+    missing.forEach(expiry => next.set(expiry.days, { status: 'loading', ...EMPTY_QUOTES }));
+    this.quotes.set(next);
+    merge(...missing.map(expiry => this.payoff.getExpiryQuotes(symbol, expiry.iso).pipe(
+      map(quotes => ({ expiry, quotes })),
+      catchError(() => of({ expiry, quotes: { status: 'error' as const, ...EMPTY_QUOTES } })),
+    ))).pipe(takeUntil(this.quoteReset$), takeUntilDestroyed(this.destroyRef)).subscribe(({ expiry, quotes }) => {
+      if (symbol !== this.selectedSymbol()) return;
+      this.quotes.update(current => new Map(current).set(expiry.days, quotes));
+      if (quotes.status === 'error') this.toast.error(`Unable to load BhavCopy prices for ${symbol} ${formatDay(expiry.date)} expiry.`);
+      this.refreshPremiums();
+    });
+  }
+
+  /** Prototype refreshPremiums(): outside Custom, every leg is re-quoted for its own type, strike and expiry. */
+  private refreshPremiums(): void {
+    if (this.mode() === 'custom') return;
+    this.ensureQuotes(this.legs().map(leg => leg.expiryDays));
+    this.legs.update(legs => legs.map(leg => ({ ...leg, premium: this.quoteFor(leg.type, leg.strike, leg.expiryDays) })));
+  }
+
+  private quoteFor(type: OptionType, strike: number, days: number): number | null {
+    const quotes = this.quotes().get(days);
+    if (quotes?.status !== 'ready') return null;
+    const quote = quotes.byStrike.get(strike);
+    return (type === 'call' ? quote?.ce : quote?.pe) ?? null;
+  }
+
   private resetMarketData(): void {
+    this.quoteReset$.next();
     this.details.set(null);
-    this.chain.set(null);
+    this.quotes.set(new Map());
     this.expiries.set([]);
     this.marketError.set('');
     this.volUnavailable.set(false);
@@ -593,27 +674,6 @@ export class PayoffComponent implements OnInit {
     this.toast.error(message);
   }
 
-  private storeMarketData(symbol: string, details: PayoffSymbolDetails, chain: PayoffChain): void {
-    if (!chain.rows.length) {
-      this.failMarketData(`No strike settlement data is available for ${symbol}.`);
-      return;
-    }
-    if (!(typeof details.underlying === 'number' && details.underlying > 0)) {
-      this.failMarketData(`Underlying price is not available for ${symbol}.`);
-      return;
-    }
-    const base = this.parseLocalDate(details.trade_date ?? chain.tradeDate) ?? this.today();
-    const expiries = this.parseExpiries(details.expiry_date, base);
-    if (!expiries.length) {
-      this.failMarketData(`No upcoming expiries are available for ${symbol}.`);
-      return;
-    }
-    this.details.set(details);
-    this.chain.set(chain);
-    this.expiries.set(expiries);
-    if (this.mode() === 'eod') this.applyFeedValues();
-  }
-
   /** EOD: underlying, HV-20 and lot size come from the feed, then the strategy is rebuilt (prototype: loadInstrument). */
   private applyFeedValues(): void {
     const details = this.details();
@@ -630,9 +690,11 @@ export class PayoffComponent implements OnInit {
     this.loadStrategy();
   }
 
+  /** Prototype loadStrategy(): build the preset legs, re-quote them (EOD), then put the date slider at the nearest expiry. */
   private loadStrategy(): void {
     const legs = buildStrategy(this.strategy(), this.strategyContext());
     this.commitLegs(legs);
+    this.refreshPremiums();
     const near = this.nearestExpiry(legs);
     if (near !== null) this.evalDay.set(near);
   }
@@ -646,41 +708,38 @@ export class PayoffComponent implements OnInit {
       expiries: this.expiryDays(),
       existing: this.legs(),
       premium: (type, strike, days) => this.premiumFor(type, strike, days),
-      strike: (target, type) => this.resolveStrike(target, type),
+      strike: (target, type, days) => this.resolveStrike(target, type, days),
       nextId: () => ++this.legId,
     };
   }
 
-  /** Custom mode prices from Black-Scholes; EOD reads CE (call) / PE (put) settlement from /tools/payoff. */
+  /** Custom prices from Black-Scholes (prototype pr()/Reprice); EOD reads that expiry's CE (call) / PE (put) price. */
   private premiumFor(type: OptionType, strike: number, days: number): number | null {
     if (this.mode() === 'custom') {
       const premium = theoreticalPremium(type, this.spot(), strike, days, this.effVol() / 100);
       return Number.isFinite(premium) ? premium : null;
     }
-    const row: PayoffChainRow | undefined = this.chainByStrike().get(strike);
-    return (type === 'call' ? row?.ce : row?.pe) ?? null;
+    return this.quoteFor(type, strike, days);
   }
 
-  /** EOD strikes must exist in the chain: snap to the nearest strike quoted for this side. */
-  private resolveStrike(target: number, type: OptionType): number {
-    if (this.mode() === 'custom') return target;
-    const listed = type === 'call' ? this.callStrikes() : this.putStrikes();
-    if (!listed.length || !Number.isFinite(target)) return target;
+  /** EOD strikes must exist on that expiry's chain: snap to the nearest strike quoted for this side. */
+  private resolveStrike(target: number, type: OptionType, days: number): number {
+    if (this.mode() === 'custom' || !Number.isFinite(target)) return target;
+    const quotes = this.quotes().get(days);
+    const listed = quotes?.status === 'ready' ? (type === 'call' ? quotes.callStrikes : quotes.putStrikes) : [];
+    if (!listed.length) return target;
     return listed.reduce((best, strike) => (Math.abs(strike - target) < Math.abs(best - target) ? strike : best), listed[0]);
   }
 
+  /** Listed expiries in days; like the prototype's EXPIRIES they also drive Custom-mode presets when known. */
   private expiryDays(): number[] {
-    return this.mode() === 'custom' ? [] : this.expiries().map(expiry => expiry.days);
+    return this.expiries().map(expiry => expiry.days);
   }
 
+  /** Prototype leg input handler: a new type/strike/expiry is a different contract, so EOD re-quotes every leg. */
   private patchLeg(id: number, patch: Partial<PayoffLeg>, requote: boolean): void {
-    // A different contract means a different quote, so EOD re-reads the chain.
-    const reread = requote && this.mode() !== 'custom';
-    this.commitLegs(this.legs().map(leg => {
-      if (leg.id !== id) return leg;
-      const next = { ...leg, ...patch };
-      return reread ? { ...next, premium: this.premiumFor(next.type, next.strike, next.expiryDays) } : next;
-    }));
+    this.commitLegs(this.legs().map(leg => (leg.id === id ? { ...leg, ...patch } : leg)));
+    if (requote) this.refreshPremiums();
   }
 
   /** Clamps the evaluation date to the nearest expiry, as the prototype's slider does. */
@@ -705,7 +764,7 @@ export class PayoffComponent implements OnInit {
     if (mode === 'live') return '';
     if (mode === 'eod') {
       if (!this.selectedSymbol()) return 'Select an instrument to load strike and settlement data.';
-      if (this.marketLoading()) return '';
+      if (this.marketLoading() || this.quotesLoading()) return '';
       if (this.marketError()) return this.marketError();
     }
     const legs = this.legs(), vol = this.vol(), lot = this.lotSize();
@@ -721,9 +780,12 @@ export class PayoffComponent implements OnInit {
       const leg = legs[i], n = i + 1;
       if (!(leg.strike > 0)) return `Leg ${n}: strike must be greater than 0.`;
       if (leg.premium === null) {
-        return mode === 'custom'
-          ? `Leg ${n}: enter a premium.`
-          : `Leg ${n}: no ${leg.type === 'call' ? 'CE' : 'PE'} settlement price is available for strike ${leg.strike}.`;
+        if (mode === 'custom') return `Leg ${n}: enter a premium.`;
+        const expiry = formatDay(addDays(this.baseDate(), leg.expiryDays));
+        if (!this.hasListedExpiry(leg)) return `Leg ${n}: ${expiry} is not a listed expiry. Choose one of the chain dates.`;
+        return this.quotes().get(leg.expiryDays)?.status === 'error'
+          ? `Leg ${n}: BhavCopy prices for the ${expiry} expiry could not be loaded.`
+          : `Leg ${n}: no ${leg.type === 'call' ? 'CE' : 'PE'} BhavCopy price for strike ${leg.strike} on the ${expiry} expiry.`;
       }
       if (!(leg.premium >= 0)) return `Leg ${n}: premium cannot be negative.`;
       if (!(leg.quantity > 0)) return `Leg ${n}: quantity must be at least 1.`;
@@ -739,14 +801,19 @@ export class PayoffComponent implements OnInit {
 
   private parseExpiries(raw: PayoffSymbolDetails['expiry_date'], base: Date): PayoffExpiry[] {
     const values = Array.isArray(raw) ? raw : [raw];
-    const days = values
-      .map(value => {
-        if (typeof value === 'number') return value;
-        const date = this.parseLocalDate(value);
-        return date ? Math.round((date.getTime() - base.getTime()) / 86400000) : Number.NaN;
-      })
-      .filter(value => Number.isFinite(value) && value > 0);
-    return Array.from(new Set(days)).sort((a, b) => a - b).map(value => ({ days: value, date: addDays(base, value) }));
+    const byDays = new Map<number, PayoffExpiry>();
+    values.forEach(value => {
+      const date = typeof value === 'number' ? addDays(base, value) : this.parseLocalDate(value);
+      if (!date) return;
+      const days = Math.round((date.getTime() - base.getTime()) / 86400000);
+      if (days > 0 && !byDays.has(days)) byDays.set(days, { days, date, iso: this.isoDate(date) });
+    });
+    return [...byDays.values()].sort((a, b) => a.days - b.days);
+  }
+
+  private isoDate(date: Date): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
   }
 
   private parseLocalDate(value: string | null | undefined): Date | null {

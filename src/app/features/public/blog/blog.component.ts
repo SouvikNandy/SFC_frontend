@@ -32,7 +32,7 @@ import { FormsModule } from '@angular/forms';
           <div class="blog__sidebar">
             <div class="blog__subscribe-card">
               <h3 class="blog__subscribe-title">Subscribe</h3>
-              <p class="blog__subscribe-subtitle">Get the daily F&O report and new articles in your inbox — no account needed.</p>
+              <p class="blog__subscribe-subtitle">Get the daily F&O report and new articles in your inbox. No account needed.</p>
               
               @if (isSubscribed()) {
                 <div class="blog__subscribed-message">You're subscribed ✓</div>
@@ -65,7 +65,7 @@ export class BlogComponent {
   readonly blogPosts = [
     {
       id: 1,
-      title: 'NIFTY F&O Daily Report — 18 Jul 2026',
+      title: 'NIFTY F&O Daily Report: 18 Jul 2026',
       date: '18 Jul 2026',
       tag: 'Daily Report',
       excerpt: 'Call writers defended 24,800 through the session while put unwinding below 24,600 signalled fading downside conviction into the weekly expiry.'
@@ -79,7 +79,7 @@ export class BlogComponent {
     },
     {
       id: 3,
-      title: 'BANKNIFTY F&O Daily Report — 17 Jul 2026',
+      title: 'BANKNIFTY F&O Daily Report: 17 Jul 2026',
       date: '17 Jul 2026',
       tag: 'Daily Report',
       excerpt: 'Banking majors dragged the index lower as FIIs trimmed index futures longs; IV compressed 40bps into the close on falling realised volatility.'

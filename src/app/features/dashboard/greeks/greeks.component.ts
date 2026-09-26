@@ -75,7 +75,7 @@ export class GreeksComponent implements OnInit, OnDestroy {
 
         const manualChange = () => {
             this.form.patchValue({ presetKey: 'custom' }, { emitEvent: false });
-            this.badgeText = 'Manual entry — edit any field below';
+            this.badgeText = 'Manual entry: edit any field below';
             this.calculate();
             this.autofillIvPrice();
         };
@@ -83,7 +83,7 @@ export class GreeksComponent implements OnInit, OnDestroy {
         spotCtrl.valueChanges.subscribe((val: number) => {
             // emulate prototype: mark preset custom, update strike select chain and spotSelect if matching
             this.form.patchValue({ presetKey: 'custom' }, { emitEvent: false });
-            this.badgeText = 'Manual entry — edit any field below';
+            this.badgeText = 'Manual entry: edit any field below';
             const spot = Number(val) || 0;
             this.populateStrikeOptions(spot, this.niceStep(spot), Number(this.form.value.strike));
             this.form.patchValue({ spotKey: 'custom' }, { emitEvent: false });
@@ -93,7 +93,7 @@ export class GreeksComponent implements OnInit, OnDestroy {
 
         strikeCtrl.valueChanges.subscribe((val: number) => {
             this.form.patchValue({ presetKey: 'custom' }, { emitEvent: false });
-            this.badgeText = 'Manual entry — edit any field below';
+            this.badgeText = 'Manual entry: edit any field below';
             const opts = this.strikeOptions.map(s => String(s));
             const v = String(val);
             this.form.patchValue({ strikeKey: opts.includes(v) ? v : 'custom' }, { emitEvent: false });
@@ -205,7 +205,7 @@ export class GreeksComponent implements OnInit, OnDestroy {
         if (isNaN(marketPrice) || marketPrice <= 0) { this.ivResultText = 'Enter a market price first'; this.ivResultVisible = true; return; }
         const intrinsic = type === 'call' ? Math.max(S - K, 0) : Math.max(K - S, 0);
         if (marketPrice < intrinsic * Math.exp(-r * T)) {
-            this.ivResultText = 'Price is below intrinsic value — check your inputs'; this.ivResultVisible = true; return;
+            this.ivResultText = 'Price is below intrinsic value. Check your inputs.'; this.ivResultVisible = true; return;
         }
         const iv = this.svc.impliedVolatility(type, marketPrice, S, K, r, q, T);
         this.ivResultText = 'Implied volatility ≈ ' + (iv * 100).toFixed(2) + '%';

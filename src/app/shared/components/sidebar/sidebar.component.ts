@@ -149,7 +149,7 @@ const NAV_LABELS: Record<string, string> = {
               }
             </div>
           </div>
-          <div class="sfc-copyright">© 2026 QuantSFC — quantsfc.com</div>
+          <div class="sfc-copyright">© 2026 QuantSFC · quantsfc.com</div>
         </div>
       </div>
     </aside>

@@ -40,7 +40,7 @@ export class ToolsComponent {
     },
     {
       title: 'Options Chain',
-      description: 'Full NIFTY / BANKNIFTY chain — OI, Volume, IV, LTP and optional Greeks.',
+      description: 'Full NIFTY / BANKNIFTY chain: OI, Volume, IV, LTP and optional Greeks.',
       free: false
     },
     {

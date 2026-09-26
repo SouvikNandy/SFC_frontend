@@ -135,7 +135,7 @@ export class ContactComponent {
     this.message = '';
     
     // Show success message (would be a toast in real implementation)
-    alert('Message sent — we will get back to you shortly');
+    alert('Message sent. We will get back to you shortly.');
   }
 }
 
