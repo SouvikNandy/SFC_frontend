@@ -35,10 +35,6 @@ export const routes: Routes = [
         loadComponent: () => import('./features/public/data/data.component').then((m) => m.DataComponent)
       },
       {
-        path: 'tools',
-        loadComponent: () => import('./features/public/tools/tools.component').then((m) => m.ToolsComponent)
-      },
-      {
         path: 'privacy-policy',
         loadComponent: () => import('./features/public/privacy-policy/privacy-policy.component').then((m) => m.PrivacyPolicyComponent)
       },

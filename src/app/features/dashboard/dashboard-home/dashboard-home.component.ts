@@ -30,6 +30,7 @@ import { AuthService } from '../../../core/services/auth.service';
               <div class="summary-card__pnl num" [class.pnl-positive]="card.up" [class.pnl-negative]="!card.up">{{ card.change }}</div>
             </div>
           </ng-container>
+          <div *ngIf="!cards.length" class="summary-empty">Market data is not available right now. Please try again later.</div>
         </ng-template>
       </div>
 

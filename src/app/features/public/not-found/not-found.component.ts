@@ -29,7 +29,6 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
             <li><a href="/about" class="not-found__link">About</a></li>
             <li><a href="/services" class="not-found__link">Services</a></li>
             <li><a href="/data" class="not-found__link">Data</a></li>
-            <li><a href="/tools" class="not-found__link">Tools</a></li>
             <li><a href="/blog" class="not-found__link">Blog</a></li>
             <li><a href="/contact" class="not-found__link">Contact</a></li>
           </ul>

@@ -1,26 +1,20 @@
-import { Injectable } from '@angular/core';
-import { Observable, of } from 'rxjs';
+import { Injectable, inject } from '@angular/core';
+import { Observable, map, of } from 'rxjs';
+import { TickerItem, TickerService } from '../../../shared/services/ticker.service';
 import { MarketCard, QuickLink } from './models/home.model';
 
-/**
- * HomeService
- * NOTE: The approved prototype provides the visual data for the Home page.
- * At the time of implementation there are no confirmed REST endpoints for
- * market summary or quick-links in the project's API surface. This service
- * isolates the prototype/mock data so it can be replaced by real API calls
- * once the backend contract exposes the relevant endpoints.
- */
+/** The design shows four market summary cards. */
+const SUMMARY_CARD_COUNT = 4;
+
 @Injectable({ providedIn: 'root' })
 export class HomeService {
-    getMarketSummary(): Observable<MarketCard[]> {
-        const data: MarketCard[] = [
-            { symbol: 'NIFTY 50', value: '24,812.35', change: '+0.26%', up: true },
-            { symbol: 'BANKNIFTY', value: '55,320.10', change: '−0.26%', up: false },
-            { symbol: 'SENSEX', value: '81,244.02', change: '+0.55%', up: true },
-            { symbol: 'INDIA VIX', value: '11.82', change: '+2.10%', up: true }
-        ];
+    private readonly ticker = inject(TickerService);
 
-        return of(data);
+    /** Market summary cards from the ticker API (`POST /fo/ticker`), first four instruments in API order. */
+    getMarketSummary(): Observable<MarketCard[]> {
+        return this.ticker.getTicker().pipe(
+            map(items => items.slice(0, SUMMARY_CARD_COUNT).map(item => this.toCard(item)))
+        );
     }
 
     getQuickLinks(): Observable<QuickLink[]> {
@@ -34,5 +28,20 @@ export class HomeService {
         ];
 
         return of(links);
+    }
+
+    /** Change shown as points and percent; percent uses the previous close implied by the API (price − change). */
+    private toCard(item: TickerItem): MarketCard {
+        const { priceValue: price, changeValue: change } = item;
+        const previous = price - change;
+        const sign = change > 0 ? '+' : change < 0 ? '-' : '';
+        const points = Math.abs(change).toFixed(2);
+        const percent = previous > 0 ? ` (${sign}${(Math.abs(change) / previous * 100).toFixed(2)}%)` : '';
+        return {
+            symbol: item.symbol,
+            value: Number.isFinite(price) ? price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : item.price,
+            change: Number.isFinite(change) ? `${sign}${points}${percent}` : item.change,
+            up: change >= 0,
+        };
     }
 }

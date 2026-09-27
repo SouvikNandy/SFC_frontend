@@ -192,7 +192,7 @@ export class ServicesComponent {
   constructor(private readonly router: Router) {}
 
   goToTools(): void {
-    this.router.navigateByUrl('/tools');
+    this.router.navigateByUrl('/dashboard/home');
   }
 }
 

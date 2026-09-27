@@ -239,7 +239,7 @@ export class HomeComponent {
   constructor(private readonly router: Router) { }
 
   goToData(): void {
-    this.router.navigateByUrl('/data');
+    this.router.navigateByUrl('/dashboard/eod');
   }
 
   goToLogin(): void {

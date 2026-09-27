@@ -27,7 +27,6 @@ import { AuthService } from '../../../core/services/auth.service';
         <a class="header__link" routerLink="/blog" routerLinkActive="active">Blog</a>
         <a class="header__link" routerLink="/contact" routerLinkActive="active">Contact</a>
         <!-- <a class="header__link" routerLink="/data" routerLinkActive="active">Data</a> -->
-        <a class="header__link" routerLink="/tools" routerLinkActive="active">Tools</a>
         <a class="header__link" routerLink="/dashboard/home" routerLinkActive="active">Dashboard</a>
 
         @if (!authService.isAuthenticated()) {
@@ -93,13 +92,6 @@ import { AuthService } from '../../../core/services/auth.service';
           >Data</a
         > -->
 
-        <a
-          class="mobile-nav__link"
-          routerLink="/tools"
-          routerLinkActive="active"
-          (click)="toggleMobileNav()"
-          >Tools</a
-        >
         <a
           class="mobile-nav__link"
           routerLink="/dashboard/home"

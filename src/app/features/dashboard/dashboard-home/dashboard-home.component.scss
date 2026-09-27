@@ -45,6 +45,16 @@
     flex-direction: column
 }
 
+.summary-empty {
+    grid-column: 1 / -1;
+    padding: 18px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    color: var(--muted-2);
+    font-size: 13px;
+    text-align: center;
+}
+
 .summary-card.placeholder {
     background: linear-gradient(135deg, #fff, var(--head-bg));
 }
