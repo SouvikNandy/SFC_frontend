@@ -23,8 +23,9 @@ import {
   ChartTooltipRow,
 } from '../../../shared/components/chart-tooltip/chart-tooltip.component';
 import { ToastService } from '../../../core/services/toast.service';
-import { EMPTY, Subject } from 'rxjs';
-import { catchError, switchMap, takeUntil, tap } from 'rxjs/operators';
+import { DefaultStock } from '../../../shared/services/constantFile';
+import { EMPTY, Subject, of } from 'rxjs';
+import { catchError, finalize, switchMap, takeUntil, tap } from 'rxjs/operators';
 
 interface CalendarDay {
   value: string;
@@ -46,11 +47,18 @@ interface CalendarMonthOption {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class EodComponent implements OnInit, OnDestroy {
-  symbols: EodSymbol[] = ['NIFTY', 'BANKNIFTY'];
   ranges = ['1W', '1M', '3M', 'Custom'] as const;
 
+  // symbol autocomplete (all F&O symbols from /fo/dd_list)
+  symbols: EodSymbol[] = [];
+  filteredSymbols: EodSymbol[] = [];
+  symbolQuery: string = DefaultStock;
+  symbolsLoading = true;
+  suggestionsOpen = false;
+  highlightedSymbolIndex = -1;
+
   // filter state
-  symbol: EodSymbol = 'NIFTY';
+  symbol: EodSymbol = DefaultStock;
   instrument: 'FUT' | 'CE' | 'PE' = 'FUT';
   strike?: number;
   expiry?: string;
@@ -122,7 +130,8 @@ export class EodComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     // initial defaults
     this.instrument = 'FUT';
-    this.symbol = 'NIFTY';
+    this.symbol = DefaultStock;
+    this.symbolQuery = DefaultStock;
     this.range = '1W';
     // set today string (local date) for max attribute
     const t = new Date();
@@ -135,7 +144,28 @@ export class EodComponent implements OnInit, OnDestroy {
     this.customFrom = from.toISOString().slice(0, 10);
     this.customTill = till;
     this.setupReload();
+    this.loadSymbols();
     this.refresh$.next({ loadMetadata: true });
+  }
+
+  private loadSymbols(): void {
+    this.svc
+      .getSymbols()
+      .pipe(
+        takeUntil(this.destroy$),
+        catchError(() => {
+          this.toast.error('Unable to load symbols. Please refresh and try again.');
+          return of([] as string[]);
+        }),
+        finalize(() => {
+          this.symbolsLoading = false;
+          this.changeDetector.markForCheck();
+        }),
+      )
+      .subscribe((symbols) => {
+        this.symbols = symbols;
+        this.filteredSymbols = symbols;
+      });
   }
 
   private setupReload() {
@@ -158,12 +188,22 @@ export class EodComponent implements OnInit, OnDestroy {
           }
         }),
         switchMap(({ loadMetadata }) => {
+          // Cleared symbol: nothing to load (and any in-flight request is cancelled by switchMap).
+          if (!this.symbol) {
+            this.loading = false;
+            this.isMetadataLoading = false;
+            this.isEodLoading = false;
+            this.rows = [];
+            this.chart = null;
+            this.changeDetector.markForCheck();
+            return EMPTY;
+          }
           const metadata$ = loadMetadata
             ? this.svc.getDdGreeks({ symbol: this.symbol }).pipe(
                 tap((res) => {
                   this.ddGreeksData = res.data;
-                  this.strikeOptions = res.data.strike;
-                  this.expiryOptions = res.data.expiry_date ? [res.data.expiry_date] : [];
+                  this.strikeOptions = res.data.strike ?? [];
+                  this.expiryOptions = this.parseExpiries(res.data.expiry_date);
                   this.strike = this.selectDefaultStrike(res.data.strike, res.data.atm_strike);
                   this.expiry = this.expiryOptions[0];
                   this.isMetadataLoading = false;
@@ -327,6 +367,15 @@ export class EodComponent implements OnInit, OnDestroy {
     return this.svc.getEod(req);
   }
 
+  /** `expiry_date` was a single string and is now an array; both become a sorted list of unique YYYY-MM-DD dates. */
+  private parseExpiries(raw: DdGreeksData['expiry_date'] | null | undefined): string[] {
+    const values = Array.isArray(raw) ? raw : raw ? [raw] : [];
+    const dates = values
+      .map((value) => String(value).slice(0, 10))
+      .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value));
+    return [...new Set(dates)].sort();
+  }
+
   private selectDefaultStrike(strikes: number[], atmStrike: number): number | undefined {
     return strikes.includes(atmStrike) ? atmStrike : strikes[0];
   }
@@ -377,6 +426,63 @@ export class EodComponent implements OnInit, OnDestroy {
     this.symbol = sym;
     this.currentPage = 1;
     this.refresh$.next({ loadMetadata: true });
+  }
+
+  /* ---------- symbol autocomplete (same behaviour as the calculator screens) ---------- */
+
+  onSymbolInput(event?: Event): void {
+    if (event) this.symbolQuery = (event.target as HTMLInputElement).value;
+    const query = this.symbolQuery.trim().toLowerCase();
+    this.filteredSymbols = query
+      ? this.symbols.filter((symbol) => symbol.toLowerCase().includes(query))
+      : this.symbols;
+    this.suggestionsOpen = true;
+    this.highlightedSymbolIndex = -1;
+  }
+
+  selectSymbol(symbol: string): void {
+    if (!this.symbols.includes(symbol)) return;
+    this.symbolQuery = symbol;
+    this.suggestionsOpen = false;
+    this.highlightedSymbolIndex = -1;
+    if (symbol !== this.symbol) this.onSymbol(symbol);
+  }
+
+  clearSymbol(): void {
+    this.symbolQuery = '';
+    this.filteredSymbols = this.symbols;
+    this.suggestionsOpen = false;
+    this.highlightedSymbolIndex = -1;
+    this.onSymbol('');
+  }
+
+  onSymbolKeydown(event: KeyboardEvent): void {
+    if (!this.suggestionsOpen || !this.filteredSymbols.length) {
+      if (event.key === 'ArrowDown') this.onSymbolInput();
+      return;
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      this.highlightedSymbolIndex = (this.highlightedSymbolIndex + 1) % this.filteredSymbols.length;
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      this.highlightedSymbolIndex =
+        this.highlightedSymbolIndex <= 0 ? this.filteredSymbols.length - 1 : this.highlightedSymbolIndex - 1;
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      this.selectSymbol(this.filteredSymbols[Math.max(0, this.highlightedSymbolIndex)]);
+    } else if (event.key === 'Escape') {
+      this.suggestionsOpen = false;
+    }
+  }
+
+  onSymbolBlur(): void {
+    window.setTimeout(() => {
+      this.suggestionsOpen = false;
+      // Text that is not a listed symbol reverts to the active selection.
+      if (this.symbolQuery !== this.symbol) this.symbolQuery = this.symbol;
+      this.changeDetector.markForCheck();
+    }, 150);
   }
   onInstrument(inst: 'FUT' | 'CE' | 'PE') {
     this.instrument = inst;

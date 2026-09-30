@@ -1,5 +1,6 @@
 export interface EodRequest {
-    symbol: 'NIFTY' | 'BANKNIFTY';
+    /** Any F&O symbol from `/fo/dd_list`. */
+    symbol: string;
     option_type: 'XX' | 'CE' | 'PE';
     strike?: number;
     expiry?: string;
@@ -23,7 +24,8 @@ export interface DdGreeksMarketPrice {
 export interface DdGreeksData {
     symbol: string;
     trade_date: string;
-    expiry_date: string;
+    /** Older responses sent one date string; the API now returns every listed expiry as an array. */
+    expiry_date: string | string[];
     underlying: number;
     strike: number[];
     atm_strike: number;

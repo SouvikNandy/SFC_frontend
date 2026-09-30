@@ -18,7 +18,7 @@ Historical Volatility, Greeks, Implied Volatility, Probability, and the authenti
 
 **Decisions (recent)**:
 
-- Public `/data` and dashboard `/dashboard/eod` both lazy-load the same `EodComponent`.
+- Public `/data` and dashboard `/dashboard/eod` both lazy-load the same `EodComponent`. It searches all `/fo/dd_list` symbols (shared autocomplete pattern, default NIFTY); `dd_symbol_details.expiry_date` is now an array (older responses: string) and is normalised to sorted YYYY-MM-DD options, first expiry selected.
 - DD Greeks metadata is loaded on symbol changes; EOD reloads on instrument, strike, expiry, and date-range changes.
 - DataTable owns presentation, formatting, state, and emitted interactions; feature components retain API and business logic.
 

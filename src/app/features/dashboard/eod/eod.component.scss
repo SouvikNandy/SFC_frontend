@@ -37,6 +37,29 @@
   color: var(--muted-2);
 }
 
+/* Symbol search: matches the global select styling used by Strike / Expiry. */
+.symbol-control {
+  min-width: 200px;
+}
+
+.symbol-input {
+  width: 200px;
+  box-sizing: border-box;
+  padding: 10px 32px 10px 12px;
+  border: 1.5px solid var(--input-border);
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--panel);
+  font-family: var(--font-mono);
+  font-size: 12px;
+
+  &:focus {
+    border-color: var(--teal);
+    outline: none;
+    box-shadow: 0 0 0 3px var(--teal-tint);
+  }
+}
+
 .seg {
   display: flex;
   gap: 6px;

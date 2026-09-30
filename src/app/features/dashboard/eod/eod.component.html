@@ -8,12 +8,52 @@
 
   <div class="card controls">
     <div class="controls-row">
-      <div class="control">
-        <div class="label">Symbol</div>
-        <div class="seg">
-          <button *ngFor="let s of symbols" (click)="onSymbol(s)" [class.active]="symbol === s">
-            {{ s }}
+      <div class="control symbol-control autocomplete-field">
+        <label class="label" for="eod-symbol">Symbol</label>
+        <input
+          id="eod-symbol"
+          class="symbol-input"
+          type="text"
+          autocomplete="off"
+          placeholder="Search symbol"
+          role="combobox"
+          aria-controls="eod-symbol-options"
+          [attr.aria-expanded]="suggestionsOpen"
+          [value]="symbolQuery"
+          (input)="onSymbolInput($event)"
+          (focus)="onSymbolInput()"
+          (blur)="onSymbolBlur()"
+          (keydown)="onSymbolKeydown($event)"
+        />
+        <button
+          *ngIf="symbolQuery"
+          class="autocomplete-clear"
+          type="button"
+          aria-label="Clear selection"
+          (mousedown)="$event.preventDefault()"
+          (click)="clearSymbol()"
+        >
+          ×
+        </button>
+        <div
+          *ngIf="suggestionsOpen"
+          id="eod-symbol-options"
+          class="autocomplete-options"
+          role="listbox"
+        >
+          <button
+            *ngFor="let option of filteredSymbols; let index = index"
+            type="button"
+            role="option"
+            [class.highlighted]="index === highlightedSymbolIndex"
+            (mousedown)="$event.preventDefault()"
+            (click)="selectSymbol(option)"
+          >
+            {{ option }}
           </button>
+          <div *ngIf="!filteredSymbols.length" class="combo-empty">
+            {{ symbolsLoading ? 'Loading symbol list…' : 'No script matches' }}
+          </div>
         </div>
       </div>
       <div class="control">
@@ -168,7 +208,7 @@
   <div class="card chart-card">
     <div class="chart-head">
       <div class="title">
-        {{ symbol }}
+        {{ symbol || 'Select a symbol' }}
         {{
           instrument !== 'FUT'
             ? strike
@@ -237,7 +277,9 @@
       }
     </div>
     <ng-template #emptyChart>
-      <div class="empty">No EOD data is available for the selected filters.</div>
+      <div class="empty">
+        {{ symbol ? 'No EOD data is available for the selected filters.' : 'Select a symbol to view EOD data.' }}
+      </div>
     </ng-template>
   </div>
 
