@@ -619,9 +619,9 @@ table.chain td.itm {
   font-size: 12px;
 }
 
-.chart-grid {
+.chart-stack {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 
@@ -632,7 +632,7 @@ table.chain td.itm {
 .chart-panel svg {
   display: block;
   width: 100%;
-  height: 200px;
+  height: auto;
   border-bottom: 1px solid var(--border);
   background: var(--panel);
 }
@@ -685,6 +685,34 @@ table.chain td.itm {
   stroke-width: 1;
 
   opacity: 0.65;
+}
+
+.chart-axis {
+  pointer-events: none;
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.chart-axis-label {
+  pointer-events: none;
+  fill: var(--muted);
+  font-size: 12px;
+  text-anchor: middle;
+}
+
+.chart-atm-line {
+  pointer-events: none;
+  stroke: var(--accent-dark);
+  stroke-width: 3;
+  stroke-dasharray: 8 5;
+}
+
+.chart-atm-label {
+  pointer-events: none;
+  fill: var(--accent-dark);
+  font-size: 15px;
+  font-weight: 700;
+  text-anchor: middle;
 }
 
 .chart-hit-area:focus-visible {
@@ -821,10 +849,6 @@ table.chain td.itm {
 
   .calc {
     width: 100%;
-  }
-
-  .chart-grid {
-    grid-template-columns: 1fr;
   }
 }
 

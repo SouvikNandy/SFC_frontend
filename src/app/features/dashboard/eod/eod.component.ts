@@ -95,12 +95,12 @@ export class EodComponent implements OnInit, OnDestroy {
     { key: 'high', label: 'High', type: 'number', align: 'right' },
     { key: 'low', label: 'Low', type: 'number', align: 'right' },
     {
-      key: 'ltp',
-      label: 'LTP',
+      key: 'close',
+      label: 'Close',
       type: 'change',
       align: 'right',
-      value: (row) => row.ltp - row.open,
-      formatter: (_value, row) => this.formatPrice(row.ltp),
+      value: (row) => row.close - row.open,
+      formatter: (_value, row) => this.formatPrice(row.close),
     },
     {
       key: 'volume',
@@ -300,8 +300,7 @@ export class EodComponent implements OnInit, OnDestroy {
     return {
       ...row,
       date: row.date ?? source.trade_date ?? '',
-      ltp: row.ltp ?? source.close_price ?? row.close ?? 0,
-      close: row.close ?? source.close_price ?? row.ltp ?? 0,
+      close: row.close ?? source.close_price ?? 0,
       open: row.open ?? 0,
       high: row.high ?? 0,
       low: row.low ?? 0,
@@ -343,7 +342,7 @@ export class EodComponent implements OnInit, OnDestroy {
 
   chartTooltipRows(): ChartTooltipRow[] {
     const row = this.chartTooltipRow;
-    return row ? [{ label: 'LTP', value: this.formatPrice(row.ltp), tone: 'neutral' }] : [];
+    return row ? [{ label: 'Close', value: this.formatPrice(row.close), tone: 'neutral' }] : [];
   }
   get chartTooltipRow(): EodDataRow | undefined {
     if (!this.chart || !this.chartTooltip) return undefined;
@@ -385,11 +384,7 @@ export class EodComponent implements OnInit, OnDestroy {
   }
 
   get displayColumns(): DataTableColumn<EodDataRow>[] {
-    return this.eodColumns.map((column) =>
-      column.key === 'ltp'
-        ? { ...column, label: this.instrument === 'FUT' ? 'Close' : 'LTP' }
-        : column,
-    );
+    return this.eodColumns;
   }
 
   private formatPrice(value: number): string {
@@ -733,15 +728,36 @@ export class EodComponent implements OnInit, OnDestroy {
     return true;
   }
 
+  /**
+   * SYMBOL_EXPIRY_STRIKE_OPTIONTYPE.csv from the applied selection (e.g. NIFTY_2026-10-13_22600_CE.csv).
+   * Futures have no strike/option type, so only the parts that exist are used (SYMBOL_FUT.csv);
+   * missing parts are omitted, never invented.
+   */
+  private csvFilename(): string {
+    const clean = (part: string) => part.trim().replace(/[\\/:*?"<>|\s]+/g, '-');
+    const isOption = this.instrument === 'CE' || this.instrument === 'PE';
+    const parts = isOption
+      ? [
+          this.symbol,
+          this.expiry?.slice(0, 10),
+          this.strike != null ? String(Math.round(this.strike)) : undefined,
+          this.instrument,
+        ]
+      : [this.symbol, this.instrument];
+    const name = parts
+      .filter((part): part is string => !!part)
+      .map(clean)
+      .join('_');
+    return `${name}.csv`;
+  }
+
   downloadCsv() {
     if (!this.rows || this.rows.length === 0) {
       this.toast.error('There is no EOD data available to download.');
       return;
     }
     try {
-      const isOption = this.instrument === 'CE' || this.instrument === 'PE';
-      const closeLabel = isOption ? 'LTP' : 'Close';
-      const header = `Date,Open,High,Low,${closeLabel},Volume,OI\n`;
+      const header = 'Date,Open,High,Low,Close,Volume,OI\n';
       const body = this.rows
         .map((r) =>
           [
@@ -749,16 +765,13 @@ export class EodComponent implements OnInit, OnDestroy {
             r.open.toFixed(2),
             r.high.toFixed(2),
             r.low.toFixed(2),
-            r.ltp.toFixed(2),
+            r.close.toFixed(2),
             Math.round(r.volume),
             Math.round(r.oi),
           ].join(','),
         )
         .join('\n');
-      const label = isOption
-        ? `${this.symbol}_${Math.round(this.strike || 0)}${this.instrument}_${this.range}`
-        : `${this.symbol}_FUT_${this.range}`;
-      const filename = `${label}_EOD.csv`;
+      const filename = this.csvFilename();
       const blob = new Blob([header + body], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');

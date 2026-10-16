@@ -368,19 +368,24 @@ interface ChartTooltipState {
         </div>
       }
     </div>
-    <div class="chart-grid">
+    <div class="chart-stack">
+      @for (chart of oiCharts; track chart.kind) {
       <div class="panel chart-panel">
-        <p class="panel-title">Open Interest by Strike</p>
+        <p class="panel-title">{{ chart.title }}</p>
         <div class="chart-container">
-          <svg viewBox="0 0 560 200" role="img" aria-label="Open interest by strike">
-            @for (bar of chartBarCoordinates(); track bar.index) {
+          <svg
+            [attr.viewBox]="'0 0 ' + chartWidth + ' ' + chartHeight"
+            role="img"
+            [attr.aria-label]="chart.title"
+          >
+            @for (bar of chartBarCoordinates(chart.kind); track bar.index) {
               <rect
                 [attr.x]="bar.x - bar.width - 1"
                 [attr.y]="bar.callY"
                 [attr.width]="bar.width"
                 [attr.height]="bar.callHeight"
                 class="oi-bar-chart call-bar"
-                [class.hovered]="isChartPointHovered('oi', bar.index)"
+                [class.hovered]="isChartPointHovered(chart.kind, bar.index)"
               ></rect>
               <rect
                 [attr.x]="bar.x + 1"
@@ -388,15 +393,39 @@ interface ChartTooltipState {
                 [attr.width]="bar.width"
                 [attr.height]="bar.putHeight"
                 class="oi-bar-chart put-bar"
-                [class.hovered]="isChartPointHovered('oi', bar.index)"
+                [class.hovered]="isChartPointHovered(chart.kind, bar.index)"
               ></rect>
             }
-            @if (chartTooltip?.kind === 'oi') {
+            <line
+              [attr.x1]="chartPlotLeft"
+              [attr.y1]="chartPlotBottom"
+              [attr.x2]="chartPlotRight"
+              [attr.y2]="chartPlotBottom"
+              class="chart-axis"
+            ></line>
+            @for (label of chartStrikeLabels(chart.kind); track label.x) {
+              <text [attr.x]="label.x" [attr.y]="chartHeight - 10" class="chart-axis-label">
+                {{ label.text }}
+              </text>
+            }
+            @if (atmChartX(chart.kind); as atmX) {
+              <line
+                [attr.x1]="atmX"
+                [attr.y1]="chartPlotTop"
+                [attr.x2]="atmX"
+                [attr.y2]="chartPlotBottom"
+                class="chart-atm-line"
+              ></line>
+              <text [attr.x]="atmX" [attr.y]="chartPlotTop - 4" class="chart-atm-label">
+                ATM {{ integer(atmStrike) }}
+              </text>
+            }
+            @if (chartTooltip?.kind === chart.kind) {
               <line
                 [attr.x1]="chartTooltip!.x"
-                y1="10"
+                [attr.y1]="chartPlotTop"
                 [attr.x2]="chartTooltip!.x"
-                y2="190"
+                [attr.y2]="chartPlotBottom"
                 class="chart-guide"
               ></line>
             }
@@ -404,81 +433,27 @@ interface ChartTooltipState {
               class="chart-hit-area"
               x="0"
               y="0"
-              width="560"
-              height="200"
+              [attr.width]="chartWidth"
+              [attr.height]="chartHeight"
               tabindex="0"
-              aria-label="Hover to inspect open interest by strike"
-              (mousemove)="onChartPointer('oi', $event)"
+              [attr.aria-label]="'Hover to inspect ' + chart.title.toLowerCase()"
+              (mousemove)="onChartPointer(chart.kind, $event)"
               (mouseleave)="hideChartTooltip()"
-              (touchstart)="onChartPointer('oi', $event)"
-              (focus)="onChartFocus('oi')"
+              (touchstart)="onChartPointer(chart.kind, $event)"
+              (focus)="onChartFocus(chart.kind)"
             ></rect>
           </svg>
-          @if (chartTooltip?.kind === 'oi') {
+          @if (chartTooltip?.kind === chart.kind) {
             <app-chart-tooltip
               [title]="'Strike ' + integer(chartTooltip!.strike)"
-              [rows]="chartTooltipRows('oi')"
+              [rows]="chartTooltipRows(chart.kind)"
               [left]="chartTooltip!.left"
               [top]="chartTooltip!.top"
             ></app-chart-tooltip>
           }
         </div>
       </div>
-      <div class="panel chart-panel">
-        <p class="panel-title">Open Interest Change by Strike</p>
-        <div class="chart-container">
-          <svg viewBox="0 0 560 200" role="img" aria-label="Open interest change by strike">
-            @for (bar of chartBarCoordinates('oiChange'); track bar.index) {
-              <rect
-                [attr.x]="bar.x - bar.width - 1"
-                [attr.y]="bar.callY"
-                [attr.width]="bar.width"
-                [attr.height]="bar.callHeight"
-                class="oi-bar-chart call-bar"
-                [class.hovered]="isChartPointHovered('oiChange', bar.index)"
-              ></rect>
-              <rect
-                [attr.x]="bar.x + 1"
-                [attr.y]="bar.putY"
-                [attr.width]="bar.width"
-                [attr.height]="bar.putHeight"
-                class="oi-bar-chart put-bar"
-                [class.hovered]="isChartPointHovered('oiChange', bar.index)"
-              ></rect>
-            }
-            @if (chartTooltip?.kind === 'oiChange') {
-              <line
-                [attr.x1]="chartTooltip!.x"
-                y1="15"
-                [attr.x2]="chartTooltip!.x"
-                y2="185"
-                class="chart-guide"
-              ></line>
-            }
-            <rect
-              class="chart-hit-area"
-              x="0"
-              y="0"
-              width="560"
-              height="200"
-              tabindex="0"
-              aria-label="Hover to inspect open interest change by strike"
-              (mousemove)="onChartPointer('oiChange', $event)"
-              (mouseleave)="hideChartTooltip()"
-              (touchstart)="onChartPointer('oiChange', $event)"
-              (focus)="onChartFocus('oiChange')"
-            ></rect>
-          </svg>
-          @if (chartTooltip?.kind === 'oiChange') {
-            <app-chart-tooltip
-              [title]="'Strike ' + integer(chartTooltip!.strike)"
-              [rows]="chartTooltipRows('oiChange')"
-              [left]="chartTooltip!.left"
-              [top]="chartTooltip!.top"
-            ></app-chart-tooltip>
-          }
-        </div>
-      </div>
+      }
     </div>
     }
   </section>`,
@@ -551,6 +526,17 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
   error = '';
   columnsMenuOpen = false;
   chartTooltip: ChartTooltipState | null = null;
+  /** SVG user-space geometry shared by both OI charts (the SVG scales to its container width). */
+  readonly chartWidth = 1000;
+  readonly chartHeight = 400;
+  readonly chartPlotLeft = 20;
+  readonly chartPlotRight = 980;
+  readonly chartPlotTop = 28;
+  readonly chartPlotBottom = 360;
+  readonly oiCharts: ReadonlyArray<{ kind: 'oi' | 'oiChange'; title: string }> = [
+    { kind: 'oi', title: 'Open Interest by Strike' },
+    { kind: 'oiChange', title: 'Open Interest Change by Strike' },
+  ];
   private symbolsRequested = false;
   private chainRequest: Subscription | null = null;
   ngOnInit(): void {
@@ -733,6 +719,35 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
   chartPointCoordinates(kind: ChartKind, side: Side): ChartPointCoordinate[] {
     return this.chartCoordinates(this.chartSeries(kind, side));
   }
+  /** X of the bar group at `index`; shared by the bars, strike labels, hover guide and ATM line. */
+  private chartBarX(index: number, count: number): number {
+    return (
+      this.chartPlotLeft +
+      (index / Math.max(1, count - 1)) * (this.chartPlotRight - this.chartPlotLeft)
+    );
+  }
+  /** X of the ATM strike on the bar scale; interpolated between neighbouring strikes, null if outside the data. */
+  atmChartX(kind: ChartKind): number | null {
+    const atm = this.atmStrike;
+    const strikes = this.chartSeries(kind, 'call').map((point) => point.x);
+    if (atm == null || !strikes.length) return null;
+    const exact = strikes.indexOf(atm);
+    if (exact >= 0) return this.chartBarX(exact, strikes.length);
+    for (let i = 0; i < strikes.length - 1; i++) {
+      const [a, b] = [strikes[i], strikes[i + 1]];
+      if ((atm > a && atm < b) || (atm < a && atm > b)) {
+        return this.chartBarX(i + (atm - a) / (b - a), strikes.length);
+      }
+    }
+    return null;
+  }
+  chartStrikeLabels(kind: ChartKind): Array<{ x: number; text: string }> {
+    const strikes = this.chartSeries(kind, 'call').map((point) => point.x);
+    const step = Math.max(1, Math.ceil(strikes.length / 14));
+    return strikes
+      .map((strike, index) => ({ x: this.chartBarX(index, strikes.length), text: String(strike), index }))
+      .filter((label) => label.index % step === 0);
+  }
   chartBarCoordinates(kind: 'oi' | 'oiChange' = 'oi'): ChartBarCoordinate[] {
     const call = this.chartSeries(kind, 'call');
     const put = this.chartSeries(kind, 'put');
@@ -745,12 +760,16 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
           ...put.map((point) => Math.abs(point.y)),
         )
       : Math.max(1, ...call.map((point) => point.y), ...put.map((point) => point.y));
-    const baseline = isChange ? 100 : 190;
-    const extent = isChange ? 85 : 170;
-    const width = Math.max(2, Math.min(9, 520 / call.length));
+    const plotHeight = this.chartPlotBottom - this.chartPlotTop;
+    const baseline = isChange ? this.chartPlotTop + plotHeight / 2 : this.chartPlotBottom;
+    const extent = isChange ? plotHeight / 2 - 4 : plotHeight;
+    const width = Math.max(
+      2,
+      Math.min(14, (this.chartPlotRight - this.chartPlotLeft) / call.length / 2.4),
+    );
     return call.map((point, index) => ({
       index,
-      x: 10 + (index / Math.max(1, call.length - 1)) * 540,
+      x: this.chartBarX(index, call.length),
       callY: this.barY(point.y, max, baseline, extent),
       putY: this.barY(put[index]?.y ?? 0, max, baseline, extent),
       callHeight: (Math.abs(point.y) / max) * extent,
@@ -789,8 +808,8 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
           : nearest,
       0,
     );
-    const relativeX = this.chartCoordinates(points)[index]?.x ?? 10;
-    const relativeY = Math.max(10, Math.min(190, clientY - bounds.top));
+    const relativeX = this.chartBarX(index, points.length);
+    const relativeY = Math.max(10, Math.min(bounds.height - 10, clientY - bounds.top));
     const container = target.parentElement?.parentElement?.getBoundingClientRect();
     if (!container) return;
     const tooltipWidth = 174;
@@ -820,7 +839,7 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
     this.chartTooltip = {
       kind,
       index: 0,
-      x: this.chartCoordinates(points)[0].x,
+      x: this.chartBarX(0, points.length),
       y: this.chartCoordinates(points)[0].y,
       left: 18,
       top: 18,

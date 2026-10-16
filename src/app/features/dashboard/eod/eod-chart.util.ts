@@ -26,15 +26,15 @@ export function buildEodChart(rows: EodDataRow[], width = DEFAULT_W, height = DE
     const plotW = chartW - marginLeft - marginRight;
     const plotH = chartH - marginTop - marginBottom;
 
-    const points = rows.map(r => r.ltp ?? r.close ?? 0);
+    const points = rows.map(r => r.close ?? 0);
     const min = points.length ? Math.min(...points) : 0;
     const max = points.length ? Math.max(...points) : min || 1;
 
     const xOf = (i: number) => marginLeft + (rows.length > 1 ? (i / (rows.length - 1)) * plotW : 0);
     const yOf = (price: number) => marginTop + (1 - (price - min) / ((max - min) || 1)) * plotH;
 
-    const pathPts = rows.map((r, i) => `${i === 0 ? 'M' : 'L'}${xOf(i).toFixed(1)},${yOf(r.ltp ?? r.close ?? 0).toFixed(1)}`).join(' ');
-    const chartPoints = rows.map((r, index) => ({ x: xOf(index), y: yOf(r.ltp ?? r.close ?? 0), index }));
+    const pathPts = rows.map((r, i) => `${i === 0 ? 'M' : 'L'}${xOf(i).toFixed(1)},${yOf(r.close ?? 0).toFixed(1)}`).join(' ');
+    const chartPoints = rows.map((r, index) => ({ x: xOf(index), y: yOf(r.close ?? 0), index }));
 
     const yTicks = [0, 1, 2, 3, 4].map(k => {
         const price = min + (max - min) * (k / 4);

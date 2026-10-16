@@ -47,7 +47,8 @@ export interface EodDataRow {
     high: number;
     low: number;
     close: number;
-    ltp: number;
+    /** Not used for display; the EOD screen shows `close`. */
+    ltp?: number;
     volume: number;
     oi: number;
 }

@@ -17,7 +17,13 @@
 
 - Public dashboard + authenticated Live Data section across Options Chain, Greeks, Probability, HV, IV and Payoff; login returnUrl; logout stays on dashboard.
 
+- Client feedback C1/C2/C6/C7 done (EOD Close + CSV filename, stacked OI charts with ATM line, Payoff inactive tab tint); build passes, UI checked in headless Chrome with mocked API.
+
 **Not started / backlog**
+
+- C3 Home landing page: pending client decision (keep vs remove); if kept, remove the INDEPENDENT MARKETS CONSULTING tag and the stats strip.
+- Backend: confirm `/fo/eod` returns `close` for CE/PE rows (no LTP fallback is used).
+- Client: confirm futures CSV filename `SYMBOL_FUT.csv`.
 
 - Live market feed (REST/WebSocket) — no backend contract yet; plug into `LiveDataService`.
 - Subscription layer (out of scope) — extend `LiveDataAccess` in `LiveDataAccessService`.

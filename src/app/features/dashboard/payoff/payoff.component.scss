@@ -250,6 +250,12 @@ path.ladder-connector { fill: none; }
   &.active em { color: rgba(255, 255, 255, 0.75); }
 }
 
+.view-tabs button:not(.active) {
+  background: var(--panel-alt);
+
+  &:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-tint-14); }
+}
+
 .mode-note,
 .note {
   padding: 12px 14px;

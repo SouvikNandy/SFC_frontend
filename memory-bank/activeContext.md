@@ -2,7 +2,7 @@
 
 **Current focus** (one short paragraph):
 
-Historical Volatility, Greeks, Implied Volatility, Probability, and the authentication lifecycle are connected to their production flows while preserving the approved UI and architecture.
+Client feedback round (QuantSFC_Change_Instructions.pdf): C1 EOD Close, C2 EOD CSV filename, C6 Options Chain OI charts and C7 Payoff Table-tab tint are implemented and browser-verified with mocked API. C3 (Home landing page) is pending a client decision; C4 and C5 are out of scope.
 
 **In progress**:
 
@@ -17,6 +17,8 @@ Historical Volatility, Greeks, Implied Volatility, Probability, and the authenti
 - [x] Complete authentication guards, registration context, login/session handling, logout cleanup, refresh coordination, password APIs, and temporary OTP flow.
 
 **Decisions (recent)**:
+
+- Client feedback (2026-10-16): EOD uses backend `close` only (no LTP fallback; `ltp` optional/unused). CSV filename is `SYMBOL_EXPIRY_STRIKE_OPTIONTYPE.csv` (futures: `SYMBOL_FUT.csv`, missing parts omitted). Options Chain OI charts are stacked, 1000x400 viewBox, with an ATM line placed via the shared bar-x mapping (interpolated if ATM is not a listed strike). Payoff inactive view tab uses `--panel-alt`. C3 landing page untouched (pending); C4/C5 not implemented.
 
 - Public `/data` and dashboard `/dashboard/eod` both lazy-load the same `EodComponent`. It searches all `/fo/dd_list` symbols (shared autocomplete pattern, default NIFTY); `dd_symbol_details.expiry_date` is now an array (older responses: string) and is normalised to sorted YYYY-MM-DD options, first expiry selected.
 - DD Greeks metadata is loaded on symbol changes; EOD reloads on instrument, strike, expiry, and date-range changes.
