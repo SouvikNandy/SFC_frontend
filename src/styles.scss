@@ -5,7 +5,7 @@
 @use 'scss/layout/layout';
 @use 'scss/themes/theme';
 @use 'scss/utilities/helpers';
-@import './styles/_dashboard-theme.scss';
+@use './styles/dashboard-theme';
 @import './styles.css';
 
 .autocomplete-field {

@@ -1,0 +1,202 @@
+<section class="mleg-page">
+    <div class="titlebar">
+        <h2 class="page-title">Multi-Leg EOD Data</h2>
+        <span class="badge">EOD · multi-leg</span>
+        <span class="source-note">{{ tradeDate() ? 'EOD · last session ' + tradeDate() : 'BhavCopy EOD closes' }}</span>
+    </div>
+    <p class="sub">Pick several option legs and see each leg's own end-of-day history: every leg as its own line on one
+        chart, plus OHLC, volume and OI.</p>
+
+    <div class="scope-note" role="note">
+        <span aria-hidden="true">ⓘ</span>
+        <span><b>Reference data only.</b> Prices are end-of-day closes from the data feed, and nothing on this screen
+            places or tracks an order.</span>
+    </div>
+
+    <!-- ===== symbol, date range, export ===== -->
+    <div class="panel">
+        <div class="topbar">
+            <div class="field symbox">
+                <label for="ml-symbol">Symbol</label>
+                <input id="ml-symbol" type="text" autocomplete="off" spellcheck="false" role="combobox"
+                    placeholder="Search symbol" aria-controls="ml-symbol-list" [attr.aria-expanded]="suggestionsOpen()"
+                    [value]="symbolQuery()" (input)="onSymbolInput($any($event.target).value)" (focus)="openSuggestions()"
+                    (blur)="onSymbolBlur()" (keydown)="onSymbolKeydown($event)">
+                @if (symbolQuery()) {
+                <button class="symclear" type="button" aria-label="Clear symbol" (mousedown)="$event.preventDefault()"
+                    (click)="clearSymbol()">×</button>
+                }
+                @if (suggestionsOpen()) {
+                <div id="ml-symbol-list" class="combo-list" role="listbox">
+                    @for (item of filteredSymbols(); track item; let index = $index) {
+                    <button type="button" role="option" [class.highlighted]="index === highlightedIndex()"
+                        [attr.aria-selected]="item === symbol()" (mousedown)="$event.preventDefault()"
+                        (click)="selectSymbol(item)">{{ item }}</button>
+                    } @empty { <div class="combo-empty">No symbol matches</div> }
+                </div>
+                }
+            </div>
+
+            <div class="field">
+                <span class="label">Date range</span>
+                <div class="seg" role="group" aria-label="Date range">
+                    @for (r of ranges; track r) {
+                    <button type="button" [class.active]="range() === r" [attr.aria-pressed]="range() === r"
+                        (click)="setRange(r)">{{ r }}</button>
+                    }
+                </div>
+            </div>
+
+            @if (range() === 'Custom') {
+            <div class="customdates">
+                <div class="field">
+                    <label for="ml-from">From</label>
+                    <input id="ml-from" type="date" [max]="today" [value]="customFrom()" (change)="onCustomFrom($any($event.target).value)">
+                </div>
+                <div class="field">
+                    <label for="ml-till">To</label>
+                    <input id="ml-till" type="date" [max]="today" [value]="customTill()" (change)="onCustomTill($any($event.target).value)">
+                </div>
+            </div>
+            }
+
+            <div class="grow"></div>
+            <button type="button" class="outline" [disabled]="!canDownload()" (click)="downloadCsv()">Download CSV</button>
+        </div>
+        @if (symbolsLoading() || metaLoading()) {
+        <p class="hint-line" role="status">{{ symbolsLoading() ? 'Loading symbol list…' : 'Loading strikes and expiries…' }}</p>
+        }
+        @if (rangeError()) { <p class="input-error" role="alert">{{ rangeError() }}</p> }
+        @if (metaError()) { <p class="input-error" role="alert">{{ metaError() }}</p> }
+    </div>
+
+    <!-- ===== option legs ===== -->
+    <div class="panel">
+        <div class="legs-head">
+            <p class="sect-label">Option legs</p>
+            <button type="button" class="ghost" [disabled]="legs().length >= maxLegs || !expiries().length" (click)="addLeg()">+ Add leg</button>
+        </div>
+        @if (!legs().length) {
+        <div class="empty">{{ metaLoading() ? 'Loading…' : 'No legs yet. Add a leg.' }}</div>
+        } @else {
+        @for (leg of legs(); track leg.id; let index = $index) {
+        <div class="legrow">
+            <div class="seg" role="group" [attr.aria-label]="'Leg ' + (index + 1) + ' type'">
+                <button type="button" class="tone-pos" [class.active]="leg.optionType === 'CE'" [attr.aria-pressed]="leg.optionType === 'CE'"
+                    (click)="setLegType(leg.id, 'CE')">CE</button>
+                <button type="button" class="tone-neg" [class.active]="leg.optionType === 'PE'" [attr.aria-pressed]="leg.optionType === 'PE'"
+                    (click)="setLegType(leg.id, 'PE')">PE</button>
+            </div>
+            <div class="inline-field">
+                <label [for]="'ml-strike-' + leg.id">Strike</label>
+                <select [id]="'ml-strike-' + leg.id" (change)="setLegStrike(leg.id, $any($event.target).value)">
+                    @for (s of strikes(); track s) {
+                    <option [value]="s" [selected]="s === leg.strike">{{ s }}{{ s === atmStrike() ? ' (ATM)' : '' }}</option>
+                    }
+                </select>
+            </div>
+            <div class="inline-field">
+                <label [for]="'ml-expiry-' + leg.id">Expiry</label>
+                <select [id]="'ml-expiry-' + leg.id" (change)="setLegExpiry(leg.id, $any($event.target).value)">
+                    @for (e of expiries(); track e) {
+                    <option [value]="e" [selected]="e === leg.expiry">{{ longDate(e) }}</option>
+                    }
+                </select>
+            </div>
+            <div class="leg-tools">
+                <span [class]="'leg-dot ' + legColorClass(index)" aria-hidden="true"></span>
+                <button type="button" class="legx" [attr.aria-label]="'Remove leg ' + (index + 1)" (click)="removeLeg(leg.id)">×</button>
+            </div>
+        </div>
+        }
+        }
+        @if (strikeStep() && atmStrike() !== null) {
+        <p class="legnote">Strikes in steps of {{ strikeStep() }} around ATM {{ atmStrike() }}.</p>
+        }
+    </div>
+
+    <!-- ===== chart ===== -->
+    <div class="panel">
+        <div class="charthead">
+            <h3>{{ symbol() }} options · EOD close by leg ({{ range() }})</h3>
+            <span class="unit">Price (₹)</span>
+        </div>
+        @if (!legs().length) {
+        <div class="empty">Add at least one leg to see its EOD history.</div>
+        } @else if (loading()) {
+        <div class="empty" role="status">Loading EOD history…</div>
+        } @else if (failedLegs().length && !chart()) {
+        <div class="empty" role="alert">EOD data could not be loaded for {{ failedLegs().length === 1 ? 'a leg' : 'some legs' }}. Change a selection to retry.</div>
+        } @else if (!chart()) {
+        <div class="empty">No sessions in this range (options list a few months before expiry and stop at expiry).</div>
+        } @else {
+        @if (chart(); as c) {
+        <div class="legend">
+            @for (s of series(); track s.leg.id; let index = $index) {
+            <span><i [class]="legColorClass(index)"></i>{{ s.label }}{{ s.status === 'error' ? ' (failed)' : s.rows.length ? '' : ' (no data)' }}</span>
+            }
+        </div>
+        <div class="chartbox">
+            <svg [attr.viewBox]="c.viewBox" role="img" [attr.aria-label]="'EOD close by leg for ' + symbol()">
+                @for (t of c.yTicks; track t.y) {
+                <line class="grid" [attr.x1]="c.padLeft" [attr.x2]="c.padLeft + c.plotWidth" [attr.y1]="t.y" [attr.y2]="t.y"></line>
+                <text class="axis" text-anchor="end" [attr.x]="c.padLeft - 8" [attr.y]="t.y + 4">{{ t.label }}</text>
+                }
+                @for (t of c.xTicks; track t.x) {
+                <text class="axis" text-anchor="middle" [attr.x]="t.x" [attr.y]="c.plotBottom + 22">{{ t.label }}</text>
+                }
+                @for (line of c.lines; track line.index) {
+                <path [class]="'line ' + legColorClass(line.index)" [attr.d]="line.path"></path>
+                @if (line.dots.length === 1) {
+                <circle [class]="'dot ' + legColorClass(line.index)" [attr.cx]="line.dots[0].x" [attr.cy]="line.dots[0].y" r="3.5"></circle>
+                }
+                }
+                @if (hover(); as h) {
+                <line class="hover-line" [attr.x1]="c.xs[h.index]" [attr.x2]="c.xs[h.index]" [attr.y1]="c.plotTop" [attr.y2]="c.plotBottom"></line>
+                }
+                <rect class="hit" [attr.x]="c.padLeft" [attr.y]="c.plotTop" [attr.width]="c.plotWidth"
+                    [attr.height]="c.plotBottom - c.plotTop" (mousemove)="onChartPointer($event)"
+                    (touchmove)="onChartPointer($event)" (mouseleave)="hideChartTooltip()" (touchend)="hideChartTooltip()"></rect>
+            </svg>
+            @if (hover(); as h) {
+            <app-chart-tooltip [title]="tooltipTitle()" [rows]="tooltipRows()" [left]="h.left" [top]="h.top"></app-chart-tooltip>
+            }
+        </div>
+        }
+        }
+        @if (missingLegs().length) {
+        <p class="note-box" role="status">No EOD bars were returned for {{ missingLegs().length === 1 ? 'this leg' : 'these legs' }} in the selected range:
+            {{ missingLegsLabel() }}. {{ missingLegs().length === 1 ? 'It was' : 'They were' }} not listed, already expired or has no data for these dates.</p>
+        }
+    </div>
+
+    <!-- ===== table ===== -->
+    <div class="panel">
+        <div class="legchips" role="group" aria-label="Table view">
+            <button type="button" [class.active]="tableLeg() === 'all'" [attr.aria-pressed]="tableLeg() === 'all'"
+                (click)="selectTableLeg('all')">All legs combined</button>
+            @for (s of series(); track s.leg.id) {
+            <button type="button" [class.active]="tableLeg() === s.leg.id" [attr.aria-pressed]="tableLeg() === s.leg.id"
+                (click)="selectTableLeg(s.leg.id)">{{ s.label }}</button>
+            }
+        </div>
+        <div class="tablebar">
+            <div class="info" role="status">{{ tableInfo() }}</div>
+            <label class="rows-label">Rows
+                <select (change)="onRowsPerPage($any($event.target).value)">
+                    @for (size of pageSizes; track size) { <option [value]="size" [selected]="size === rowsPerPage()">{{ size }}</option> }
+                </select>
+            </label>
+            <span class="page-label">Page {{ pageInfo().page + 1 }}</span>
+            <button type="button" class="ghost" [disabled]="pageInfo().page === 0" (click)="previousPage()">Previous</button>
+            <button type="button" class="ghost" [disabled]="pageInfo().page >= pageInfo().pages - 1" (click)="nextPage()">Next</button>
+        </div>
+        @if (activeLegIndex() >= 0) {
+        <app-data-table [columns]="singleColumns" [data]="singlePage()" [loading]="loading()" emptyMessage="No sessions to show."></app-data-table>
+        } @else {
+        <app-data-table [columns]="combinedColumns()" [data]="combinedPage()" [loading]="loading()" emptyMessage="No sessions to show."></app-data-table>
+        }
+        <p class="note">The chart plots each leg's own EOD close; the table shows all legs' closes side by side, or one leg's
+            full OHLC, volume and open interest. A dash means the leg had no bar that day (not listed or already expired).</p>
+    </div>
+</section>

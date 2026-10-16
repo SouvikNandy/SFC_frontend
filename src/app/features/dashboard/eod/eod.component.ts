@@ -27,17 +27,6 @@ import { DefaultStock } from '../../../shared/services/constantFile';
 import { EMPTY, Subject, of } from 'rxjs';
 import { catchError, finalize, switchMap, takeUntil, tap } from 'rxjs/operators';
 
-interface CalendarDay {
-  value: string;
-  label: number;
-  muted: boolean;
-}
-
-interface CalendarMonthOption {
-  value: number;
-  label: string;
-}
-
 @Component({
   selector: 'app-eod',
   standalone: true,
@@ -69,10 +58,6 @@ export class EodComponent implements OnInit, OnDestroy {
   // custom date range values (YYYY-MM-DD)
   customFrom = '';
   customTill = '';
-  draftCustomFrom = '';
-  draftCustomTill = '';
-  calendarMonth = '';
-  dateRangeOpen = false;
   todayStr = '';
 
   loading = false;
@@ -136,7 +121,6 @@ export class EodComponent implements OnInit, OnDestroy {
     // set today string (local date) for max attribute
     const t = new Date();
     this.todayStr = new Date(t.getFullYear(), t.getMonth(), t.getDate()).toISOString().slice(0, 10);
-    this.calendarMonth = this.todayStr.slice(0, 7);
     // default custom range to last week
     const till = this.todayStr;
     const from = new Date();
@@ -513,8 +497,7 @@ export class EodComponent implements OnInit, OnDestroy {
         const d = new Date();
         this.customTill = d.toISOString().slice(0, 10);
       }
-      if (!this.validateCustomDates()) return;
-      // The custom range is applied by the Done action.
+      this.applyCustomDates();
     } else {
       this.resetPageAndRefresh();
     }
@@ -522,141 +505,17 @@ export class EodComponent implements OnInit, OnDestroy {
 
   onCustomFromChange(value: Event | string) {
     this.onCustomFrom(typeof value === 'string' ? value : (value.target as HTMLInputElement).value);
+    this.applyCustomDates();
   }
 
   onCustomTillChange(value: Event | string) {
     this.onCustomTill(typeof value === 'string' ? value : (value.target as HTMLInputElement).value);
+    this.applyCustomDates();
   }
 
-  get customRangeLabel(): string {
-    if (!this.customFrom || !this.customTill) return 'Select date range';
-    return `${this.formatDateLabel(this.customFrom)} → ${this.formatDateLabel(this.customTill)}`;
-  }
-
-  get calendarDays(): CalendarDay[] {
-    if (!this.calendarMonth) return [];
-    const [year, month] = this.calendarMonth.split('-').map(Number);
-    const first = new Date(Date.UTC(year, month - 1, 1));
-    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-    const days: CalendarDay[] = Array.from({ length: first.getUTCDay() }, () => ({
-      value: '',
-      label: 0,
-      muted: true,
-    }));
-    for (let day = 1; day <= daysInMonth; day++) {
-      const value = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      days.push({ value, label: day, muted: false });
-    }
-    return days;
-  }
-
-  get calendarMonthLabel(): string {
-    if (!this.calendarMonth) return '';
-    const [year, month] = this.calendarMonth.split('-').map(Number);
-    return new Intl.DateTimeFormat('en-IN', {
-      month: 'long',
-      year: 'numeric',
-      timeZone: 'UTC',
-    }).format(new Date(Date.UTC(year, month - 1, 1)));
-  }
-
-  readonly calendarMonths: CalendarMonthOption[] = Array.from({ length: 12 }, (_, index) => ({
-    value: index + 1,
-    label: new Intl.DateTimeFormat('en-IN', { month: 'long', timeZone: 'UTC' }).format(
-      new Date(Date.UTC(2020, index, 1)),
-    ),
-  }));
-
-  get calendarYear(): number {
-    const year = Number(this.calendarMonth.slice(0, 4));
-    return Number.isFinite(year) && year > 1900 ? year : new Date().getFullYear();
-  }
-  get calendarMonthNumber(): number {
-    const month = Number(this.calendarMonth.slice(5, 7));
-    return Number.isFinite(month) && month >= 1 && month <= 12 ? month : new Date().getMonth() + 1;
-  }
-  get calendarYears(): number[] {
-    const parsedYear = Number(this.todayStr.slice(0, 4));
-    const currentYear =
-      Number.isFinite(parsedYear) && parsedYear > 1900 ? parsedYear : new Date().getFullYear();
-    return Array.from({ length: 11 }, (_, index) => currentYear - 10 + index);
-  }
-
-  toggleDateRange(): void {
-    if (!this.dateRangeOpen) {
-      this.draftCustomFrom = this.customFrom;
-      this.draftCustomTill = this.customTill;
-      const preferredMonth = (this.draftCustomFrom || this.customTill || this.todayStr).slice(0, 7);
-      this.calendarMonth = /^\d{4}-\d{2}$/.test(preferredMonth)
-        ? preferredMonth
-        : this.todayStr.slice(0, 7);
-    }
-    this.dateRangeOpen = !this.dateRangeOpen;
-  }
-
-  closeDateRange(): void {
-    this.dateRangeOpen = false;
-  }
-
-  applyCustomDateRange(): void {
-    this.customFrom = this.draftCustomFrom;
-    this.customTill = this.draftCustomTill;
+  /** The custom From/To dates apply as soon as they form a valid range. */
+  private applyCustomDates(): void {
     if (this.validateCustomDates()) this.resetPageAndRefresh();
-    this.closeDateRange();
-  }
-
-  cancelDateRange(): void {
-    this.draftCustomFrom = this.customFrom;
-    this.draftCustomTill = this.customTill;
-    this.closeDateRange();
-  }
-
-  shiftCalendarMonth(offset: number): void {
-    const [year, month] = this.calendarMonth.split('-').map(Number);
-    const next = new Date(Date.UTC(year, month - 1 + offset, 1));
-    this.calendarMonth = `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}`;
-  }
-
-  setCalendarMonthPart(part: 'month' | 'year', event: Event): void {
-    const value = Number((event.target as HTMLSelectElement).value);
-    const month = part === 'month' ? value : this.calendarMonthNumber;
-    const year = part === 'year' ? value : this.calendarYear;
-    this.calendarMonth = `${year}-${String(month).padStart(2, '0')}`;
-  }
-
-  selectCalendarDay(value: string): void {
-    if (!value || value > this.todayStr) return;
-    if (!this.draftCustomFrom || (this.draftCustomFrom && this.draftCustomTill)) {
-      this.draftCustomFrom = value;
-      this.draftCustomTill = '';
-    } else if (value < this.draftCustomFrom) {
-      this.draftCustomFrom = value;
-    } else {
-      this.draftCustomTill = value;
-    }
-  }
-
-  calendarDayClass(day: CalendarDay): string {
-    if (day.muted) return 'calendar-day muted';
-    if (day.value === this.draftCustomFrom || day.value === this.draftCustomTill)
-      return 'calendar-day selected';
-    if (
-      this.draftCustomFrom &&
-      this.draftCustomTill &&
-      day.value > this.draftCustomFrom &&
-      day.value < this.draftCustomTill
-    )
-      return 'calendar-day in-range';
-    return 'calendar-day';
-  }
-
-  formatDateLabel(value: string): string {
-    const date = new Date(`${value}T00:00:00`);
-    return new Intl.DateTimeFormat('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    }).format(date);
   }
 
   onCustomFrom(val: string) {

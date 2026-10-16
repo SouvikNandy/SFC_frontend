@@ -8,7 +8,6 @@
 import {
     HeatColumn,
     HeatRow,
-    OptionType,
     PayoffCurvePoint,
     PayoffHeatmap,
     PayoffInputs,
@@ -17,57 +16,22 @@ import {
     PricedLeg,
     ProfitZone,
 } from './payoff.model';
+import { DAYS_YEAR, ValuedLeg, legMark, nearestExpiryAverageIv, normCdf, valueLegs } from './payoff-pricing';
 
-export const DAYS_YEAR = 365;
+// Pricing primitives live in payoff-pricing.ts; re-exported so existing imports keep working.
+export { DAYS_YEAR, bsValue, erf, intrinsic, normCdf, theoreticalPremium } from './payoff-pricing';
+
 const BREAKEVEN_SAMPLES = 1401;
 const BISECTION_STEPS = 60;
-
-/* ---------------- Black-Scholes primitives ---------------- */
-
-export function erf(x: number): number {
-    const s = x < 0 ? -1 : 1;
-    x = Math.abs(x);
-    const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741, a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
-    const t = 1 / (1 + p * x);
-    return s * (1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x));
-}
-
-export function normCdf(x: number): number {
-    return 0.5 * (1 + erf(x / Math.SQRT2));
-}
-
-export function intrinsic(type: OptionType, S: number, K: number): number {
-    return type === 'call' ? Math.max(S - K, 0) : Math.max(K - S, 0);
-}
-
-export function bsValue(type: OptionType, S: number, K: number, r: number, q: number, T: number, sigma: number): number {
-    if (T <= 0 || sigma <= 0) return intrinsic(type, S, K);
-    const d1 = (Math.log(S / K) + (r - q + 0.5 * sigma * sigma) * T) / (sigma * Math.sqrt(T));
-    const d2 = d1 - sigma * Math.sqrt(T);
-    const eq = Math.exp(-q * T), er = Math.exp(-r * T);
-    return type === 'call'
-        ? S * eq * normCdf(d1) - K * er * normCdf(d2)
-        : K * er * normCdf(-d2) - S * eq * normCdf(-d1);
-}
-
-/** Theoretical premium rounded to 2 dp, as the prototype's presets and "Reprice" use. */
-export function theoreticalPremium(type: OptionType, spot: number, strike: number, days: number, sigma: number): number {
-    return Math.round(bsValue(type, spot, strike, 0, 0, days / DAYS_YEAR, sigma) * 100) / 100;
-}
-
 /* ---------------- position valuation ---------------- */
 
 const sgn = (leg: Pick<PayoffLeg, 'direction'>) => (leg.direction === 'long' ? 1 : -1);
 const mult = (leg: Pick<PayoffLeg, 'quantity' | 'lotSize'>) => leg.quantity * leg.lotSize;
 
-function legValue(leg: PricedLeg, S: number, evalDay: number, sigma: number): number {
-    const remaining = leg.expiryDays - evalDay;
-    return remaining <= 0 ? intrinsic(leg.type, S, leg.strike) : bsValue(leg.type, S, leg.strike, 0, 0, remaining / DAYS_YEAR, sigma);
-}
-
-export function evaluatePosition(legs: PricedLeg[], S: number, evalDay: number, sigma: number): number {
+/** Position P&L: every leg is marked with its own IV × `ivMultiplier` (ratio, 1 = ×1.00), less its entry premium. */
+export function evaluatePosition(legs: ValuedLeg[], S: number, evalDay: number, ivMultiplier: number): number {
     let total = 0;
-    for (const leg of legs) total += sgn(leg) * (legValue(leg, S, evalDay, sigma) - leg.premium) * mult(leg);
+    for (const leg of legs) total += sgn(leg) * (legMark(leg, S, evalDay, ivMultiplier) - leg.premium) * mult(leg);
     return total;
 }
 
@@ -83,17 +47,17 @@ export function priceRange(spot: number, rangePct: number, legs: PayoffLeg[]): [
     return [Math.max(lo, 0.01), hi];
 }
 
-function payoffCurve(legs: PricedLeg[], lo: number, hi: number, evalDay: number, sigma: number, n: number): PayoffCurvePoint[] {
+function payoffCurve(legs: ValuedLeg[], lo: number, hi: number, evalDay: number, ivMult: number, n: number): PayoffCurvePoint[] {
     const out: PayoffCurvePoint[] = [];
     for (let i = 0; i < n; i++) {
         const price = lo + (hi - lo) * i / (n - 1);
-        out.push({ price, pnl: evaluatePosition(legs, price, evalDay, sigma) });
+        out.push({ price, pnl: evaluatePosition(legs, price, evalDay, ivMult) });
     }
     return out;
 }
 
-function findBreakevens(legs: PricedLeg[], lo: number, hi: number, evalDay: number, sigma: number): number[] {
-    const f = (S: number) => evaluatePosition(legs, S, evalDay, sigma);
+function findBreakevens(legs: ValuedLeg[], lo: number, hi: number, evalDay: number, ivMult: number): number[] {
+    const f = (S: number) => evaluatePosition(legs, S, evalDay, ivMult);
     const xs: number[] = [], ys: number[] = [];
     for (let i = 0; i < BREAKEVEN_SAMPLES; i++) {
         const x = lo + (hi - lo) * i / (BREAKEVEN_SAMPLES - 1);
@@ -119,12 +83,12 @@ function findBreakevens(legs: PricedLeg[], lo: number, hi: number, evalDay: numb
     return out;
 }
 
-function profitZones(legs: PricedLeg[], lo: number, hi: number, evalDay: number, sigma: number, breakevens: number[]): ProfitZone[] {
+function profitZones(legs: ValuedLeg[], lo: number, hi: number, evalDay: number, ivMult: number, breakevens: number[]): ProfitZone[] {
     const bounds = [lo, ...breakevens, hi];
     const zones: ProfitZone[] = [];
     for (let i = 0; i < bounds.length - 1; i++) {
         const a = bounds[i], c = bounds[i + 1];
-        if (evaluatePosition(legs, (a + c) / 2, evalDay, sigma) > 0) {
+        if (evaluatePosition(legs, (a + c) / 2, evalDay, ivMult) > 0) {
             const left = a === lo ? -Infinity : a, right = c === hi ? Infinity : c;
             if (zones.length && zones[zones.length - 1][1] === left) zones[zones.length - 1][1] = right;
             else zones.push([left, right]);
@@ -175,7 +139,7 @@ const isWeekend = (date: Date) => date.getDay() === 0 || date.getDay() === 6;
 
 /* ---------------- heat map: real dates across, prices down ---------------- */
 
-function buildHeatmap(legs: PricedLeg[], inputs: PayoffInputs, lo: number, hi: number, near: number, sigma: number): PayoffHeatmap {
+function buildHeatmap(legs: ValuedLeg[], inputs: PayoffInputs, lo: number, hi: number, near: number, ivMult: number): PayoffHeatmap {
     let cols: Array<{ days: number; date: Date }> = [];
     for (let d = 0; d <= near; d++) {
         const date = addDays(inputs.baseDate, d);
@@ -200,7 +164,7 @@ function buildHeatmap(legs: PricedLeg[], inputs: PayoffInputs, lo: number, hi: n
     });
 
     // Colour intensity is scaled to the largest absolute P&L shown in the grid.
-    const grid = prices.map(price => cols.map(col => evaluatePosition(legs, price, col.days, sigma)));
+    const grid = prices.map(price => cols.map(col => evaluatePosition(legs, price, col.days, ivMult)));
     let peak = 0;
     grid.forEach(row => row.forEach(value => { peak = Math.max(peak, Math.abs(value)); }));
     if (peak <= 0) peak = 1;
@@ -220,10 +184,20 @@ function buildHeatmap(legs: PricedLeg[], inputs: PayoffInputs, lo: number, hi: n
 
 /* ---------------- single entry point ---------------- */
 
-export function computePayoff(inputs: PayoffInputs): PayoffResult {
-    const { legs, spot } = inputs;
-    const effVol = inputs.vol * (inputs.ivMultiplier / 100);
-    const sigma = effVol / 100;
+/**
+ * Prices every leg at its own chain IV, then builds the curves, metrics and heat map.
+ * Returns null when there is nothing valid to price (no legs, or an unusable spot / reference volatility),
+ * so callers never receive NaN values.
+ */
+export function computePayoff(inputs: PayoffInputs): PayoffResult | null {
+    const { spot } = inputs;
+    const ivMult = inputs.ivMultiplier / 100;
+    const legs = valueLegs(inputs.legs, spot, inputs.referenceVol, inputs.live);
+    const averageIv = nearestExpiryAverageIv(legs);
+    if (!legs.length || !(ivMult > 0) || !(averageIv > 0) || legs.some(leg => !Number.isFinite(leg.iv) || !(leg.expiryDays > 0))) return null;
+    // Probability distribution: nearest-expiry average leg IV × multiplier. Leg valuation uses each leg's own IV.
+    const probIv = averageIv * ivMult;
+    const effVol = probIv * 100;
     const usedExpiries = Array.from(new Set(legs.map(leg => leg.expiryDays))).sort((a, b) => a - b);
     const near = usedExpiries[0];
     const far = usedExpiries[usedExpiries.length - 1];
@@ -231,14 +205,14 @@ export function computePayoff(inputs: PayoffInputs): PayoffResult {
     const [lo, hi] = priceRange(spot, inputs.rangePct, legs);
     const points = inputs.narrow ? 161 : 281;
 
-    const curveExpiry = payoffCurve(legs, lo, hi, near, sigma, points);
-    const curveEval = payoffCurve(legs, lo, hi, evalDay, sigma, points);
-    const breakevens = findBreakevens(legs, lo, hi, near, sigma);
-    const zones = profitZones(legs, lo, hi, near, sigma, breakevens);
+    const curveExpiry = payoffCurve(legs, lo, hi, near, ivMult, points);
+    const curveEval = payoffCurve(legs, lo, hi, evalDay, ivMult, points);
+    const breakevens = findBreakevens(legs, lo, hi, near, ivMult);
+    const zones = profitZones(legs, lo, hi, near, ivMult, breakevens);
 
     const pnlSamples = curveExpiry.map(point => point.pnl);
     Array.from(new Set(legs.map(leg => leg.strike))).forEach(strike => {
-        if (strike >= lo && strike <= hi) pnlSamples.push(evaluatePosition(legs, strike, near, sigma));
+        if (strike >= lo && strike <= hi) pnlSamples.push(evaluatePosition(legs, strike, near, ivMult));
     });
     const callExposure = legs.filter(leg => leg.type === 'call').reduce((sum, leg) => sum + sgn(leg) * mult(leg), 0);
     const putExposure = -legs.filter(leg => leg.type === 'put').reduce((sum, leg) => sum + sgn(leg) * mult(leg), 0);
@@ -255,16 +229,16 @@ export function computePayoff(inputs: PayoffInputs): PayoffResult {
         curveExpiry,
         curveEval,
         breakevens,
-        densities: curveExpiry.map(point => density(point.price, spot, sigma, near)),
+        densities: curveExpiry.map(point => density(point.price, spot, probIv, near)),
         metrics: {
             netPremium: netPremium(legs),
             maxProfit: Math.max(...pnlSamples),
             maxLoss: Math.min(...pnlSamples),
             profitUnlimited: callExposure > 0 || putExposure < 0,
             lossUnlimited: callExposure < 0 || putExposure > 0,
-            chanceOfProfit: chanceOfProfit(zones, spot, sigma, near),
+            chanceOfProfit: chanceOfProfit(zones, spot, probIv, near),
             zones,
         },
-        heatmap: buildHeatmap(legs, inputs, lo, hi, near, sigma),
+        heatmap: buildHeatmap(legs, inputs, lo, hi, near, ivMult),
     };
 }

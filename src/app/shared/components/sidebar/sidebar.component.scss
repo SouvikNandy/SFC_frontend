@@ -1,6 +1,6 @@
 .sfc-logo {
-    height: 32px;
-    width: auto;
+    width: 120px;
+    height: auto;
     display: block
 }
 
@@ -13,9 +13,10 @@
     border-top: 1px solid var(--border)
 }
 
+/* Logo sits at the same x/y as in the public header (30px, 16px) so it does not jump between the two layouts. */
 .sfc-sidebar__brand {
-    padding: 0 8px;
-    margin-bottom: 20px;
+    padding: 0 8px 0 16px;
+    margin: -4px 0 20px;
 }
 
 .sfc-avatar {

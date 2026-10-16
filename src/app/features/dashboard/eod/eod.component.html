@@ -98,111 +98,23 @@
               {{ r }}
             </button>
           </div>
-          <div class="date-range-picker" *ngIf="range === 'Custom'">
-            <button
-              class="date-range-input"
-              type="button"
-              [attr.aria-expanded]="dateRangeOpen"
-              aria-haspopup="dialog"
-              (click)="toggleDateRange()"
-            >
-              <span>{{ customRangeLabel }}</span>
-              <span class="calendar-icon" aria-hidden="true">▣</span>
-            </button>
-            <div
-              class="date-range-popover"
-              *ngIf="dateRangeOpen"
-              role="dialog"
-              aria-label="Select date range"
-            >
-              <div class="date-picker-head">
-                <strong>Select date range</strong>
-                <button type="button" aria-label="Close date picker" (click)="cancelDateRange()">
-                  ×
-                </button>
-              </div>
-              <p class="date-picker-hint">Choose a start date, then an end date.</p>
-              <div class="calendar-nav">
-                <button type="button" aria-label="Previous month" (click)="shiftCalendarMonth(-1)">
-                  ‹
-                </button>
-                <div class="calendar-selectors">
-                  <select
-                    aria-label="Calendar month"
-                    (change)="setCalendarMonthPart('month', $event)"
-                  >
-                    <option
-                      *ngFor="let month of calendarMonths"
-                      [value]="month.value"
-                      [selected]="month.value === calendarMonthNumber"
-                    >
-                      {{ month.label }}
-                    </option>
-                  </select>
-                  <select
-                    aria-label="Calendar year"
-                    (change)="setCalendarMonthPart('year', $event)"
-                  >
-                    <option
-                      *ngFor="let year of calendarYears"
-                      [value]="year"
-                      [selected]="year === calendarYear"
-                    >
-                      {{ year }}
-                    </option>
-                  </select>
-                </div>
-                <button type="button" aria-label="Next month" (click)="shiftCalendarMonth(1)">
-                  ›
-                </button>
-              </div>
-              <div class="calendar-weekdays">
-                <span *ngFor="let day of ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']">{{
-                  day
-                }}</span>
-              </div>
-              <div class="calendar-grid">
-                <button
-                  *ngFor="let day of calendarDays"
-                  type="button"
-                  [class]="calendarDayClass(day)"
-                  [disabled]="day.muted || day.value > todayStr"
-                  [attr.aria-label]="day.value || null"
-                  (click)="selectCalendarDay(day.value)"
-                >
-                  {{ day.label || '' }}
-                </button>
-              </div>
-              <div class="date-summary">
-                <div>
-                  <span>Start</span>
-                  <strong>{{ draftCustomFrom ? formatDateLabel(draftCustomFrom) : '–' }}</strong>
-                </div>
-                <div>
-                  <span>End</span>
-                  <strong>{{ draftCustomTill ? formatDateLabel(draftCustomTill) : '–' }}</strong>
-                </div>
-              </div>
-              <div class="date-picker-actions">
-                <button type="button" class="date-picker-cancel" (click)="cancelDateRange()">
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  class="date-picker-apply"
-                  [disabled]="!draftCustomFrom || !draftCustomTill"
-                  (click)="applyCustomDateRange()"
-                >
-                  Apply
-                </button>
-              </div>
-            </div>
-          </div>
+        </div>
+      </div>
+
+      <div class="custom-dates" *ngIf="range === 'Custom'">
+        <div class="control">
+          <label class="label" for="eod-from">From</label>
+          <input id="eod-from" class="date-input" type="date" [max]="todayStr" [value]="customFrom" (change)="onCustomFromChange($event)" />
+        </div>
+        <div class="control">
+          <label class="label" for="eod-till">To</label>
+          <input id="eod-till" class="date-input" type="date" [max]="todayStr" [value]="customTill" (change)="onCustomTillChange($event)" />
         </div>
       </div>
 
       <button class="btn-export" (click)="downloadCsv()">Download CSV</button>
     </div>
+    <p class="range-error" role="alert" *ngIf="range === 'Custom' && error">{{ error }}</p>
   </div>
 
   <div class="card chart-card">

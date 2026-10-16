@@ -92,7 +92,9 @@ export const routes: Routes = [
       { path: 'portfolio', loadComponent: () => import('./features/dashboard/portfolio/portfolio.component').then((m) => m.PortfolioComponent) },
       { path: 'options-chain', loadComponent: () => import('./features/dashboard/options-chain/options-chain.component').then((m) => m.OptionsChainComponent) },
       { path: 'eod', loadComponent: () => import('./features/dashboard/eod/eod.component').then((m) => m.EodComponent) },
-      { path: 'closed-trades', loadComponent: () => import('./features/dashboard/closed-trades/closed-trades.component').then((m) => m.ClosedTradesComponent) },
+      { path: 'multi-leg-eod', loadComponent: () => import('./features/dashboard/multi-leg-eod/multi-leg-eod.component').then((m) => m.MultiLegEodComponent) },
+      // The screen formerly named Closed Trades is now Multi-Leg EOD Data; keep old links working.
+      { path: 'closed-trades', redirectTo: 'multi-leg-eod', pathMatch: 'full' },
       { path: 'greeks', loadComponent: () => import('./features/dashboard/greeks/greeks.component').then((m) => m.GreeksComponent) },
       { path: 'probability', loadComponent: () => import('./features/dashboard/probability/probability.component').then((m) => m.ProbabilityComponent) },
       { path: 'historical-volatility', loadComponent: () => import('./features/dashboard/historical-volatility/historical-volatility.component').then((m) => m.HistoricalVolatilityComponent) },

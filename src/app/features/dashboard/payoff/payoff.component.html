@@ -199,8 +199,8 @@
                 (click)="selectMode('live')">Live data <em>Premium</em></button>
         </div>
         @if (mode() === 'custom') {
-        <div class="mode-note">Enter the underlying price and volatility by hand. Nothing is pulled from a data feed in
-            this mode.</div>
+        <div class="mode-note">Enter the underlying price and premiums by hand. Leg implied vols use the HV-20 of the
+            last instrument loaded in EOD data.</div>
         }
         @if (mode() === 'live') {
         <app-live-data-access description="underlying prices and implied volatility"></app-live-data-access>
@@ -250,12 +250,6 @@
                 <span class="field-hint">{{ mode() === 'custom' ? 'Entered manually' : 'BhavCopy EOD close' }}</span>
             </div>
             <div class="field-block">
-                <label for="payoff-vol">Base volatility %</label>
-                <input id="payoff-vol" type="number" step="0.1" [value]="displayNumber(vol())"
-                    (input)="onVolInput($any($event.target).value)">
-                <span class="field-hint">{{ volHint() }}</span>
-            </div>
-            <div class="field-block">
                 <label for="payoff-lot">Lot size</label>
                 <input id="payoff-lot" type="number" step="1" min="1" [value]="displayNumber(lotSize())"
                     (input)="onLotInput($any($event.target).value)">
@@ -273,8 +267,8 @@
             <button type="button" class="ghost" [disabled]="marketLoading()" (click)="addLeg()">+ Add
                 leg</button>
             @if (mode() === 'custom') {
-            <button type="button" class="ghost" [disabled]="!legs().length" (click)="reprice()">Reprice at current
-                vol</button>
+            <button type="button" class="ghost" [disabled]="!legs().length" (click)="reprice()">Reprice at model
+                IV</button>
             }
             @if (expiryPill(); as pill) { <span class="pill" [class.calendar]="pill.calendar">{{ pill.text }}</span> }
         </div>

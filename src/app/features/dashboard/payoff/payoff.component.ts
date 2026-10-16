@@ -22,7 +22,8 @@ import {
   DataTableColumn,
 } from '../../../shared/components/data-table/data-table.types';
 import { DefaultStock } from '../../../shared/services/constantFile';
-import { addDays, computePayoff, theoreticalPremium } from './payoff-engine';
+import { addDays, computePayoff } from './payoff-engine';
+import { chainIV, nearestExpiryAverageIv, theoreticalPremium } from './payoff-pricing';
 import { buildPayoffChart, buildStrikeLadder, formatRupee } from './payoff-chart.util';
 import {
   STRATEGY_GROUPS,
@@ -109,17 +110,16 @@ export class PayoffComponent implements OnInit {
   readonly expiries = signal<PayoffExpiry[]>([]);
   /** EOD prices keyed by expiryDays: the real counterpart of the prototype's chainPremium(type, K, days). */
   readonly quotes = signal<ReadonlyMap<number, ExpiryQuotes>>(new Map());
-  readonly volUnavailable = signal(false);
   readonly lotFromFeed = signal(false);
 
   /* ---------- position and controls ---------- */
   readonly mode = signal<PayoffMode>('eod');
   readonly strategy = signal<PayoffStrategy>('double_calendar');
   readonly spot = signal(Number.NaN);
-  readonly vol = signal(Number.NaN);
   readonly lotSize = signal(Number.NaN);
   readonly legs = signal<PayoffLeg[]>([]);
-  readonly evalDay = signal(30);
+  /** The date slider starts at T+0 (today). */
+  readonly evalDay = signal(0);
   readonly rangePct = signal(6);
   readonly ivMultiplier = signal(100);
   readonly view = signal<PayoffView>('graph');
@@ -153,15 +153,23 @@ export class PayoffComponent implements OnInit {
   /** EOD legs whose expiry prices are still being fetched. */
   readonly quotesLoading = computed(() =>
     this.mode() === 'eod' && this.legs().some(leg => this.quotes().get(leg.expiryDays)?.status === 'loading'));
-  readonly effVol = computed(() => this.vol() * (this.ivMultiplier() / 100));
-  /** EOD pre-fills HV-20 but lets the user override it; the hint keeps the feed value visible. */
-  readonly volHint = computed(() => {
-    if (this.mode() === 'custom') return 'Entered manually';
+  /**
+   * Underlying reference volatility (percent): the symbol's HV-20 from the loaded details. It only seeds the
+   * chain-IV formula; there is no editable base volatility. NaN when the feed has no usable HV-20.
+   */
+  readonly referenceVol = computed(() => {
     const hv = this.details()?.hv20;
-    if (this.volUnavailable() || typeof hv !== 'number') return 'HV-20 unavailable, enter manually';
-    const feed = Math.round(hv * 100) / 100;
-    return this.vol() === feed ? 'HV-20 from BhavCopy EOD · editable' : `Edited · HV-20 from BhavCopy EOD is ${feed}%`;
+    return typeof hv === 'number' && Number.isFinite(hv) && hv > 0 ? Math.round(hv * 100) / 100 : Number.NaN;
   });
+  /** Each leg's own chain IV (decimal, before the multiplier); legs without a usable strike/expiry are skipped. */
+  readonly legIvs = computed(() => {
+    const spot = this.spot(), reference = this.referenceVol(), live = this.mode() === 'live';
+    return this.legs()
+      .filter(leg => leg.strike > 0 && leg.expiryDays > 0)
+      .map(leg => ({ expiryDays: leg.expiryDays, iv: chainIV(spot, leg.strike, reference, live) }));
+  });
+  /** Nearest-expiry average leg IV × multiplier, in percent (the IV label and the probability distribution). */
+  readonly effVol = computed(() => nearestExpiryAverageIv(this.legIvs()) * this.ivMultiplier());
 
   /* ---------- validation → single calculation → views ---------- */
   readonly validationError = computed(() => this.validate());
@@ -173,7 +181,8 @@ export class PayoffComponent implements OnInit {
     return computePayoff({
       legs,
       spot: this.spot(),
-      vol: this.vol(),
+      referenceVol: this.referenceVol(),
+      live: this.mode() === 'live',
       ivMultiplier: this.ivMultiplier(),
       rangePct: this.rangePct(),
       evalDay: this.evalDay(),
@@ -235,7 +244,9 @@ export class PayoffComponent implements OnInit {
   readonly evalLabel = computed(() => {
     const result = this.result();
     if (!result) return '–';
-    return result.evalDay >= result.near ? 'At expiration' : `${formatDay(addDays(this.baseDate(), result.evalDay))} · T+${result.evalDay}`;
+    if (result.evalDay >= result.near) return 'At expiration';
+    const day = formatDay(addDays(this.baseDate(), result.evalDay));
+    return result.evalDay === 0 ? `${day} · T+0 (today)` : `${day} · T+${result.evalDay}`;
   });
   readonly dateCaption = computed(() => {
     const result = this.result();
@@ -243,7 +254,7 @@ export class PayoffComponent implements OnInit {
     const date = addDays(this.baseDate(), result.evalDay);
     return {
       left: `DATE: ${WEEKDAYS[date.getDay()]} ${formatDay(date)} (${result.near - result.evalDay}d left)`,
-      right: result.evalDay >= result.near ? '(At expiration)' : '(Pre-expiry estimate)',
+      right: result.evalDay >= result.near ? '(At expiration)' : result.evalDay === 0 ? '(T+0 · today)' : '(Pre-expiry estimate)',
     };
   });
   readonly ivLabel = computed(() => {
@@ -260,7 +271,7 @@ export class PayoffComponent implements OnInit {
     const nearLabel = formatDay(addDays(this.baseDate(), result.near));
     const farLabel = formatDay(addDays(this.baseDate(), result.far));
     return `Mixed expiries: the expiration line is drawn at ${nearLabel} (T+${result.near}), where the ${farLabel} leg still holds time value. ` +
-      `That residual is priced with Black-Scholes at ${result.effVol.toFixed(2)}% volatility, so this curve moves with the IV slider, unlike a single-expiry position.`;
+      `Each leg is priced with Black-Scholes at its own implied vol (near-leg average ${result.effVol.toFixed(2)}%), so this curve moves with the IV slider, unlike a single-expiry position.`;
   });
   readonly summary = computed(() => {
     const result = this.result();
@@ -417,11 +428,6 @@ export class PayoffComponent implements OnInit {
     this.rebuildIfIncomplete();
   }
 
-  onVolInput(raw: string): void {
-    this.vol.set(parseFloat(raw));
-    this.rebuildIfIncomplete();
-  }
-
   onLotInput(raw: string): void {
     const lot = parseInt(raw, 10);
     this.lotSize.set(lot);
@@ -482,7 +488,7 @@ export class PayoffComponent implements OnInit {
     this.strategy.set('custom_position');
   }
 
-  /** Custom mode only: recompute Black-Scholes premiums at the current volatility. EOD premiums always track the loaded settlements. */
+  /** Custom mode only: recompute Black-Scholes premiums at each leg's chain IV. EOD premiums always track the loaded settlements. */
   reprice(): void {
     this.legs.update(legs => legs.map(leg => ({ ...leg, premium: this.premiumFor(leg.type, leg.strike, leg.expiryDays) })));
   }
@@ -658,13 +664,11 @@ export class PayoffComponent implements OnInit {
     this.quotes.set(new Map());
     this.expiries.set([]);
     this.marketError.set('');
-    this.volUnavailable.set(false);
     this.lotFromFeed.set(false);
     this.hover.set(null);
     if (this.mode() !== 'custom') {
       this.legs.set([]);
       this.spot.set(Number.NaN);
-      this.vol.set(Number.NaN);
       this.lotSize.set(Number.NaN);
     }
   }
@@ -674,29 +678,24 @@ export class PayoffComponent implements OnInit {
     this.toast.error(message);
   }
 
-  /** EOD: underlying, HV-20 and lot size come from the feed, then the strategy is rebuilt (prototype: loadInstrument). */
+  /** EOD: underlying and lot size come from the feed (HV-20 becomes the reference volatility), then the strategy is rebuilt (prototype: loadInstrument). */
   private applyFeedValues(): void {
     const details = this.details();
     if (!details) return;
-    const hv = details.hv20;
-    const hvValid = typeof hv === 'number' && Number.isFinite(hv) && hv > 0;
     const lot = details.lot;
     const lotValid = typeof lot === 'number' && Number.isInteger(lot) && lot > 0;
     this.spot.set(Math.round(details.underlying * 100) / 100);
-    this.vol.set(hvValid ? Math.round(hv * 100) / 100 : Number.NaN);
-    this.volUnavailable.set(!hvValid);
     this.lotFromFeed.set(lotValid);
     if (lotValid) this.lotSize.set(lot);
     this.loadStrategy();
   }
 
-  /** Prototype loadStrategy(): build the preset legs, re-quote them (EOD), then put the date slider at the nearest expiry. */
+  /** Prototype loadStrategy(): build the preset legs, re-quote them (EOD), then reset the date slider to T+0. */
   private loadStrategy(): void {
     const legs = buildStrategy(this.strategy(), this.strategyContext());
     this.commitLegs(legs);
     this.refreshPremiums();
-    const near = this.nearestExpiry(legs);
-    if (near !== null) this.evalDay.set(near);
+    this.evalDay.set(0);
   }
 
   private strategyContext(): StrategyContext {
@@ -704,7 +703,8 @@ export class PayoffComponent implements OnInit {
       spot: this.spot(),
       step: this.strikeStep(),
       lotSize: this.lotSize() > 0 ? this.lotSize() : 1,
-      sigma: this.effVol() / 100,
+      // Wing placement only: the ATM chain IV equals the reference vol, scaled by the multiplier as before.
+      sigma: (this.referenceVol() / 100) * (this.ivMultiplier() / 100),
       expiries: this.expiryDays(),
       existing: this.legs(),
       premium: (type, strike, days) => this.premiumFor(type, strike, days),
@@ -713,10 +713,10 @@ export class PayoffComponent implements OnInit {
     };
   }
 
-  /** Custom prices from Black-Scholes (prototype pr()/Reprice); EOD reads that expiry's CE (call) / PE (put) price. */
+  /** Custom prices from Black-Scholes at the leg's chain IV (prototype pr()/Reprice); EOD reads that expiry's CE (call) / PE (put) price. */
   private premiumFor(type: OptionType, strike: number, days: number): number | null {
     if (this.mode() === 'custom') {
-      const premium = theoreticalPremium(type, this.spot(), strike, days, this.effVol() / 100);
+      const premium = theoreticalPremium(type, this.spot(), strike, days, chainIV(this.spot(), strike, this.referenceVol()));
       return Number.isFinite(premium) ? premium : null;
     }
     return this.quoteFor(type, strike, days);
@@ -767,13 +767,13 @@ export class PayoffComponent implements OnInit {
       if (this.marketLoading() || this.quotesLoading()) return '';
       if (this.marketError()) return this.marketError();
     }
-    const legs = this.legs(), vol = this.vol(), lot = this.lotSize();
+    const legs = this.legs(), lot = this.lotSize();
     if (!legs.length) return 'Add at least one leg to the position.';
     if (!(this.spot() > 0)) return 'Underlying price must be greater than 0.';
-    if (!(vol > 0)) {
-      return this.volUnavailable() && mode === 'eod'
-        ? `HV-20 volatility is not available for ${this.selectedSymbol()}. Enter a base volatility to continue.`
-        : 'Volatility must be greater than 0%.';
+    if (!(this.referenceVol() > 0)) {
+      return mode === 'eod'
+        ? `HV-20 volatility is not available for ${this.selectedSymbol()}, so leg implied vols cannot be calculated.`
+        : 'Reference volatility unavailable: load an instrument in EOD data first (its HV-20 seeds the leg implied vols).';
     }
     if (!(lot > 0)) return 'Lot size must be at least 1.';
     for (let i = 0; i < legs.length; i++) {

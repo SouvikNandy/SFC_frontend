@@ -64,9 +64,11 @@ export interface PricedLeg extends PayoffLeg {
 export interface PayoffInputs {
     legs: PricedLeg[];
     spot: number;
-    /** Base volatility in percent. */
-    vol: number;
-    /** Implied-vol slider value; 100 = ×1.00. */
+    /** Underlying reference volatility in percent (feed HV-20); it seeds each leg's chain IV and is not user-editable. */
+    referenceVol: number;
+    /** Live data applies the chain formula's live-IV uplift. */
+    live: boolean;
+    /** IV-multiplier slider value applied to every leg's IV; 100 = ×1.00. */
     ivMultiplier: number;
     /** Price-range slider value in percent either side of spot. */
     rangePct: number;
@@ -127,6 +129,7 @@ export interface PayoffResult {
     isCalendar: boolean;
     usedExpiries: number[];
     evalDay: number;
+    /** Nearest-expiry average leg IV × multiplier, in percent; drives the probability distribution. */
     effVol: number;
     lo: number;
     hi: number;

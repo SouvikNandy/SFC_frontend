@@ -18,6 +18,10 @@ Client feedback round (QuantSFC_Change_Instructions.pdf): C1 EOD Close, C2 EOD C
 
 **Decisions (recent)**:
 
+- Portfolio Analysis + Multi-Leg EOD (2026-10-16): /dashboard/portfolio renamed Portfolio Analysis (paper ledger; no backend endpoint, so persisted in localStorage per user; CMP and basket history from real /fo/eod closes; Live is a locked Premium state). Closed Trades screen replaced by Multi-Leg EOD Data at /dashboard/multi-leg-eod (old /closed-trades redirects); per-leg data via EodService.getAllRows (/fo/eod paging), no synthetic prices.
+
+- Payoff per-leg IV (2026-10-16): Base volatility field removed. Each leg IV = approved chainIV(spot, strike, HV-20 reference) in `payoff/payoff-pricing.ts`; IV slider is a multiplier on every leg; probability/CoP use nearest-expiry average leg IV x multiplier. Entry-premium calibration offset per leg fades linearly to 0 at expiry so T+0 P&L at entry spot = 0 and expiry = intrinsic. Date slider defaults to T+0. Custom mode takes reference vol from last loaded instrument HV-20 (assumption, needs PO confirmation). Prototype _13 itself solves IV from premium instead of chainIV; brief followed.
+
 - Client feedback (2026-10-16): EOD uses backend `close` only (no LTP fallback; `ltp` optional/unused). CSV filename is `SYMBOL_EXPIRY_STRIKE_OPTIONTYPE.csv` (futures: `SYMBOL_FUT.csv`, missing parts omitted). Options Chain OI charts are stacked, 1000x400 viewBox, with an ATM line placed via the shared bar-x mapping (interpolated if ATM is not a listed strike). Payoff inactive view tab uses `--panel-alt`. C3 landing page untouched (pending); C4/C5 not implemented.
 
 - Public `/data` and dashboard `/dashboard/eod` both lazy-load the same `EodComponent`. It searches all `/fo/dd_list` symbols (shared autocomplete pattern, default NIFTY); `dd_symbol_details.expiry_date` is now an array (older responses: string) and is normalised to sorted YYYY-MM-DD options, first expiry selected.

@@ -5,7 +5,7 @@ import { SidebarService } from '../../services/sidebar.service';
 import { AuthService } from '../../../core/services/auth.service';
 
 const NAV_GROUPS = [
-  { label: 'Trading', keys: ['home', 'portfolio', 'options-chain', 'eod', 'closed-trades'] },
+  { label: 'Trading', keys: ['home', 'portfolio', 'options-chain', 'eod', 'multi-leg-eod'] },
   {
     label: 'Tools',
     keys: ['greeks', 'probability', 'historical-volatility', 'implied-volatility', 'payoff'],
@@ -15,10 +15,10 @@ const NAV_GROUPS = [
 
 const NAV_LABELS: Record<string, string> = {
   home: 'Home',
-  portfolio: 'Portfolio',
+  portfolio: 'Portfolio Analysis',
   'options-chain': 'Options Chain',
   eod: 'F&O EOD Data',
-  'closed-trades': 'Closed Trades',
+  'multi-leg-eod': 'Multi-Leg EOD Data',
   greeks: 'Greeks Calculator',
   probability: 'Probability Calculator',
   'historical-volatility': 'Historical Volatility',
@@ -85,9 +85,9 @@ const NAV_LABELS: Record<string, string> = {
                         <path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"></path>
                         <path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"></path>
                       }
-                      @case ('closed-trades') {
-                        <circle cx="12" cy="12" r="9"></circle>
-                        <polyline points="8,12.5 11,15.5 16,9"></polyline>
+                      @case ('multi-leg-eod') {
+                        <polyline points="3,17 8,11 12,14 17,7 21,10"></polyline>
+                        <polyline points="3,20 8,16 12,18 17,13 21,15"></polyline>
                       }
                       @case ('greeks') {
                         <line x1="5" y1="19" x2="5" y2="10"></line>

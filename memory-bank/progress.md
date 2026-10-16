@@ -19,7 +19,14 @@
 
 - Client feedback C1/C2/C6/C7 done (EOD Close + CSV filename, stacked OI charts with ATM line, Payoff inactive tab tint); build passes, UI checked in headless Chrome with mocked API.
 
+- Payoff per-leg IV refactor done (payoff-pricing.ts, payoff-engine.spec.ts, payoff.component.spec.ts); `ng test` now compiles (login spec matcher fixed); only stale app.spec.ts fails.
+
+- Portfolio Analysis and Multi-Leg EOD Data screens implemented (portfolio-ledger.ts, portfolio-store.service.ts, portfolio-market.service.ts, multi-leg-eod/*) with specs; 141/142 tests pass (stale app.spec only).
+
 **Not started / backlog**
+
+- Backend: portfolio persistence endpoint (ledger is browser-local today); confirm /fo/eod futures contract/expiry selection and expired-contract history.
+
 
 - C3 Home landing page: pending client decision (keep vs remove); if kept, remove the INDEPENDENT MARKETS CONSULTING tag and the stats strip.
 - Backend: confirm `/fo/eod` returns `close` for CE/PE rows (no LTP fallback is used).

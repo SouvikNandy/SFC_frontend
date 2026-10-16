@@ -19,7 +19,7 @@ export class HomeService {
 
     getQuickLinks(): Observable<QuickLink[]> {
         const links: QuickLink[] = [
-            { key: 'portfolio', title: 'Portfolio', desc: 'Live P&L across your open positions' },
+            { key: 'portfolio', title: 'Portfolio Analysis', desc: 'Paper positions, P&L and performance on EOD prices' },
             { key: 'chain', title: 'Options Chain', desc: 'Full NIFTY / BANKNIFTY chain with OI & IV' },
             { key: 'greeks', title: 'Greeks Calculator', desc: 'Delta, Gamma, Theta & Vega for any contract' },
             { key: 'payoff', title: 'Payoff Simulator', desc: 'Visualise P&L at expiry for any strategy' },

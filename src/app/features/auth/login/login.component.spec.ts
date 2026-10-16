@@ -24,6 +24,6 @@ describe('LoginComponent', () => {
     });
 
     it('starts with an invalid form', () => {
-        expect(component.form.invalid).toBeTrue();
+        expect(component.form.invalid).toBe(true);
     });
 });

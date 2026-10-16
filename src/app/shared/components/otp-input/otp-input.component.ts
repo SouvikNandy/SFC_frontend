@@ -11,7 +11,7 @@ import { ChangeDetectionStrategy, Component, computed, input, output, signal } f
           inputmode="numeric"
           maxlength="1"
           class="otp-input__field"
-          [value]="digits()[index] ?? ''"
+          [value]="digits()[index] || ''"
           (input)="handleInput($event, index)"
           (keydown)="handleKeydown($event, index)"
           (paste)="handlePaste($event)"
