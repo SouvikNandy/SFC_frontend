@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 
@@ -7,7 +7,7 @@ import { AuthService } from '../../../core/services/auth.service';
   standalone: true,
   imports: [RouterLink, RouterLinkActive],
   template: `
-    <header class="header">
+    <header class="header" [class.header--shrunk]="shrunk()">
       <div class="header__brand">
         <span class="header__brand-mark">
           <img src="assets/images/logo.webp" alt="QuantSFC logo" />
@@ -123,6 +123,16 @@ import { AuthService } from '../../../core/services/auth.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class HeaderComponent {
+  /** The bar shrinks once the page is scrolled; the gap between the two thresholds stops it flickering as its height changes. */
+  readonly shrunk = signal(false);
+
+  @HostListener('window:scroll')
+  onScroll(): void {
+    const y = window.scrollY;
+    if (!this.shrunk() && y > 60) this.shrunk.set(true);
+    else if (this.shrunk() && y < 10) this.shrunk.set(false);
+  }
+
   readonly authService = inject(AuthService);
   readonly mobileNavOpen = signal(false);
 

@@ -47,6 +47,7 @@
             </div>
             <div class="field combo">
                 <label for="pf-underlying">Underlying</label>
+                <div class="input-wrap">
                 <input id="pf-underlying" type="text" autocomplete="off" role="combobox" placeholder="Search underlying…"
                     aria-controls="pf-underlying-list" [attr.aria-expanded]="suggestionsOpen()"
                     [value]="symbolQuery()" (input)="onSymbolInput($any($event.target).value)"
@@ -64,6 +65,7 @@
                     } @empty { <div class="empty">No underlying matches</div> }
                 </div>
                 }
+                </div>
                 <span class="hint">{{ underlyingsLoading() ? 'Loading underlyings…' : catalogLoading() ? 'Loading contracts…' : '' }}</span>
             </div>
         </div>

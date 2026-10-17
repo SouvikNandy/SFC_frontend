@@ -12,7 +12,6 @@
 
 .scope-note {
   display: flex;
-  align-items: flex-start;
   gap: 10px;
   margin-bottom: 18px;
   padding: 11px 14px;
@@ -96,7 +95,7 @@ select {
 
 select { font-family: var(--font-body); font-weight: 500; cursor: pointer; }
 
-.form-grid { display: grid; gap: 10px; align-items: end; margin-bottom: 10px; }
+.form-grid { display: grid; gap: 10px; align-items: start; margin-bottom: 10px; }
 .form-grid.top { grid-template-columns: 1fr 2fr; }
 .form-grid.contract { grid-template-columns: 0.7fr 1fr 1fr; }
 .form-grid.basket { grid-template-columns: 1fr 1fr; }
@@ -107,7 +106,8 @@ select { font-family: var(--font-body); font-weight: 500; cursor: pointer; }
   gap: 2px;
   padding: 2px;
   border-radius: 8px;
-  background: var(--border-soft);
+   background: var(--panel-alt);
+
 
   button {
     padding: 8px 14px;
@@ -168,12 +168,13 @@ button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
 .input-error { margin: 12px 0 0; padding: 11px 13px; border: 1px solid var(--red); border-radius: 10px; background: var(--red-tint); color: var(--red); font-size: 12.5px; }
 
 /* ---------- autocomplete ---------- */
-.combo-clear { position: absolute; right: 8px; bottom: 28px; padding: 0; border: 0; background: none; color: var(--ink-faint); cursor: pointer; font-size: 16px; line-height: 1; }
+.input-wrap { position: relative; }
+.combo-clear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); padding: 0; border: 0; background: none; color: var(--ink-faint); cursor: pointer; font-size: 16px; line-height: 1; }
 
 .combo-list {
   position: absolute;
   z-index: 40;
-  top: 58px;
+  top: calc(100% + 4px);
   left: 0;
   right: 0;
   max-height: 260px;
@@ -287,7 +288,6 @@ button.chip {
     text-align: right;
     text-transform: uppercase;
     white-space: nowrap;
-    user-select: none;
   }
 
   th:first-child { text-align: left; }
@@ -424,7 +424,6 @@ button.row-btn {
 .modal-card {
   width: 100%;
   max-width: 360px;
-  max-height: 92vh;
   overflow: auto;
   padding: 20px 22px;
   border-radius: 16px;

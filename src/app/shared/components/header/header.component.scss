@@ -18,6 +18,7 @@
   background: rgba(255, 255, 255, 0.92);
   border-bottom: 1px solid $color-border;
   backdrop-filter: blur(12px);
+  transition: padding 0.2s ease;
 }
 
 .header__brand {
@@ -35,6 +36,7 @@
   align-items: center;
   justify-content: center;
   height: 5rem;
+  transition: height 0.2s ease;
 }
 
 .header__brand-mark img {
@@ -154,4 +156,13 @@
   margin-left: 0;
   margin-top: 4px;
   padding: 10px 16px;
+}
+/* Scrolled state: a slimmer bar with a smaller logo (declared last so it also wins inside the mobile query). */
+.header--shrunk {
+  padding-top: $space-8;
+  padding-bottom: $space-8;
+}
+
+.header--shrunk .header__brand-mark {
+  height: 3rem;
 }
