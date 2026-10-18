@@ -3,7 +3,7 @@
         <div class="titlebar">
             <h2 class="page-title">Portfolio Analysis</h2>
             <span class="badge">Paper trading</span>
-            <span class="source-note">{{ source() === 'live' ? 'Live feed · not connected' : 'BhavCopy EOD close' + (eodDateLabel() ? ' · ' + eodDateLabel() : '') }}</span>
+            <span class="source-note">{{ source() === 'live' ? 'Live feed · not connected' : 'BhavCopy EOD close' + (catalog()?.tradeDate ? ' · ' + dateLabel(catalog()!.tradeDate!) : '') }}</span>
         </div>
         <p class="sub">Track hypothetical positions, monitor performance and review closed trades.</p>
     </div>
@@ -14,10 +14,15 @@
             position. It never places, modifies or cancels a real order, and nothing on this screen reaches a broker or
             an exchange.</span>
     </div>
-    @if (!persisted()) {
-    <p class="input-error" role="alert">This browser is blocking local storage, so your paper book will be lost when you
-        leave this page.</p>
-    }
+
+    @if (!signedIn() || sessionExpired()) {
+    <div class="panel">
+        <div class="empty" role="region" aria-label="Sign in required">
+            {{ sessionExpired() ? 'Your session has expired. Please sign in again to see your paper portfolio.' : 'Your paper portfolio is saved to your account, so you need to sign in to see it.' }}<br>
+            <button type="button" class="primary" (click)="signIn()">Sign in</button>
+        </div>
+    </div>
+    } @else {
 
     <!-- ===== market price source + record a fill ===== -->
     <div class="panel">
@@ -30,8 +35,8 @@
         </div>
         @if (source() === 'live') {
         <app-live-data-access description="streaming CMP for your open positions"></app-live-data-access>
-        <p class="note">Live CMP needs broker integration, which is not connected. Positions stay valued at the
-            latest EOD close until it is.</p>
+        <p class="note">Live CMP needs broker integration, which is not connected. Positions stay valued at the latest
+            end-of-day price the backend has recorded.</p>
         }
 
         <p class="sect-label spaced">Record a paper fill</p>
@@ -39,10 +44,10 @@
             <div class="field">
                 <span class="label">Segment</span>
                 <div class="seg" role="group" aria-label="Segment">
-                    <button type="button" [class.active]="segment() === 'future'" [attr.aria-pressed]="segment() === 'future'"
-                        (click)="setSegment('future')">Futures</button>
-                    <button type="button" [class.active]="segment() === 'option'" [attr.aria-pressed]="segment() === 'option'"
-                        (click)="setSegment('option')">Options</button>
+                    <button type="button" [class.active]="segment() === 'FUT'" [attr.aria-pressed]="segment() === 'FUT'"
+                        (click)="setSegment('FUT')">Futures</button>
+                    <button type="button" [class.active]="segment() === 'OPT'" [attr.aria-pressed]="segment() === 'OPT'"
+                        (click)="setSegment('OPT')">Options</button>
                 </div>
             </div>
             <div class="field combo">
@@ -71,7 +76,7 @@
         </div>
 
         <div class="form-grid contract">
-            @if (segment() === 'option') {
+            @if (segment() === 'OPT') {
             <div class="field">
                 <span class="label">Type</span>
                 <div class="seg" role="group" aria-label="Option type">
@@ -83,7 +88,7 @@
             </div>
             <div class="field">
                 <label for="pf-strike">Strike</label>
-                <select id="pf-strike" [disabled]="!catalog()?.strikes?.length" (change)="onStrike($any($event.target).value)">
+                <select id="pf-strike" [class.invalid]="invalid().has('strike')" [disabled]="!catalog()?.strikes?.length" (change)="onStrike($any($event.target).value)">
                     @for (s of catalog()?.strikes ?? []; track s) {
                     <option [value]="s" [selected]="s === strike()">{{ s }}{{ s === catalog()?.atmStrike ? ' (ATM)' : '' }}</option>
                     }
@@ -92,7 +97,7 @@
             }
             <div class="field">
                 <label for="pf-expiry">Expiry</label>
-                <select id="pf-expiry" [disabled]="!catalog()?.expiries?.length" (change)="onExpiry($any($event.target).value)">
+                <select id="pf-expiry" [class.invalid]="invalid().has('expiry_date')" [disabled]="!catalog()?.expiries?.length" (change)="onExpiry($any($event.target).value)">
                     @for (e of catalog()?.expiries ?? []; track e) {
                     <option [value]="e" [selected]="e === expiry()">{{ dateLabel(e) }}</option>
                     }
@@ -104,7 +109,7 @@
         <div class="form-grid basket">
             <div class="field">
                 <label for="pf-basket">Basket</label>
-                <select id="pf-basket" [class.invalid]="invalidField() === 'basket'" (change)="onBasketChoice($any($event.target).value)">
+                <select id="pf-basket" [class.invalid]="invalid().has('basket')" (change)="onBasketChoice($any($event.target).value)">
                     <option value="" [selected]="basketChoice() === ''">No basket</option>
                     @for (b of baskets(); track b.id) {
                     <option [value]="b.id" [selected]="basketChoice() === b.id">{{ b.name }}</option>
@@ -116,7 +121,7 @@
             <div class="field">
                 <label for="pf-basket-name">New basket name</label>
                 <input id="pf-basket-name" type="text" maxlength="40" placeholder="e.g. Nifty swing set"
-                    [class.invalid]="invalidField() === 'basket'" [value]="newBasketName()"
+                    [class.invalid]="invalid().has('basket')" [value]="newBasketName()"
                     (input)="newBasketName.set($any($event.target).value)">
             </div>
             }
@@ -126,64 +131,75 @@
             <div class="field">
                 <span class="label">Side</span>
                 <div class="seg" role="group" aria-label="Side">
-                    <button type="button" [class.active]="side() === 'buy'" [attr.aria-pressed]="side() === 'buy'"
-                        [class.tone-pos]="true" (click)="side.set('buy')">Buy</button>
-                    <button type="button" [class.active]="side() === 'sell'" [attr.aria-pressed]="side() === 'sell'"
-                        [class.tone-neg]="true" (click)="side.set('sell')">Sell</button>
+                    <button type="button" [class.active]="side() === 'Buy'" [attr.aria-pressed]="side() === 'Buy'"
+                        [class.tone-pos]="true" (click)="side.set('Buy')">Buy</button>
+                    <button type="button" [class.active]="side() === 'Sell'" [attr.aria-pressed]="side() === 'Sell'"
+                        [class.tone-neg]="true" (click)="side.set('Sell')">Sell</button>
                 </div>
             </div>
             <div class="field">
                 <label for="pf-qty">Qty <span class="unit">(lots)</span></label>
-                <input id="pf-qty" type="number" step="1" min="1" [class.invalid]="invalidField() === 'qty'"
+                <input id="pf-qty" type="number" step="1" min="1" [class.invalid]="invalid().has('qnt')"
                     [value]="qty()" (input)="qty.set($any($event.target).value)">
             </div>
             <div class="field">
                 <label for="pf-price">Price</label>
-                <input id="pf-price" type="number" step="0.05" min="0" [class.invalid]="invalidField() === 'price'"
-                    [value]="fillPrice()" (input)="onPriceInput($any($event.target).value)">
-                <span class="hint">{{ priceLoading() ? 'Fetching EOD close…' : priceHint() }}</span>
+                <input id="pf-price" type="number" step="0.05" min="0" [class.invalid]="invalid().has('open_price')"
+                    [value]="fillPrice()" (input)="fillPrice.set($any($event.target).value)">
+                <span class="hint">{{ priceHint() }}</span>
             </div>
             <div class="field">
                 <label for="pf-date">Date</label>
-                <input id="pf-date" type="date" [max]="today" [class.invalid]="invalidField() === 'date'"
+                <input id="pf-date" type="date" [max]="today" [class.invalid]="invalid().has('date')"
                     [value]="fillDate()" (input)="fillDate.set($any($event.target).value)">
             </div>
             <div class="field">
                 <label for="pf-lot">Lot size</label>
-                <input id="pf-lot" type="number" readonly [value]="lot() ?? ''">
+                <input id="pf-lot" type="number" min="1" step="1" [readOnly]="lotFromFeed() !== null" [class.invalid]="invalid().has('lot_size')"
+                    [value]="lotFromFeed() ?? lotInput()" (input)="lotInput.set($any($event.target).value)">
                 <span class="hint">{{ lotHint() }}</span>
             </div>
             <div class="field action">
                 <span class="label" aria-hidden="true">&nbsp;</span>
-                <button type="button" class="primary" [disabled]="!selectedContract() || catalogLoading()" (click)="record()">Record</button>
+                <button type="button" class="primary" [disabled]="!canRecord() || submitting()" (click)="record()">{{ submitting() ? 'Recording…' : 'Record' }}</button>
             </div>
         </div>
         @if (entryError()) { <p class="input-error" role="alert">{{ entryError() }}</p> }
         @if (entryMessage()) { <p class="cap" role="status">{{ entryMessage() }}</p> }
     </div>
 
-    <!-- ===== summary ===== -->
+    <!-- ===== summary (from the API) ===== -->
     <div class="stat-strip">
+        @if (kpi(); as k) {
         <div class="stat">
             <div class="stat-label">Current value</div>
-            <div class="stat-value">{{ summary().value }}</div>
-            <div class="stat-hint">{{ pricesLoading() ? 'Fetching EOD prices…' : summary().valueHint }}</div>
+            <div class="stat-value">{{ k.value }}</div>
+            <div class="stat-hint">{{ k.valueHint }}</div>
         </div>
         <div class="stat">
             <div class="stat-label">Unrealised P&amp;L</div>
-            <div class="stat-value" [class]="tone(summary().unreal)">{{ summary().unrealText }}</div>
-            <div class="stat-hint">{{ summary().unrealHint }}</div>
+            <div class="stat-value" [class]="k.unreal === null ? '' : tone(k.unreal)">{{ k.unrealText }}</div>
+            <div class="stat-hint">{{ k.unrealHint }}</div>
         </div>
         <div class="stat">
             <div class="stat-label">Realised P&amp;L</div>
-            <div class="stat-value" [class]="tone(summary().real)">{{ summary().realText }}</div>
-            <div class="stat-hint">{{ summary().realHint }}</div>
+            <div class="stat-value" [class]="tone(k.real)">{{ k.realText }}</div>
+            <div class="stat-hint">{{ k.realHint }}</div>
         </div>
         <div class="stat">
             <div class="stat-label">Total P&amp;L</div>
-            <div class="stat-value" [class]="tone(summary().total)">{{ summary().totalText }}</div>
-            <div class="stat-hint">Unrealised + realised</div>
+            <div class="stat-value" [class]="tone(k.total)">{{ k.totalText }}</div>
+            <div class="stat-hint">{{ k.totalHint }}</div>
         </div>
+        } @else {
+        @for (label of ['Current value', 'Unrealised P&L', 'Realised P&L', 'Total P&L']; track label) {
+        <div class="stat">
+            <div class="stat-label">{{ label }}</div>
+            <div class="stat-value">—</div>
+            <div class="stat-hint">{{ openError() ? 'Unavailable' : 'Loading…' }}</div>
+        </div>
+        }
+        }
     </div>
 
     <!-- ===== views ===== -->
@@ -204,10 +220,14 @@
         <div class="chips" role="group" aria-label="Segment filter">
             @for (chip of segmentChips(); track chip.value) {
             <button type="button" class="chip" [class.active]="segFilter() === chip.value" [attr.aria-pressed]="segFilter() === chip.value"
-                (click)="segFilter.set(chip.value)">{{ chip.text }}</button>
+                (click)="setSegFilter(chip.value)">{{ chip.text }}</button>
             }
         </div>
-        @if (!openRows().length) {
+        @if (openError()) {
+        <p class="input-error" role="alert">{{ openError() }} <button type="button" class="ghost" (click)="loadOpen()">Retry</button></p>
+        } @else if (openLoading() && !openData()) {
+        <div class="empty" role="status">Loading positions…</div>
+        } @else if (!openRows().length) {
         <div class="empty">
             @if (segFilter() === 'all') { No open positions.<br>Record a paper fill above to start tracking one. }
             @else { No open {{ segFilterLabel() }} positions. }
@@ -218,33 +238,33 @@
                 <thead>
                     <tr>
                         <th scope="col" [attr.aria-sort]="ariaSort(openSort(), 'symbol')"><button type="button" class="sort" (click)="sortOpenBy('symbol')">Instrument</button></th>
-                        <th scope="col" class="num" [attr.aria-sort]="ariaSort(openSort(), 'qty')"><button type="button" class="sort" (click)="sortOpenBy('qty')">Qty / lots</button></th>
-                        <th scope="col" class="num" [attr.aria-sort]="ariaSort(openSort(), 'avg')"><button type="button" class="sort" (click)="sortOpenBy('avg')">{{ segFilter() === 'option' ? 'Avg premium' : 'Avg cost' }}</button></th>
+                        <th scope="col" class="num" [attr.aria-sort]="ariaSort(openSort(), 'qnt')"><button type="button" class="sort" (click)="sortOpenBy('qnt')">Qty / lots</button></th>
+                        <th scope="col" class="num" [attr.aria-sort]="ariaSort(openSort(), 'avg_cost')"><button type="button" class="sort" (click)="sortOpenBy('avg_cost')">{{ segFilter() === 'OPT' ? 'Avg premium' : 'Avg cost' }}</button></th>
                         <th scope="col" class="num" [attr.aria-sort]="ariaSort(openSort(), 'cmp')"><button type="button" class="sort" (click)="sortOpenBy('cmp')">CMP</button></th>
                         <th scope="col" class="num" [attr.aria-sort]="ariaSort(openSort(), 'notional')"><button type="button" class="sort" (click)="sortOpenBy('notional')">Notional</button></th>
-                        <th scope="col" class="num" [attr.aria-sort]="ariaSort(openSort(), 'unreal')"><button type="button" class="sort" (click)="sortOpenBy('unreal')">Unrealised</button></th>
+                        <th scope="col" class="num" [attr.aria-sort]="ariaSort(openSort(), 'unrealised')"><button type="button" class="sort" (click)="sortOpenBy('unrealised')">Unrealised</button></th>
                         <th scope="col"><span class="visually-hidden">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody>
-                    @for (p of openRows(); track p.contract.key) {
+                    @for (p of openRows(); track p.id) {
                     <tr>
-                        <td>{{ p.contract.label }}<span class="segtag" [class.option]="p.kind === 'option'" [class.future]="p.kind === 'future'">{{ p.kind === 'future' ? 'FUT' : 'OPT' }}</span>
-                            <span class="kindtag">{{ dateLabel(p.contract.expiry) }}@if (dte(p); as d) { @if (d <= 7) { <span class="expwarn">{{ d }}d</span> } }</span>
+                        <td>{{ p.label }}<span class="segtag" [class.option]="p.segment === 'OPT'" [class.future]="p.segment === 'FUT'">{{ p.segment }}</span>
+                            <span class="kindtag">{{ dateLabel(p.expiry_date) }}@if (p.dte !== undefined && p.dte <= 7) { <span class="expwarn">{{ p.dte < 0 ? 'expired' : p.dte + 'd' }}</span> }</span>
                         </td>
-                        <td class="num"><span class="dir" [class.long]="p.qty > 0">{{ p.qty > 0 ? 'LONG' : 'SHORT' }}</span> {{ p.qty < 0 ? -p.qty : p.qty }}</td>
-                        <td class="num">{{ price(p.avg) }}</td>
-                        <td class="num">{{ p.cmp === null ? '' : price(p.cmp) }}@if (p.cmp === null) { <span class="nocmp">{{ pricesLoading() ? '…' : 'no feed' }}</span> }</td>
-                        <td class="num">{{ money(this.notionalOf(p)) }}</td>
-                        <td class="num" [class]="p.cmp === null ? '' : tone(this.unrealOf(p))">{{ p.cmp === null ? '—' : signed(this.unrealOf(p)) }}</td>
-                        <td class="num"><button type="button" class="row-btn" (click)="openSquareOff(p.contract.key)">Square off</button></td>
+                        <td class="num"><span class="dir" [class.long]="p.direction === 'LONG'">{{ p.direction }}</span> {{ p.qnt }}</td>
+                        <td class="num">{{ priceCell(p.avg_cost) }}</td>
+                        <td class="num">{{ priceCell(p.cmp) }}@if (cmpNote(p); as note) { <span class="hint">{{ note }}</span> }</td>
+                        <td class="num">{{ moneyCell(p.notional) }}</td>
+                        <td class="num" [class]="unrealTone(p)">{{ unrealCell(p) }}</td>
+                        <td class="num"><button type="button" class="row-btn" (click)="openSquareOff(p)">Square off</button></td>
                     </tr>
                     }
                 </tbody>
             </table>
         </div>
         <p class="cap">Average cost is weighted across fills. “Square off” books a closing fill at the price you confirm, a ledger
-            entry and not a broker order.{{ expiringSoon() ? ' ' + plural(expiringSoon(), 'contract') + ' expire within a week.' : '' }}</p>
+            entry and not a broker order.{{ eodNote() }}{{ expiringSoon() ? ' ' + plural(expiringSoon(), 'contract') + ' expire within a week.' : '' }}</p>
         }
         }
 
@@ -253,10 +273,14 @@
         <div class="seg group-seg" role="group" aria-label="Group closed trades">
             @for (g of groupOptions; track g.value) {
             <button type="button" [class.active]="closedGroup() === g.value" [attr.aria-pressed]="closedGroup() === g.value"
-                (click)="closedGroup.set(g.value)">{{ g.closedLabel }}</button>
+                (click)="setClosedGroup(g.value)">{{ g.closedLabel }}</button>
             }
         </div>
-        @if (!closed().length) {
+        @if (closedError()) {
+        <p class="input-error" role="alert">{{ closedError() }} <button type="button" class="ghost" (click)="loadClosed()">Retry</button></p>
+        } @else if (closedLoading() && !closedData()) {
+        <div class="empty" role="status">Loading closed trades…</div>
+        } @else if (!closedTotals()?.closed_trades) {
         <div class="empty">No closed trades yet.<br>Close or reduce an open position and it will appear here.</div>
         } @else if (closedGroup() === 'trade') {
         <div class="tbl-scroll">
@@ -264,44 +288,54 @@
                 <thead>
                     <tr>
                         <th scope="col" [attr.aria-sort]="ariaSort(closedSort(), 'symbol')"><button type="button" class="sort" (click)="sortClosedBy('symbol')">Instrument</button></th>
-                        <th scope="col" class="num" [attr.aria-sort]="ariaSort(closedSort(), 'qty')"><button type="button" class="sort" (click)="sortClosedBy('qty')">Qty</button></th>
-                        <th scope="col" class="num" [attr.aria-sort]="ariaSort(closedSort(), 'entry')"><button type="button" class="sort" (click)="sortClosedBy('entry')">Entry</button></th>
-                        <th scope="col" class="num" [attr.aria-sort]="ariaSort(closedSort(), 'exit')"><button type="button" class="sort" (click)="sortClosedBy('exit')">Exit</button></th>
+                        <th scope="col" class="num" [attr.aria-sort]="ariaSort(closedSort(), 'qnt')"><button type="button" class="sort" (click)="sortClosedBy('qnt')">Qty</button></th>
+                        <th scope="col" class="num" [attr.aria-sort]="ariaSort(closedSort(), 'avg_cost')"><button type="button" class="sort" (click)="sortClosedBy('avg_cost')">Entry</button></th>
+                        <th scope="col" class="num" [attr.aria-sort]="ariaSort(closedSort(), 'closing_price')"><button type="button" class="sort" (click)="sortClosedBy('closing_price')">Exit</button></th>
                         <th scope="col" class="num" [attr.aria-sort]="ariaSort(closedSort(), 'realised')"><button type="button" class="sort" (click)="sortClosedBy('realised')">Realised</button></th>
-                        <th scope="col" [attr.aria-sort]="ariaSort(closedSort(), 'exit_date')"><button type="button" class="sort" (click)="sortClosedBy('exit_date')">Closed</button></th>
+                        <th scope="col" [attr.aria-sort]="ariaSort(closedSort(), 'close_date')"><button type="button" class="sort" (click)="sortClosedBy('close_date')">Closed</button></th>
                     </tr>
                 </thead>
                 <tbody>
-                    @for (t of closedRows(); track $index) {
+                    @for (t of closedTrades(); track t.id) {
                     <tr>
-                        <td>{{ t.label }}<span class="segtag" [class.option]="t.kind === 'option'" [class.future]="t.kind === 'future'">{{ t.kind === 'future' ? 'FUT' : 'OPT' }}</span></td>
-                        <td class="num"><span class="dir" [class.long]="t.direction === 'long'">{{ t.direction === 'long' ? 'LONG' : 'SHORT' }}</span> {{ t.qty }}</td>
-                        <td class="num">{{ price(t.entry) }}</td>
-                        <td class="num">{{ price(t.exit) }}</td>
-                        <td class="num" [class]="tone(t.realised)">{{ signed(t.realised) }}</td>
-                        <td>{{ t.exitDate }}</td>
+                        <td>{{ t.label }}<span class="segtag" [class.option]="t.segment === 'OPT'" [class.future]="t.segment === 'FUT'">{{ t.segment }}</span></td>
+                        <td class="num"><span class="dir" [class.long]="t.direction === 'LONG'">{{ t.direction }}</span> {{ t.qnt }}</td>
+                        <td class="num">{{ priceCell(t.avg_cost) }}</td>
+                        <td class="num">{{ priceCell(t.closing_price) }}</td>
+                        <td class="num" [class]="realisedTone(t)">{{ realisedCell(t) }}</td>
+                        <td>{{ t.close_date }}</td>
                     </tr>
                     }
                 </tbody>
             </table>
         </div>
-        <p class="cap">{{ plural(closed().length, 'closed trade') }} · {{ closedWins() }} profitable.</p>
+        <div class="pager">
+            <span class="cap">{{ plural(closedTotals()!.closed_trades, 'closed trade') }} · {{ closedTotals()!.profitable }} profitable.</span>
+            <label class="rows-label">Rows
+                <select (change)="setClosedPageSize($any($event.target).value)">
+                    @for (size of closedPageSizes; track size) { <option [value]="size" [selected]="size === closedPageSize()">{{ size }}</option> }
+                </select>
+            </label>
+            <button type="button" class="ghost" [disabled]="!closedHasPrevious() || closedLoading()" (click)="closedPrevious()">Previous</button>
+            <span class="cap">Page {{ closedPage() }}</span>
+            <button type="button" class="ghost" [disabled]="!closedHasNext() || closedLoading()" (click)="closedNext()">Next</button>
+        </div>
         } @else {
         <div class="tbl-scroll">
             <table class="tbl">
                 <thead><tr><th scope="col">Period</th><th scope="col" class="num">Trades</th><th scope="col" class="num">Wins</th><th scope="col" class="num">Win rate</th><th scope="col" class="num">Realised P&amp;L</th></tr></thead>
                 <tbody>
-                    @for (g of closedGroups(); track g.key) {
+                    @for (g of closedPeriods(); track g.key) {
                     <tr>
                         <td>{{ g.label }}</td><td class="num">{{ g.trades }}</td><td class="num">{{ g.wins }}</td>
-                        <td class="num">{{ g.winRate.toFixed(0) }}%</td>
+                        <td class="num">{{ g.win_rate.toFixed(0) }}%</td>
                         <td class="num" [class]="tone(g.realised)">{{ signed(g.realised) }}</td>
                     </tr>
                     }
                 </tbody>
             </table>
         </div>
-        <p class="cap">{{ plural(closedGroups().length, closedGroup()) }} with closed trades · realised is summed within each {{ closedGroup() }}.</p>
+        <p class="cap">{{ plural(closedPeriods().length, closedGroup()) }} with closed trades · realised is summed within each {{ closedGroup() }}.</p>
         }
         }
 
@@ -310,11 +344,11 @@
         <div class="perf-controls">
             <div class="field">
                 <label for="pf-from">From</label>
-                <input id="pf-from" type="date" [value]="perfFrom()" (input)="perfFrom.set($any($event.target).value)">
+                <input id="pf-from" type="date" [value]="perfFrom()" (change)="setPerfFrom($any($event.target).value)">
             </div>
             <div class="field">
                 <label for="pf-to">To</label>
-                <input id="pf-to" type="date" [value]="perfTo()" (input)="perfTo.set($any($event.target).value)">
+                <input id="pf-to" type="date" [value]="perfTo()" (change)="setPerfTo($any($event.target).value)">
             </div>
             <div class="field action">
                 <span class="label" aria-hidden="true">&nbsp;</span>
@@ -325,18 +359,22 @@
                 <div class="seg" role="group" aria-label="Group performance by">
                     @for (g of groupOptions; track g.value) {
                     <button type="button" [class.active]="perfGroup() === g.value" [attr.aria-pressed]="perfGroup() === g.value"
-                        (click)="perfGroup.set(g.value)">{{ g.perfLabel }}</button>
+                        (click)="setPerfGroup(g.value)">{{ g.perfLabel }}</button>
                     }
                 </div>
             </div>
         </div>
         @if (perfRangeError()) { <p class="input-error" role="alert">{{ perfRangeError() }}</p> }
+        @if (perfError()) {
+        <p class="input-error" role="alert">{{ perfError() }} <button type="button" class="ghost" (click)="loadPerf()">Retry</button></p>
+        }
 
-        @if (!perfTrades().length) {
-        <div class="empty">
-            @if (closed().length) { No closed trades in this date range.<br>Widen the range to see performance. }
-            @else { No closed trades yet.<br>Performance metrics appear once a position has been closed. }
-        </div>
+        @if (perfState() === 'loading') {
+        <div class="empty" role="status">{{ perfError() ? '' : 'Loading performance…' }}</div>
+        } @else if (perfState() === 'none') {
+        <div class="empty">No closed trades yet.<br>Performance metrics appear once a position has been closed.</div>
+        } @else if (perfState() === 'empty-range') {
+        <div class="empty">No closed trades in this date range.<br>Widen the range to see performance.</div>
         } @else {
         <div class="chart-legend">
             <span><i class="legend-line"></i>Cumulative realised P&amp;L</span>
@@ -384,13 +422,14 @@
             }
         </div>
         @if (perfSegments().length) {
-        <p class="cap strong">Realised by segment:
-            @for (s of perfSegments(); track s.kind; let last = $last) { {{ segmentLabels[s.kind] }} {{ signed(s.realised) }}{{ last ? '' : ' ·' }} }
+        <p class="cap">Realised by segment:
+            @for (s of perfSegments(); track s.label; let last = $last) { {{ s.label }} {{ signed(s.value) }}{{ last ? '' : ' ·' }} }
         </p>
         }
         <p class="cap">The curve is cumulative realised P&amp;L{{ perfGroup() === 'trade' ? ' in trade order' : ' by ' + perfGroup() }}{{ perfFrom() || perfTo() ? ' within the selected date range' : '' }},
             not open-position mark-to-market, because those outcomes are not yet decided. The dashed line marks the
-            running peak, so the gap below it is the drawdown.</p>
+            running peak, so the gap below it is the drawdown. The drawdown percentage is the worst fall divided by the highest
+            peak of the whole run.</p>
         <p class="note">Realised P&amp;L uses weighted-average cost, matching how broker apps show positions. Indian
             capital-gains tax is computed FIFO, so for an instrument averaged into across several days these figures
             will not match a tax statement. This is a reporting convention, not a discrepancy.</p>
@@ -399,73 +438,81 @@
 
         <!-- BASKETS -->
         @if (view() === 'basket') {
-        @if (!basketCards().cards.length && !basketCards().unassigned.length) {
+        @if (basketsError()) {
+        <p class="input-error" role="alert">{{ basketsError() }} <button type="button" class="ghost" (click)="loadBaskets()">Retry</button></p>
+        } @else if (basketsLoading() && !basketsView()) {
+        <div class="empty" role="status">Loading baskets…</div>
+        } @else if (basketsView(); as data) {
+        @if (!data.baskets.length && !data.unassigned.open_count) {
         <div class="empty">No baskets yet.<br>Pick “+ Create new basket…” while recording a paper fill to group positions together.</div>
         }
-        @for (card of basketCards().cards; track card.id) {
+        @for (card of data.baskets; track card.id) {
         <div class="basket-card">
             <div class="basket-head">
                 <h3>{{ card.name }}</h3>
                 <div class="basket-stats">
-                    <span>{{ card.members.length }} open</span>
-                    @if (card.closedMembers.length) { <span>{{ card.closedMembers.length }} closed</span> }
-                    <span [class]="tone(card.unreal)">{{ signed(card.unreal) }} unrealised</span>
+                    <span>{{ card.open_count }} open</span>
+                    @if (card.closed_count) { <span>{{ card.closed_count }} closed</span> }
+                    <span [class]="bucketUnrealised(card.open_positions, card.unrealised).tone">{{ bucketUnrealised(card.open_positions, card.unrealised).text }} unrealised</span>
                     <span [class]="tone(card.realised)">{{ signed(card.realised) }} realised</span>
                 </div>
-                <button type="button" class="row-btn" (click)="openBasketChart(card.id)">Chart</button>
-                <button type="button" class="row-btn" (click)="openRename(card.id)">Rename</button>
-                <button type="button" class="row-btn" (click)="openDelete(card.id)">Remove basket</button>
+                <button type="button" class="row-btn" (click)="openBasketChart(card.id, card.name)">Chart</button>
+                <button type="button" class="row-btn" (click)="openRename(card.id, card.name)">Rename</button>
+                <button type="button" class="row-btn" (click)="openDelete(card.id, card.name)">Remove basket</button>
             </div>
             <div class="basket-body">
-                @if (card.members.length) {
+                @if (card.open_positions.length) {
                 <div class="tbl-scroll">
                     <table class="tbl">
                         <thead><tr><th scope="col">Instrument</th><th scope="col" class="num">Qty</th><th scope="col" class="num">Avg</th><th scope="col" class="num">CMP</th><th scope="col" class="num">Unrealised</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
                         <tbody>
-                            @for (p of card.members; track p.contract.key) {
+                            @for (p of card.open_positions; track p.id) {
                             <tr>
-                                <td>{{ p.contract.label }}<span class="segtag" [class.option]="p.kind === 'option'" [class.future]="p.kind === 'future'">{{ p.kind === 'future' ? 'FUT' : 'OPT' }}</span></td>
-                                <td class="num"><span class="dir" [class.long]="p.qty > 0">{{ p.qty > 0 ? 'LONG' : 'SHORT' }}</span> {{ p.qty < 0 ? -p.qty : p.qty }}</td>
-                                <td class="num">{{ price(p.avg) }}</td>
-                                <td class="num">{{ p.cmp === null ? '' : price(p.cmp) }}@if (p.cmp === null) { <span class="nocmp">no feed</span> }</td>
-                                <td class="num" [class]="p.cmp === null ? '' : tone(this.unrealOf(p))">{{ p.cmp === null ? '—' : signed(this.unrealOf(p)) }}</td>
-                                <td class="num"><button type="button" class="row-btn" (click)="openSquareOff(p.contract.key)">Square off</button></td>
+                                <td>{{ p.label }}<span class="segtag" [class.option]="p.segment === 'OPT'" [class.future]="p.segment === 'FUT'">{{ p.segment }}</span></td>
+                                <td class="num"><span class="dir" [class.long]="p.direction === 'LONG'">{{ p.direction }}</span> {{ p.qnt }}</td>
+                                <td class="num">{{ priceCell(p.avg_cost) }}</td>
+                                <td class="num">{{ priceCell(p.cmp) }}@if (cmpNote(p); as note) { <span class="hint">{{ note }}</span> }</td>
+                                <td class="num" [class]="unrealTone(p)">{{ unrealCell(p) }}</td>
+                                <td class="num"><button type="button" class="row-btn" (click)="openSquareOff(p)">Square off</button></td>
                             </tr>
                             }
                         </tbody>
                     </table>
                 </div>
                 } @else { <p class="empty">No open positions in this basket.</p> }
-                @if (card.closedMembers.length) {
+                @if (card.closed_trades.length) {
                 <p class="sect-label spaced">Closed in this basket</p>
                 <div class="tbl-scroll">
                     <table class="tbl">
                         <thead><tr><th scope="col">Instrument</th><th scope="col" class="num">Qty</th><th scope="col" class="num">Entry</th><th scope="col" class="num">Exit</th><th scope="col" class="num">Realised</th><th scope="col">Closed</th></tr></thead>
                         <tbody>
-                            @for (t of card.closedMembers; track $index) {
+                            @for (t of card.closed_trades; track t.id) {
                             <tr>
-                                <td>{{ t.label }}<span class="segtag" [class.option]="t.kind === 'option'" [class.future]="t.kind === 'future'">{{ t.kind === 'future' ? 'FUT' : 'OPT' }}</span></td>
-                                <td class="num"><span class="dir" [class.long]="t.direction === 'long'">{{ t.direction === 'long' ? 'LONG' : 'SHORT' }}</span> {{ t.qty }}</td>
-                                <td class="num">{{ price(t.entry) }}</td>
-                                <td class="num">{{ price(t.exit) }}</td>
-                                <td class="num" [class]="tone(t.realised)">{{ signed(t.realised) }}</td>
-                                <td>{{ t.exitDate }}</td>
+                                <td>{{ t.label }}<span class="segtag" [class.option]="t.segment === 'OPT'" [class.future]="t.segment === 'FUT'">{{ t.segment }}</span></td>
+                                <td class="num"><span class="dir" [class.long]="t.direction === 'LONG'">{{ t.direction }}</span> {{ t.qnt }}</td>
+                                <td class="num">{{ priceCell(t.avg_cost) }}</td>
+                                <td class="num">{{ priceCell(t.closing_price) }}</td>
+                                <td class="num" [class]="realisedTone(t)">{{ realisedCell(t) }}</td>
+                                <td>{{ t.close_date }}</td>
                             </tr>
                             }
                         </tbody>
                     </table>
                 </div>
+                @if (card.closed_trades_truncated) {
+                <p class="cap">Showing the newest {{ card.closed_trades.length }} of {{ card.closed_count }} closed trades in this basket.</p>
+                }
                 }
             </div>
         </div>
         }
-        @if (basketCards().unassigned.length) {
+        @if (data.unassigned.open_count) {
         <div class="basket-card">
             <div class="basket-head">
                 <h3>Unassigned</h3>
                 <div class="basket-stats">
-                    <span>{{ basketCards().unassigned.length }} open</span>
-                    <span [class]="tone(basketCards().unassignedUnreal)">{{ signed(basketCards().unassignedUnreal) }} unrealised</span>
+                    <span>{{ data.unassigned.open_count }} open</span>
+                    <span [class]="bucketUnrealised(data.unassigned.open_positions, data.unassigned.unrealised).tone">{{ bucketUnrealised(data.unassigned.open_positions, data.unassigned.unrealised).text }} unrealised</span>
                 </div>
             </div>
             <div class="basket-body">
@@ -473,14 +520,14 @@
                     <table class="tbl">
                         <thead><tr><th scope="col">Instrument</th><th scope="col" class="num">Qty</th><th scope="col" class="num">Avg</th><th scope="col" class="num">CMP</th><th scope="col" class="num">Unrealised</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
                         <tbody>
-                            @for (p of basketCards().unassigned; track p.contract.key) {
+                            @for (p of data.unassigned.open_positions; track p.id) {
                             <tr>
-                                <td>{{ p.contract.label }}<span class="segtag" [class.option]="p.kind === 'option'" [class.future]="p.kind === 'future'">{{ p.kind === 'future' ? 'FUT' : 'OPT' }}</span></td>
-                                <td class="num"><span class="dir" [class.long]="p.qty > 0">{{ p.qty > 0 ? 'LONG' : 'SHORT' }}</span> {{ p.qty < 0 ? -p.qty : p.qty }}</td>
-                                <td class="num">{{ price(p.avg) }}</td>
-                                <td class="num">{{ p.cmp === null ? '' : price(p.cmp) }}@if (p.cmp === null) { <span class="nocmp">no feed</span> }</td>
-                                <td class="num" [class]="p.cmp === null ? '' : tone(this.unrealOf(p))">{{ p.cmp === null ? '—' : signed(this.unrealOf(p)) }}</td>
-                                <td class="num"><button type="button" class="row-btn" (click)="openSquareOff(p.contract.key)">Square off</button></td>
+                                <td>{{ p.label }}<span class="segtag" [class.option]="p.segment === 'OPT'" [class.future]="p.segment === 'FUT'">{{ p.segment }}</span></td>
+                                <td class="num"><span class="dir" [class.long]="p.direction === 'LONG'">{{ p.direction }}</span> {{ p.qnt }}</td>
+                                <td class="num">{{ priceCell(p.avg_cost) }}</td>
+                                <td class="num">{{ priceCell(p.cmp) }}@if (cmpNote(p); as note) { <span class="hint">{{ note }}</span> }</td>
+                                <td class="num" [class]="unrealTone(p)">{{ unrealCell(p) }}</td>
+                                <td class="num"><button type="button" class="row-btn" (click)="openSquareOff(p)">Square off</button></td>
                             </tr>
                             }
                         </tbody>
@@ -490,7 +537,9 @@
         </div>
         }
         }
+        }
     </div>
+    }
 </section>
 
 <!-- ===== dialogs ===== -->
@@ -499,53 +548,57 @@
     <div class="modal-card" [class.wide]="d.kind === 'chart'" role="dialog" aria-modal="true" tabindex="-1" (click)="$event.stopPropagation()">
         @switch (d.kind) {
         @case ('close') {
-        <h3>Square off {{ closeTarget()?.contract?.label }}</h3>
-        <p>Enter the price this {{ (closeTarget()?.qty ?? 0) > 0 ? 'long' : 'short' }} position is being closed at{{ closeTarget()?.cmp !== null ? ', defaults to the latest EOD close.' : '. No EOD price is available, so it defaults to average cost.' }}</p>
+        <h3>Square off {{ d.position.label }}</h3>
+        <p>Enter the price this {{ d.position.direction === 'LONG' ? 'long' : 'short' }} position is being closed at{{ hasPrice(d.position.cmp) ? ', defaults to the latest EOD price.' : '. No EOD price is available, so it defaults to average cost.' }}
+            Leave lots empty to close all {{ d.position.qnt }}.</p>
+        <div class="field">
+            <label for="pf-close-qty">Lots to close <span class="unit">(optional)</span></label>
+            <input id="pf-close-qty" type="number" step="1" min="1" [max]="d.position.qnt" [placeholder]="'All ' + d.position.qnt"
+                [value]="d.qty" (input)="onCloseQty($any($event.target).value)">
+        </div>
         <div class="field">
             <label for="pf-close-price">Closing price</label>
-            <input id="pf-close-price" type="number" step="0.05" [value]="d.price" (input)="onDialogPrice($any($event.target).value)"
+            <input id="pf-close-price" type="number" step="0.05" [value]="d.price" (input)="onClosePrice($any($event.target).value)"
                 (keydown.enter)="confirmSquareOff()">
         </div>
         @if (d.error) { <p class="input-error" role="alert">{{ d.error }}</p> }
         <div class="modal-actions">
             <button type="button" class="ghost" (click)="closeDialog()">Cancel</button>
-            <button type="button" class="primary" (click)="confirmSquareOff()">Square off</button>
+            <button type="button" class="primary" [disabled]="d.busy" (click)="confirmSquareOff()">{{ d.busy ? 'Squaring off…' : 'Square off' }}</button>
         </div>
         }
         @case ('rename') {
         <h3>Rename basket</h3>
         <div class="field">
             <label for="pf-rename">Basket name</label>
-            <input id="pf-rename" type="text" maxlength="40" [value]="d.name" (input)="onDialogName($any($event.target).value)"
+            <input id="pf-rename" type="text" maxlength="40" [value]="d.name" (input)="onRenameInput($any($event.target).value)"
                 (keydown.enter)="confirmRename()">
         </div>
         @if (d.error) { <p class="input-error" role="alert">{{ d.error }}</p> }
         <div class="modal-actions">
             <button type="button" class="ghost" (click)="closeDialog()">Cancel</button>
-            <button type="button" class="primary" (click)="confirmRename()">Save</button>
+            <button type="button" class="primary" [disabled]="d.busy" (click)="confirmRename()">{{ d.busy ? 'Saving…' : 'Save' }}</button>
         </div>
         }
         @case ('delete') {
         <h3>Remove basket</h3>
-        <p>Remove “{{ dialogBasketName() }}”? Positions stay open and become unassigned.</p>
+        <p>Remove “{{ d.name }}”? Its open and closed positions stay in your portfolio and become unassigned; no position
+            records are deleted.</p>
         <div class="modal-actions">
             <button type="button" class="ghost" (click)="closeDialog()">Cancel</button>
-            <button type="button" class="primary danger" (click)="confirmDelete()">Remove basket</button>
+            <button type="button" class="primary danger" [disabled]="d.busy" (click)="confirmDelete()">{{ d.busy ? 'Removing…' : 'Remove basket' }}</button>
         </div>
         }
         @case ('chart') {
-        <h3>{{ dialogBasketName() }} — EOD P&amp;L</h3>
-        @if (chartLoading()) { <p class="empty">Loading EOD prices…</p> }
+        <h3>{{ d.name }} — EOD P&amp;L</h3>
+        @if (chartLoading()) { <p class="empty" role="status">Loading EOD P&amp;L…</p> }
         @else if (chartError()) { <p class="input-error" role="alert">{{ chartError() }}</p> }
-        @else if (basketEod(); as data) {
+        @else if (chartData(); as data) {
         @if (!data.rows.length) {
         <p class="empty">No positions in this basket yet. Record a fill into it to see its EOD P&amp;L.</p>
         } @else {
-        <p class="empty">Day-wise end-of-day P&amp;L across live and squared-off legs, from real EOD closes.</p>
-        @if (data.unpriced.length) {
-        <p class="note">No EOD prices were returned for {{ data.unpriced.join(', ') }}; those legs are marked at their
-            fill price, so they show no unrealised P&amp;L.</p>
-        }
+        <p class="cap">Day-wise end-of-day P&amp;L across live and squared-off legs{{ data.as_of ? ', priced up to ' + dateLabel(data.as_of) : '' }}. Days before an add-on
+            fill are marked at the position's final average cost.</p>
         @if (basketBars(); as b) {
         <div class="chart-wrap">
             <svg [attr.viewBox]="b.viewBox" role="img" aria-label="Basket EOD P&L by day">
@@ -569,11 +622,11 @@
             <table class="tbl">
                 <thead><tr><th scope="col">Date</th><th scope="col" class="num">Live positions</th><th scope="col" class="num">Squared off</th><th scope="col" class="num">EOD P&amp;L</th><th scope="col" class="num">Cumulative</th></tr></thead>
                 <tbody>
-                    @for (r of basketEodRowsDesc(); track r.date) {
+                    @for (r of chartRowsDesc(); track r.date) {
                     <tr>
                         <td>{{ dateLabel(r.date) }}</td>
                         <td class="num" [class]="tone(r.live)">{{ eodCell(r.live) }}</td>
-                        <td class="num" [class]="tone(r.squared)">{{ eodCell(r.squared) }}</td>
+                        <td class="num" [class]="tone(r.sq)">{{ eodCell(r.sq) }}</td>
                         <td class="num" [class]="tone(r.day)">{{ eodCell(r.day) }}</td>
                         <td class="num" [class]="tone(r.cum)">{{ eodCell(r.cum) }}</td>
                     </tr>

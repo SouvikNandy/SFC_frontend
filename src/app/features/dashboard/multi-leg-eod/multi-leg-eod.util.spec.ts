@@ -1,3 +1,4 @@
+import { MAX_RANGE_MESSAGE } from '../../../shared/utils/date-range';
 import { EodDataRow } from '../eod/eod.model';
 import { LegSelection, LegSeries } from './multi-leg-eod.model';
 import {
@@ -38,6 +39,21 @@ describe('resolveRange (UTC-safe)', () => {
     expect(resolveRange('Custom', '2026-10-16', '', '2026-10-01')).toMatchObject({ error: expect.stringMatching(/both/) });
     expect(resolveRange('Custom', '2026-10-16', '2026-02-31', '2026-03-01')).toMatchObject({ error: expect.stringMatching(/valid/) });
     expect(resolveRange('Custom', '2026-10-16', '2026-10-01', '2026-10-20')).toMatchObject({ error: expect.stringMatching(/future/) });
+  });
+  it('limits a custom range to one calendar year, inclusive', () => {
+    expect(resolveRange('Custom', '2026-10-18', '2025-10-18', '2026-10-18')).toEqual({ range: { from: '2025-10-18', till: '2026-10-18' } });
+    expect(resolveRange('Custom', '2026-10-18', '2025-10-17', '2026-10-18')).toEqual({ error: MAX_RANGE_MESSAGE });
+    expect(resolveRange('Custom', '2026-10-18', '2024-02-29', '2025-02-28')).toMatchObject({ range: { from: '2024-02-29', till: '2025-02-28' } });
+    expect(resolveRange('Custom', '2026-10-18', '2024-02-29', '2025-03-01')).toEqual({ error: MAX_RANGE_MESSAGE });
+    expect(resolveRange('Custom', '2026-10-18', '2025-01-31', '2026-01-31')).toMatchObject({ range: { from: '2025-01-31', till: '2026-01-31' } });
+  });
+  it('reports the earlier problem first: reversed, future and malformed dates are not "too long"', () => {
+    expect(resolveRange('Custom', '2026-10-18', '2026-10-18', '2024-01-01')).toEqual({ error: 'From date cannot be after To date.' });
+    expect(resolveRange('Custom', '2026-10-18', '2020-01-01', '2026-10-19')).toMatchObject({ error: expect.stringMatching(/future/) });
+    expect(resolveRange('Custom', '2026-10-18', '2020-01-01', '2026-02-31')).toMatchObject({ error: expect.stringMatching(/valid/) });
+  });
+  it('does not touch presets', () => {
+    expect(resolveRange('3M', '2026-10-16', '2000-01-01', '2026-10-16')).toEqual({ range: { from: '2026-06-30', till: '2026-10-16' } });
   });
 });
 

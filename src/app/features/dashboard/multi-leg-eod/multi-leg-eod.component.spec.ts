@@ -3,6 +3,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 import { Observable, Subject, of, throwError } from 'rxjs';
 import { MultiLegEodComponent } from './multi-leg-eod.component';
+import { MAX_RANGE_MESSAGE, minusOneYear, tillPickerMax } from '../../../shared/utils/date-range';
 import { EodDataRow, EodRequest } from '../eod/eod.model';
 import { EodService } from '../eod/eod.service';
 
@@ -180,6 +181,38 @@ describe('MultiLegEodComponent', () => {
     expect(component.rangeError()).toBe('');
   });
 
+  it('custom range is limited to one calendar year: picker limits, message, and no request when exceeded', async () => {
+    await click('.field .seg button', 'Custom');
+    const today = component.today;
+    const edge = minusOneYear(today);                            // exactly one year back: allowed
+    const dayBefore = new Date(Date.parse(`${edge}T00:00:00Z`) - 86400000).toISOString().slice(0, 10);
+    const typeDate = async (id: string, value: string) => {
+      const input = host.querySelector<HTMLInputElement>(`#${id}`)!;
+      input.value = value;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await settle();
+    };
+    expect(host.querySelector<HTMLInputElement>('#ml-from')!.min).toBe(minusOneYear(component.customTill()));
+    expect(host.querySelector<HTMLInputElement>('#ml-till')!.max).toBe(tillPickerMax(component.customFrom(), today));
+    requests.length = 0;
+    await typeDate('ml-from', dayBefore);
+    expect(host.textContent).toContain(MAX_RANGE_MESSAGE);
+    expect(component.rangeError()).toBe(MAX_RANGE_MESSAGE);
+    expect(requests).toHaveLength(0);
+    await typeDate('ml-from', edge);
+    expect(component.rangeError()).toBe('');
+    expect(host.textContent).not.toContain(MAX_RANGE_MESSAGE);
+    expect(requests.at(-1)).toMatchObject({ date_from: edge, date_till: today });
+    // moving To earlier lowers the From floor and the To ceiling follows From + 1 year (never beyond today)
+    await typeDate('ml-till', today);
+    expect(host.querySelector<HTMLInputElement>('#ml-till')!.max).toBe(today);
+    // presets are unaffected
+    requests.length = 0;
+    await click('.field .seg button', '1M');
+    expect(component.rangeError()).toBe('');
+    expect(requests.length).toBeGreaterThan(0);
+  });
+
   it('combined table shows one close column per leg, latest first; missing values are explicit', async () => {
     await reloadWith(req => of(req.option_type === 'CE' ? makeRows(5, 100) : makeRows(2, 50)));   // PE only has the last 2 sessions
     const heads = Array.from(host.querySelectorAll('.data-table th, table th')).map(th => th.textContent?.trim());
@@ -290,6 +323,63 @@ describe('MultiLegEodComponent', () => {
       const lines = (await blobs[0].text()).split('\n');
       expect(lines[0]).toBe('Date,Open,High,Low,Close,Volume,OI');
       expect(lines[1]).toBe(`${isoDaysAgo(5)},50.00,53.00,47.00,51.00,1000,5000`);
+    });
+  });
+
+  it('sessions without trades (zero OHLC and volume, carried close) are gaps, never zero candles or a flat stale line', async () => {
+    const dead = (rows: EodDataRow[]) => rows.map(r => ({ ...r, open: 0, high: 0, low: 0, volume: 0, oi: 0 }));
+    await reloadWith(req => of(req.option_type === 'CE'
+      ? [...dead(makeRows(3, 1500, 4)), ...makeRows(2, 100)]          // listed but untraded for 3 sessions, then 2 traded ones
+      : dead(makeRows(5, 50))));                                       // never traded in the range
+    expect(component.series()[0].rows).toHaveLength(2);
+    expect(component.series()[1].rows).toHaveLength(0);
+    expect(component.sessions().map(s => s.date)).toEqual([isoDaysAgo(2), isoDaysAgo(1)]);
+    expect(component.chart()?.lines[0].path.match(/M/g)).toHaveLength(1);
+    expect(component.chart()?.yTicks.every(tick => !tick.label.startsWith('1,5'))).toBe(true);   // the stale 1500 close is not plotted
+    expect(host.textContent).toContain('(no data)');
+    expect(component.missingLegs()).toHaveLength(1);
+  });
+
+  describe('only legs that are not already loaded are requested', () => {
+    it('adding a leg requests just that leg; removing a leg requests nothing', async () => {
+      requests.length = 0;
+      component.addLeg();                                    // a new CE at the same contract as leg 1: already cached
+      await settle();
+      expect(requests).toHaveLength(0);
+      await select('#ml-strike-3', '22700');                 // now it is a different contract
+      expect(requests).toEqual([expect.objectContaining({ option_type: 'CE', strike: 22700 })]);
+      requests.length = 0;
+      component.removeLeg(component.legs()[2].id);
+      await settle();
+      expect(requests).toHaveLength(0);
+      expect(component.series()).toHaveLength(2);
+    });
+
+    it('changing one leg re-requests only that leg, and changing back is served from the cache', async () => {
+      requests.length = 0;
+      await select('#ml-strike-1', '22700');
+      expect(requests).toHaveLength(1);
+      requests.length = 0;
+      await select('#ml-strike-1', '22600');
+      expect(requests).toHaveLength(0);
+    });
+
+    it('a request still in flight when another leg changes is not repeated, and its result is kept', async () => {
+      const slow = new Subject<EodDataRow[]>();
+      rowsFor = req => (req.strike === 22700 ? slow : of(makeRows(4, 100)));
+      requests.length = 0;
+      component.setLegStrike(component.legs()[0].id, '22700');   // leg 1 starts loading (slow)
+      component.setLegType(component.legs()[1].id, 'CE');         // a second change reloads the screen while leg 1 is in flight
+      await settle();
+      expect(requests.filter(r => r.strike === 22700)).toHaveLength(1);
+      slow.next(makeRows(3, 500));
+      slow.complete();
+      await settle();
+      expect(component.series()[0].rows).toHaveLength(3);
+      requests.length = 0;
+      component.setLegType(component.legs()[1].id, 'PE');        // another reload: leg 1 comes from the cache
+      await settle();
+      expect(requests.filter(r => r.strike === 22700)).toHaveLength(0);
     });
   });
 

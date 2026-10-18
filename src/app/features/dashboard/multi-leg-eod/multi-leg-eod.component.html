@@ -51,11 +51,11 @@
             <div class="customdates">
                 <div class="field">
                     <label for="ml-from">From</label>
-                    <input id="ml-from" type="date" [max]="today" [value]="customFrom()" (change)="onCustomFrom($any($event.target).value)">
+                    <input id="ml-from" type="date" [min]="fromMin()" [max]="today" [value]="customFrom()" (change)="onCustomFrom($any($event.target).value)">
                 </div>
                 <div class="field">
                     <label for="ml-till">To</label>
-                    <input id="ml-till" type="date" [max]="today" [value]="customTill()" (change)="onCustomTill($any($event.target).value)">
+                    <input id="ml-till" type="date" [max]="tillMax()" [value]="customTill()" (change)="onCustomTill($any($event.target).value)">
                 </div>
             </div>
             }
@@ -197,6 +197,6 @@
         <app-data-table [columns]="combinedColumns()" [data]="combinedPage()" [loading]="loading()" emptyMessage="No sessions to show."></app-data-table>
         }
         <p class="note">The chart plots each leg's own EOD close; the table shows all legs' closes side by side, or one leg's
-            full OHLC, volume and open interest. A dash means the leg had no bar that day (not listed or already expired).</p>
+            full OHLC, volume and open interest. A dash means the leg had no bar that day: not listed, already expired, or it did not trade (the feed then reports zero prices and volume, which are left blank rather than drawn as zero).</p>
     </div>
 </section>

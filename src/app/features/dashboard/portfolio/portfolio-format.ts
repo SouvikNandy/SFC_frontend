@@ -9,3 +9,10 @@ export const price = (value: number): string => nf2.format(value);
 export const signed = (value: number): string => `${value > 0 ? '+' : ''}${money(value)}`;
 export const tone = (value: number): 'pos' | 'neg' | '' => (value > 0 ? 'pos' : value < 0 ? 'neg' : '');
 export const plural = (count: number, word: string): string => `${count} ${word}${count === 1 ? '' : 's'}`;
+
+/** API money strings ("120.50") and numbers; null/undefined/invalid stay null so "not priced" is never shown as zero. */
+export const amount = (value: string | number | null | undefined): number | null => {
+    if (value === null || value === undefined || value === '') return null;
+    const n = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(n) ? n : null;
+};

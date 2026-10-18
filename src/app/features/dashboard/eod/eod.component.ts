@@ -16,6 +16,7 @@ import {
   EodSymbol,
 } from './eod.model';
 import { buildEodChart, ChartResult } from './eod-chart.util';
+import { extractEodPage } from './eod-rows.util';
 import { DataTableColumn } from '../../../shared/components/data-table/data-table.types';
 import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
 import {
@@ -24,6 +25,7 @@ import {
 } from '../../../shared/components/chart-tooltip/chart-tooltip.component';
 import { ToastService } from '../../../core/services/toast.service';
 import { DefaultStock } from '../../../shared/services/constantFile';
+import { MAX_RANGE_MESSAGE, exceedsOneYear, fromPickerMin, isIsoDate, localTodayIso, tillPickerMax } from '../../../shared/utils/date-range';
 import { EMPTY, Subject, of } from 'rxjs';
 import { catchError, finalize, switchMap, takeUntil, tap } from 'rxjs/operators';
 
@@ -118,15 +120,11 @@ export class EodComponent implements OnInit, OnDestroy {
     this.symbol = DefaultStock;
     this.symbolQuery = DefaultStock;
     this.range = '1W';
-    // set today string (local date) for max attribute
-    const t = new Date();
-    this.todayStr = new Date(t.getFullYear(), t.getMonth(), t.getDate()).toISOString().slice(0, 10);
+    // today's LOCAL calendar date for the max attribute (toISOString would give yesterday east of UTC)
+    this.todayStr = localTodayIso();
     // default custom range to last week
-    const till = this.todayStr;
-    const from = new Date();
-    from.setDate(from.getDate() - 7);
-    this.customFrom = from.toISOString().slice(0, 10);
-    this.customTill = till;
+    this.customFrom = this.daysBeforeToday(7);
+    this.customTill = this.todayStr;
     this.setupReload();
     this.loadSymbols();
     this.refresh$.next({ loadMetadata: true });
@@ -226,54 +224,10 @@ export class EodComponent implements OnInit, OnDestroy {
       });
   }
 
+  /** Payload shape detection is shared with the Multi-Leg EOD screen; the row defaults below stay specific to this screen. */
   private normalizeEodData(data: EodResponse['data']): EodPaginatedData {
-    const payload = data as unknown;
-    if (Array.isArray(payload)) {
-      return { results: payload as EodDataRow[], page: 1, has_next: false, has_previous: false };
-    }
-    if (!payload || typeof payload !== 'object') {
-      return { results: [], page: 1, has_next: false, has_previous: false };
-    }
-    const value = payload as {
-      results?: unknown;
-      rows?: unknown;
-      items?: unknown;
-      data?: unknown;
-      page?: unknown;
-      has_next?: unknown;
-      has_previous?: unknown;
-    };
-    if (value.data && typeof value.data === 'object' && !Array.isArray(value.data)) {
-      const nested = value.data as {
-        results?: unknown;
-        rows?: unknown;
-        items?: unknown;
-        data?: unknown;
-      };
-      if (
-        Array.isArray(nested.results) ||
-        Array.isArray(nested.rows) ||
-        Array.isArray(nested.items) ||
-        Array.isArray(nested.data)
-      ) {
-        return this.normalizeEodData(value.data as EodResponse['data']);
-      }
-    }
-    const results = Array.isArray(value.results)
-      ? value.results
-      : Array.isArray(value.rows)
-        ? value.rows
-        : Array.isArray(value.items)
-          ? value.items
-          : Array.isArray(value.data)
-            ? value.data
-            : [];
-    return {
-      results: results as EodDataRow[],
-      page: typeof value.page === 'number' ? value.page : 1,
-      has_next: value.has_next === true,
-      has_previous: value.has_previous === true,
-    };
+    const page = extractEodPage(data);
+    return { ...page, results: page.results as EodDataRow[] };
   }
 
   private normalizeEodRow(row: EodDataRow): EodDataRow {
@@ -488,15 +442,8 @@ export class EodComponent implements OnInit, OnDestroy {
     this.range = r;
     if (r === 'Custom') {
       // ensure defaults exist and validate
-      if (!this.customFrom) {
-        const d = new Date();
-        d.setDate(d.getDate() - 7);
-        this.customFrom = d.toISOString().slice(0, 10);
-      }
-      if (!this.customTill) {
-        const d = new Date();
-        this.customTill = d.toISOString().slice(0, 10);
-      }
+      if (!this.customFrom) this.customFrom = this.daysBeforeToday(7);
+      if (!this.customTill) this.customTill = this.todayStr;
       this.applyCustomDates();
     } else {
       this.resetPageAndRefresh();
@@ -572,6 +519,10 @@ export class EodComponent implements OnInit, OnDestroy {
       this.error = 'Select both start and end dates';
       return false;
     }
+    if (!isIsoDate(this.customFrom) || !isIsoDate(this.customTill)) {
+      this.error = 'Enter valid dates';
+      return false;
+    }
     // no future dates
     const today = new Date(this.todayStr + 'T00:00:00');
     const from = new Date(this.customFrom + 'T00:00:00');
@@ -584,7 +535,23 @@ export class EodComponent implements OnInit, OnDestroy {
       this.error = 'Start date cannot be after end date';
       return false;
     }
+    if (exceedsOneYear(this.customFrom, this.customTill)) {
+      this.error = MAX_RANGE_MESSAGE;
+      return false;
+    }
     return true;
+  }
+
+  /** Earliest From the picker offers: one year before the To date. */
+  get customFromMin(): string | null { return fromPickerMin(this.customTill); }
+
+  /** Latest To the picker offers: one year after From, never in the future. */
+  get customTillMax(): string { return tillPickerMax(this.customFrom, this.todayStr); }
+
+  private daysBeforeToday(days: number): string {
+    const d = new Date(`${this.todayStr}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - days);
+    return d.toISOString().slice(0, 10);
   }
 
   /**

@@ -2,6 +2,7 @@
  * Multi-Leg EOD Data helpers: date ranges, session alignment, chart geometry, table rows and CSV.
  * Pure functions so they can be tested without the DOM. All dates are YYYY-MM-DD and handled in UTC.
  */
+import { MAX_RANGE_MESSAGE, exceedsOneYear } from '../../../shared/utils/date-range';
 import { EodDataRow } from '../eod/eod.model';
 import {
     CombinedTableRow,
@@ -62,6 +63,7 @@ export function resolveRange(preset: RangePreset, today: string, customFrom: str
         if (!isIsoDate(customFrom) || !isIsoDate(customTill)) return { error: 'Enter valid dates.' };
         if (customFrom > customTill) return { error: 'From date cannot be after To date.' };
         if (customTill > today) return { error: 'Dates cannot be in the future.' };
+        if (exceedsOneYear(customFrom, customTill)) return { error: MAX_RANGE_MESSAGE };
         return { range: { from: customFrom, till: customTill } };
     }
     if (!isIsoDate(today)) return { error: 'Enter valid dates.' };

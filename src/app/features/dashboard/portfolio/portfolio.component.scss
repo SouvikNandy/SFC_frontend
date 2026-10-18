@@ -464,3 +464,9 @@ button.row-btn {
 .kindtag { margin-left: 6px; color: var(--ink-faint); font: 500 9px var(--font-body); }
 .group-seg { margin-bottom: 12px; }
 .legend-line { display: inline-block; width: 13px; border-top: 2px solid var(--accent-dark); &.dashed { border-top: 2px dashed var(--red); } }
+
+.pager { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 9px; }
+.pager .cap { margin: 0; }
+.pager .cap:first-child { flex: 1; }
+.pager .rows-label { display: flex; align-items: center; gap: 8px; color: var(--ink-faint); font-size: 12px; }
+.pager select { width: auto; padding: 6px 8px; }

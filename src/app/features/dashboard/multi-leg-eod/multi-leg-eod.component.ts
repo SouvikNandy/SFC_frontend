@@ -8,14 +8,16 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Subject, catchError, finalize, forkJoin, map, of, switchMap, tap } from 'rxjs';
+import { Observable, Subject, catchError, finalize, forkJoin, map, of, shareReplay, switchMap, tap } from 'rxjs';
 import { ToastService } from '../../../core/services/toast.service';
 import { ChartTooltipComponent, ChartTooltipRow } from '../../../shared/components/chart-tooltip/chart-tooltip.component';
 import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
 import { DataTableColumn } from '../../../shared/components/data-table/data-table.types';
 import { DefaultStock } from '../../../shared/services/constantFile';
+import { fromPickerMin, tillPickerMax } from '../../../shared/utils/date-range';
 import { EodDataRow } from '../eod/eod.model';
 import { EodService } from '../eod/eod.service';
+import { isNoTradeBar } from '../eod/eod-rows.util';
 import { deriveStrikeStep } from '../payoff/payoff-strategies';
 import {
   CombinedTableRow,
@@ -111,6 +113,9 @@ export class MultiLegEodComponent implements OnInit {
     const resolved = this.rangeResolution();
     return 'error' in resolved ? resolved.error : '';
   });
+  /** Picker limits that keep a custom range within one year (see shared/utils/date-range.ts). */
+  readonly fromMin = computed(() => fromPickerMin(this.customTill()));
+  readonly tillMax = computed(() => tillPickerMax(this.customFrom(), this.today));
 
   /* ---------- data ---------- */
   readonly series = signal<LegSeries[]>([]);
@@ -197,7 +202,10 @@ export class MultiLegEodComponent implements OnInit {
   });
 
   private legId = 0;
+  /** Loaded legs, by contract + date range. Only legs missing from here are requested. */
   private readonly cache = new Map<string, EodDataRow[]>();
+  /** Requests still running, so a leg changed or re-requested mid-flight is never fetched twice. */
+  private readonly inflight = new Map<string, Observable<EodDataRow[]>>();
   private readonly metaRequest$ = new Subject<string>();
   private readonly dataRequest$ = new Subject<{ symbol: string; legs: LegSelection[]; range: DateRange }>();
 
@@ -465,6 +473,7 @@ export class MultiLegEodComponent implements OnInit {
         this.series.set([]);
         this.tableLeg.set('all');
         this.cache.clear();
+        this.inflight.clear();
       }),
       switchMap(symbol => (symbol ? this.eod.getDdGreeks({ symbol }).pipe(
         map(response => response.data),
@@ -515,19 +524,37 @@ export class MultiLegEodComponent implements OnInit {
     });
   }
 
+  /**
+   * One leg: from the cache when already loaded, otherwise one request (getAllRows follows the API's 500-row pages).
+   * The request is shared and keeps running if the selection changes while it is in flight, so its result still
+   * lands in the cache; switchMap on the screen only drops the stale *result*, never causes a repeat request.
+   */
   private loadLeg(symbol: string, leg: LegSelection, range: DateRange) {
     const base = { leg, label: legLabel(leg) };
     if (!isLegComplete(leg)) return of<LegSeries>({ ...base, status: 'ready', rows: [] });
-    const key = legCacheKey(symbol, leg, range);
-    const cached = this.cache.get(key);
-    if (cached) return of<LegSeries>({ ...base, status: 'ready', rows: cached });
-    return this.eod.getAllRows({
-      symbol, option_type: leg.optionType, strike: leg.strike as number, expiry: leg.expiry, date_from: range.from, date_till: range.till,
-    }).pipe(
-      tap(rows => this.cache.set(key, rows)),
+    return this.legRows(symbol, leg, range).pipe(
       map((rows): LegSeries => ({ ...base, status: 'ready', rows })),
       catchError(() => of<LegSeries>({ ...base, status: 'error', rows: [] })),
     );
+  }
+
+  private legRows(symbol: string, leg: LegSelection, range: DateRange): Observable<EodDataRow[]> {
+    const key = legCacheKey(symbol, leg, range);
+    const cached = this.cache.get(key);
+    if (cached) return of(cached);
+    const pending = this.inflight.get(key);
+    if (pending) return pending;
+    const request$ = this.eod.getAllRows({
+      symbol, option_type: leg.optionType, strike: leg.strike as number, expiry: leg.expiry, date_from: range.from, date_till: range.till,
+    }).pipe(
+      // Sessions without trades (zero prices and volume) stay gaps; see isNoTradeBar.
+      map(rows => rows.filter(row => !isNoTradeBar(row))),
+      tap(rows => { if (symbol === this.symbol()) this.cache.set(key, rows); }),
+      finalize(() => this.inflight.delete(key)),
+      shareReplay({ bufferSize: 1, refCount: false }),
+    );
+    this.inflight.set(key, request$);
+    return request$;
   }
 
   private watchViewport(): void {

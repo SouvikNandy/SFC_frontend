@@ -104,11 +104,11 @@
       <div class="custom-dates" *ngIf="range === 'Custom'">
         <div class="control">
           <label class="label" for="eod-from">From</label>
-          <input id="eod-from" class="date-input" type="date" [max]="todayStr" [value]="customFrom" (change)="onCustomFromChange($event)" />
+          <input id="eod-from" class="date-input" type="date" [min]="customFromMin" [max]="todayStr" [value]="customFrom" (change)="onCustomFromChange($event)" />
         </div>
         <div class="control">
           <label class="label" for="eod-till">To</label>
-          <input id="eod-till" class="date-input" type="date" [max]="todayStr" [value]="customTill" (change)="onCustomTillChange($event)" />
+          <input id="eod-till" class="date-input" type="date" [max]="customTillMax" [value]="customTill" (change)="onCustomTillChange($event)" />
         </div>
       </div>
 

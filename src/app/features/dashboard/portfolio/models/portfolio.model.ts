@@ -1,139 +1,320 @@
-export type PositionKind = 'future' | 'option';
-export type FillSide = 'buy' | 'sell';
+/* Types for the Portfolio API (docs: "SFC Advisor — Portfolio API Reference") and the Portfolio Analysis screen. */
+
+export type Segment = 'FUT' | 'OPT';
+export type SegmentFilter = 'all' | Segment;
 export type OptionKind = 'CE' | 'PE';
-export type Direction = 'long' | 'short';
-export type SegmentFilter = 'all' | PositionKind;
-export type PortfolioView = 'open' | 'closed' | 'perf' | 'basket';
+export type FillSide = 'Buy' | 'Sell';
+export type Direction = 'LONG' | 'SHORT';
 export type PeriodGroup = 'trade' | 'day' | 'week' | 'month';
+export type PortfolioView = 'open' | 'closed' | 'perf' | 'basket';
 export type PriceSource = 'eod' | 'live';
+export type FillAction = 'opened' | 'added' | 'reduced' | 'closed' | 'flipped';
 
-/** The contract a fill is booked against, built from underlying + expiry (+ strike and CE/PE for options). */
-export interface ContractRef {
-    /** Stable identity, e.g. `NIFTY|FUT|2026-10-29` or `NIFTY|OPT|2026-10-29|22600|CE`. */
-    key: string;
-    label: string;
-    kind: PositionKind;
-    underlying: string;
-    /** YYYY-MM-DD */
-    expiry: string;
-    strike: number | null;
-    optionType: OptionKind | null;
-    lot: number;
+/* ---------- response envelope ---------- */
+
+export interface ApiEnvelope<T> {
+    success: boolean;
+    message: string;
+    data: T;
+    timestamp?: string;
+    path?: string;
+    /** Field problems keyed by field name; business-rule problems are keyed `detail` (or `name`). */
+    errors?: Record<string, string[]>;
+    error_code?: number;
 }
 
-/** One paper-trading ledger entry. Bookkeeping only: it never reaches a broker or an exchange. */
-export interface LedgerFill {
+/* ---------- shared objects ---------- */
+
+/** A position row. Money is a string; `cmp`/`unrealised` are null until an end-of-day price exists. */
+export interface PortfolioPosition {
     id: string;
-    contract: ContractRef;
+    add_date?: string;
+    segment: Segment;
+    symbol: string;
+    label: string;
+    /** "" for futures. */
+    type: OptionKind | '';
+    strike: string | null;
+    expiry_date: string;
+    basket: string | null;
+    basket_name: string | null;
     side: FillSide;
-    /** Lots. */
-    qty: number;
-    price: number;
-    lot: number;
-    /** YYYY-MM-DD */
+    direction: Direction;
+    /** Lots (units = qnt × lot_size). */
+    qnt: number;
+    open_price: string;
     date: string;
-    /** Basket the position is tagged into by this fill; null leaves the position's basket unchanged. */
-    basketId: string | null;
+    lot_size: number;
+    avg_cost: string;
+    cmp: string | null;
+    notional: string;
+    unrealised: string | null;
+    realised: string | null;
+    closing_price: string | null;
+    close_date: string | null;
+    /** Open rows from /open-list and /baskets only; negative once expired. */
+    dte?: number;
+    /** Set by the UI, never the API: `cmp`/`unrealised` were filled from an EOD close because the API had none. */
+    cmp_source?: 'eod';
+    /** Session date of that EOD close, YYYY-MM-DD. */
+    cmp_date?: string;
 }
 
-export interface Basket {
+export interface PortfolioSummary {
+    open_positions: number;
+    priced: number;
+    notional: number;
+    unrealised: number;
+    realised: number;
+    total: number;
+    closed_trades: number;
+}
+
+/* ---------- requests ---------- */
+
+export interface AddFillRequest {
+    segment: Segment;
+    symbol: string;
+    /** OPT only. */
+    type?: OptionKind;
+    /** OPT only; decimal as a string, e.g. "24500.00". */
+    strike?: string;
+    expiry_date: string;
+    side: FillSide;
+    qnt: number;
+    open_price: string;
+    date: string;
+    lot_size: number;
+    /** Either basket_id or basket_name, never both. */
+    basket_id?: string;
+    basket_name?: string;
+}
+
+export interface SquareOffRequest {
+    id: string;
+    closing_price: string;
+    /** Omit to close every open lot. */
+    qnt?: number;
+}
+
+export type OpenSortKey = 'symbol' | 'qnt' | 'avg_cost' | 'cmp' | 'notional' | 'unrealised';
+export type ClosedSortKey = 'symbol' | 'qnt' | 'avg_cost' | 'closing_price' | 'realised' | 'close_date';
+export type SortDir = 'asc' | 'desc';
+
+export interface OpenListRequest {
+    segment?: SegmentFilter;
+    sort_by?: OpenSortKey;
+    sort_dir?: SortDir;
+}
+
+export interface ClosedListRequest {
+    group?: PeriodGroup;
+    sort_by?: ClosedSortKey;
+    sort_dir?: SortDir;
+    page?: number;
+    page_size?: number;
+}
+
+export interface PerformanceRequest {
+    group?: PeriodGroup;
+    date_from?: string;
+    date_to?: string;
+}
+
+export interface BasketsRequest {
+    closed_limit?: number;
+}
+
+export interface BasketChartRequest {
+    id: string;
+    days?: number;
+}
+
+export interface BasketRenameRequest {
     id: string;
     name: string;
 }
 
-/** What is persisted: positions and closed trades are always derived by replaying the fills. */
-export interface LedgerSnapshot {
-    version: 1;
-    fills: LedgerFill[];
-    baskets: Basket[];
+export interface BasketRemoveRequest {
+    id: string;
 }
 
-export interface OpenPosition {
-    contract: ContractRef;
-    kind: PositionKind;
-    lot: number;
-    /** Signed lots: positive long, negative short. */
-    qty: number;
-    /** Weighted-average entry price. */
-    avg: number;
-    opened: string;
-    basketId: string | null;
-    /** Latest EOD close for the contract; null when no price is available. */
-    cmp: number | null;
-}
+/* ---------- responses (the envelope's `data`) ---------- */
 
-export interface ClosedTrade {
-    contract: ContractRef;
-    label: string;
-    kind: PositionKind;
-    direction: Direction;
-    qty: number;
-    lot: number;
-    entry: number;
-    exit: number;
-    realised: number;
-    entryDate: string;
-    exitDate: string;
-    basketId: string | null;
-}
-
-export type FillAction = 'opened' | 'added' | 'reduced' | 'closed' | 'flipped';
-
-export interface FillResult {
+export interface AddFillData {
     action: FillAction;
+    realised: string;
+    /** Open position left after the fill; null after a full close. */
+    position: PortfolioPosition | null;
+    closed_trades: PortfolioPosition[];
+}
+
+export interface SquareOffData {
+    realised: string;
+    closed_trade: PortfolioPosition;
+    /** Open lots remaining; null after a full square-off. */
+    position: PortfolioPosition | null;
+}
+
+export interface OpenListData {
+    summary: PortfolioSummary;
+    segment_counts: { all: number; FUT: number; OPT: number };
+    expiring_soon: number;
+    results: PortfolioPosition[];
+}
+
+export interface ClosedTotals {
+    closed_trades: number;
+    profitable: number;
+}
+
+export interface ClosedTradesData {
+    group: 'trade';
+    summary: PortfolioSummary;
+    totals: ClosedTotals;
+    results: PortfolioPosition[];
+    page: number;
+    has_next: boolean;
+    has_previous: boolean;
+}
+
+export interface PeriodRow {
+    key: string;
+    start: string;
+    end: string;
+    trades: number;
+    wins: number;
+    win_rate: number;
     realised: number;
 }
 
-export interface DrawdownStats {
+export interface ClosedPeriodsData {
+    group: 'day' | 'week' | 'month';
+    summary: PortfolioSummary;
+    totals: ClosedTotals;
+    results: PeriodRow[];
+}
+
+export type ClosedListData = ClosedTradesData | ClosedPeriodsData;
+
+export interface MaxDrawdown {
     amount: number;
     pct: number | null;
-    peakDate: string | null;
-    troughDate: string | null;
+    peak_date: string | null;
+    trough_date: string | null;
 }
 
-export interface TradeStats {
+export interface PerformanceMetrics {
     trades: number;
     wins: number;
     losses: number;
-    winRate: number;
-    grossProfit: number;
-    grossLoss: number;
+    win_rate: number;
+    gross_profit: number;
+    gross_loss: number;
     net: number;
-    avgWin: number;
-    avgLoss: number;
-    largestWin: number;
-    largestLoss: number;
-    profitFactor: number | null;
+    avg_win: number;
+    avg_loss: number;
+    largest_win: number;
+    largest_loss: number;
+    /** null when there are no losses. */
+    profit_factor: number | null;
     expectancy: number;
-    dd: DrawdownStats;
-}
-
-export interface PeriodSummary {
-    key: string;
-    trades: number;
-    wins: number;
-    realised: number;
+    max_drawdown: MaxDrawdown;
 }
 
 export interface CurvePoint {
+    index: number;
+    /** null for the origin point. */
+    key: string | null;
+    start?: string;
+    end?: string;
+    value: number;
+    peak: number;
+}
+
+export interface PeriodPnl {
+    key: string;
+    start?: string;
+    end?: string;
+    /** Absent when group = trade. */
+    trades?: number;
+    wins?: number;
+    value: number;
+}
+
+export interface PerformanceData {
+    group: PeriodGroup;
+    date_from: string | null;
+    date_to: string | null;
+    /** false only when the user has no closed trades at all. */
+    has_closed_trades: boolean;
+    summary: PortfolioSummary;
+    metrics: PerformanceMetrics;
+    curve: CurvePoint[];
+    period_pnl: PeriodPnl[];
+    by_segment: Partial<Record<Segment, number>>;
+}
+
+export interface BasketItem {
+    id: string;
+    name: string;
+    open_count: number;
+    closed_count: number;
+    unrealised: number;
+    realised: number;
+    open_positions: PortfolioPosition[];
+    closed_trades: PortfolioPosition[];
+    closed_trades_truncated: boolean;
+}
+
+export interface UnassignedBucket {
+    open_count: number;
+    unrealised: number;
+    open_positions: PortfolioPosition[];
+}
+
+export interface BasketsData {
+    summary: PortfolioSummary;
+    baskets: BasketItem[];
+    unassigned: UnassignedBucket;
+}
+
+export interface BasketChartRow {
+    date: string;
+    live: number;
+    sq: number;
+    day: number;
+    cum: number;
+}
+
+export interface BasketChartData {
+    basket: { id: string; name: string };
+    /** Latest EOD date in the market data; null for an empty basket. */
+    as_of: string | null;
+    rows: BasketChartRow[];
+}
+
+export interface BasketRenameData {
+    id: string;
+    name: string;
+}
+
+export interface BasketRemoveData {
+    id: string;
+    name: string;
+    unassigned: number;
+}
+
+/* ---------- chart helpers (UI) ---------- */
+
+export interface CurveChartPoint {
     i: number;
     v: number;
     label: string;
+    peak?: number;
 }
 
 export interface PeriodBar {
     label: string;
     v: number;
 }
-
-/** Daily EOD P&L of one basket, from real EOD closes (see buildBasketEodSeries). */
-export interface BasketEodRow {
-    date: string;
-    live: number;
-    squared: number;
-    day: number;
-    cum: number;
-}
-
-/** EOD close history per contract key: date → close. */
-export type PriceHistory = ReadonlyMap<string, ReadonlyMap<string, number>>;

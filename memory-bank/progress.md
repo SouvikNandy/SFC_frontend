@@ -23,7 +23,11 @@
 
 - Portfolio Analysis and Multi-Leg EOD Data screens implemented (portfolio-ledger.ts, portfolio-store.service.ts, portfolio-market.service.ts, multi-leg-eod/*) with specs; 141/142 tests pass (stale app.spec only).
 
+- Portfolio Analysis integrated with the live Portfolio API (all 9 endpoints); specs: portfolio-api.service.spec.ts, portfolio.component.spec.ts.
+
 **Not started / backlog**
+
+- Backend: `cmp` not populated yet (unrealised stays null); verify the integration against the real backend (only mocked responses were exercised).
 
 - Backend: portfolio persistence endpoint (ledger is browser-local today); confirm /fo/eod futures contract/expiry selection and expired-contract history.
 
@@ -51,3 +55,22 @@
 - `npm run build` passes; existing Angular warnings remain, including the Historical Volatility stylesheet budget warning.
 
 _Keep bullets factual and small; link issues or PRs when useful._
+
+- 2026-10-18: Re-verified against the live API. Portfolio UI: 25/25 checks (fills, square-off, closed pagination/sort/grouping, performance, baskets). Multi-Leg EOD: real /fo/eod, charts, tables, per-leg requests and CSV filenames OK. 171/171 unit tests pass.
+
+## Backend blockers / unverified (2026-10-18)
+- Multi-Leg expired contracts: `/fo/eod` returns data for expired contracts when expiry+strike are supplied (verified: NIFTY CE 24000, 2026-09-29), but no API lists expired expiries. `/fo/dd_symbol_details` returns upcoming expiries only and ignores `trade_date`/`date`/`as_of`/`include_expired`/`expired`; `/fo/dd_list` is GET and lists symbols only. Needs backend: either a documented expiry-history endpoint (e.g. symbol + date range -> expiry dates, incl. expired) or an `include_expired`/`as_of` option on `dd_symbol_details`. Expiries are NOT derived client-side (holiday-shifted weeklies make that unreliable). Expiry dropdown unchanged.
+- Portfolio: backend still returns `cmp: null`. The UI now falls back to the latest `/fo/eod` close (see "EOD close as CMP" below). Backend-populated `cmp`/`unrealised` is still unverified live; when present it always wins (code path covered by unit tests only).
+- Payoff Custom mode: no manual vol input by decision; reference vol stays HV-20 x multiplier. Calculation unchanged.
+
+## EOD close as CMP (2026-10-18)
+- Files: `portfolio-eod-price.ts` (pure logic), `portfolio-eod-price.service.ts` (`/fo/eod` lookups, 10-min cache, 4 parallel), wiring in `portfolio.component.ts` (`eodQuotes`, `openRows`, `basketsView`, `summaryView`, `cmpNote`).
+- Applies only to rows where the API gave neither `cmp` nor `unrealised`. Never overwrites backend values. Rows get `cmp_source:'eod'`, `cmp_date`; UI caption "EOD close - 16 Oct" and a footnote "not live prices".
+- Options: exact symbol + CE/PE + strike + expiry; request window = last 10 days, page_size 20; latest bar that is NOT a no-trade bar (zero OHLC/volume, stale carried close), close > 0. Nothing in window -> stays unpriced.
+- Unrealised = (cmp - avg_cost) x lots x lot_size, negated for SHORT (Portfolio API formula). FUT notional re-based to cmp x units (API rule); option notional unchanged. KPI summary/bucket totals adjusted only from a baskets response newer than the last mutation (`basketsFresh`).
+- Futures: `/fo/eod` XX ignores `expiry` and rows have no expiry field (verified: identical series for 5 different expiry values). Backend says it serves the nearest expiry. A FUT position is priced only if its expiry == the nearest MONTHLY expiry on the bar date (monthly = last listed expiry of its calendar month in `dd_symbol_details`). Weekly/later-month FUT stay "not priced". UNRESOLVED: the nearest-expiry behaviour is not provable from the response (no expiry field); a roll-day mismatch is possible. Needs backend to return the contract expiry on futures rows (or honour `expiry`).
+- Live broker data later: use live price first, keep this as fallback (the overlay already yields to any non-null backend value).
+
+## One-year custom date range (2026-10-18)
+- Only F&O EOD and Multi-Leg EOD (Portfolio Performance, Historical Volatility untouched by decision). Shared rules in `src/app/shared/utils/date-range.ts`: inclusive one calendar year (From 18 Oct 2025 -> To 18 Oct 2026 ok; 17 Oct fails), 29 Feb + 1y = 28 Feb, picker limits `fromPickerMin` / `tillPickerMax`, `localTodayIso()`.
+- F&O EOD: fixed `todayStr` (was `toISOString()` of local midnight = yesterday in IST). Invalid range -> no request, previous rows stay. Multi-Leg: `resolveRange` returns the error; an invalid range already clears the legs' rows (existing behaviour, unchanged).

@@ -2,29 +2,49 @@ import { EodDataRow, EodPaginatedData } from './eod.model';
 
 type RawRow = Partial<EodDataRow> & { trade_date?: string; close_price?: number };
 
-const num = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) ? value : null);
+/** A `/fo/eod` payload reduced to its page metadata and untouched rows. */
+export interface RawEodPage {
+    results: unknown[];
+    page: number;
+    has_next: boolean;
+    has_previous: boolean;
+}
+
+const LIST_KEYS = ['results', 'rows', 'items', 'data'] as const;
+const EMPTY_PAGE: RawEodPage = { results: [], page: 1, has_next: false, has_previous: false };
 
 /**
- * Reads a `/fo/eod` payload (an array, or an object holding `results`/`rows`/`items`/`data`) into a page of rows.
- * Mirrors the shapes the F&O EOD screen already accepts; nothing is invented.
+ * Finds the rows and paging flags in a `/fo/eod` payload: an array, or an object holding `results`
+ * (the shape the live API returns), `rows`, `items` or `data`, possibly nested one level in `data`.
+ * Shared by the F&O EOD and Multi-Leg EOD screens; rows are returned untouched.
  */
-export function readEodPage(payload: unknown): EodPaginatedData {
-    const empty: EodPaginatedData = { results: [], page: 1, has_next: false, has_previous: false };
-    if (Array.isArray(payload)) return { ...empty, results: payload.map(toRow).filter(isRow) };
-    if (!payload || typeof payload !== 'object') return empty;
+export function extractEodPage(payload: unknown): RawEodPage {
+    if (Array.isArray(payload)) return { ...EMPTY_PAGE, results: payload };
+    if (!payload || typeof payload !== 'object') return EMPTY_PAGE;
     const value = payload as Record<string, unknown>;
     const nested = value['data'];
     if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
         const inner = nested as Record<string, unknown>;
-        if (['results', 'rows', 'items', 'data'].some(key => Array.isArray(inner[key]))) return readEodPage(nested);
+        if (LIST_KEYS.some(key => Array.isArray(inner[key]))) return extractEodPage(nested);
     }
-    const list = ['results', 'rows', 'items', 'data'].map(key => value[key]).find(Array.isArray) as unknown[] | undefined;
+    const list = LIST_KEYS.map(key => value[key]).find(Array.isArray) as unknown[] | undefined;
     return {
-        results: (list ?? []).map(toRow).filter(isRow),
+        results: list ?? [],
         page: typeof value['page'] === 'number' ? value['page'] : 1,
         has_next: value['has_next'] === true,
         has_previous: value['has_previous'] === true,
     };
+}
+
+const num = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) ? value : null);
+
+/**
+ * Typed rows for the Multi-Leg screen: a row without a date is dropped, and a field the backend did not
+ * send is NaN (never a fabricated 0). The F&O EOD screen keeps its own row defaults.
+ */
+export function readEodPage(payload: unknown): EodPaginatedData {
+    const raw = extractEodPage(payload);
+    return { ...raw, results: raw.results.map(toRow).filter((row): row is EodDataRow => row !== null) };
 }
 
 function toRow(raw: unknown): EodDataRow | null {
@@ -45,4 +65,10 @@ function toRow(raw: unknown): EodDataRow | null {
     };
 }
 
-const isRow = (row: EodDataRow | null): row is EodDataRow => row !== null;
+/**
+ * A session on which the contract did not trade. Verified against the live API: such rows come back with
+ * open, high, low, volume and OI all 0 and a close carried over from the previous session. They are left
+ * as gaps instead of being drawn as zero-price candles or a flat stale line.
+ */
+export const isNoTradeBar = (row: Pick<EodDataRow, 'open' | 'high' | 'low' | 'volume'>): boolean =>
+    row.open === 0 && row.high === 0 && row.low === 0 && row.volume === 0;

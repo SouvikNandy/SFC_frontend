@@ -8,6 +8,14 @@ import { Observable, map, of, switchMap } from 'rxjs';
 /** Safety bound for paging through one contract's history. */
 const MAX_EOD_PAGES = 40;
 
+/**
+ * Rows per request when loading a whole history. The backend caps every response at 500 rows: verified live on
+ * 2026-10-18 with a 1,273-row series, where page_size 501, 1000 and 5000 all returned 500 rows with has_next=true
+ * (it is not an error). Callers must therefore follow `has_next`, never infer the end from the row count.
+ * Walking 500-row pages and 100-row pages produced identical, duplicate-free sets. page_size 0 returns HTTP 500.
+ */
+const ALL_ROWS_PAGE_SIZE = 500;
+
 @Injectable({ providedIn: 'root' })
 export class EodService {
     constructor(private readonly api: ApiService, private readonly greeks: GreeksCalculatorService) { }
@@ -25,7 +33,7 @@ export class EodService {
      * Every row for a request, following the API's own pagination (`has_next`) page by page.
      * Rows are returned oldest first; fields the backend did not send are NaN, never fabricated.
      */
-    getAllRows(request: Omit<EodRequest, 'page' | 'page_size'>, pageSize = 50): Observable<EodDataRow[]> {
+    getAllRows(request: Omit<EodRequest, 'page' | 'page_size'>, pageSize = ALL_ROWS_PAGE_SIZE): Observable<EodDataRow[]> {
         const fetchPage = (page: number, acc: EodDataRow[]): Observable<EodDataRow[]> =>
             this.getEod({ ...request, page, page_size: pageSize }).pipe(
                 switchMap(response => {

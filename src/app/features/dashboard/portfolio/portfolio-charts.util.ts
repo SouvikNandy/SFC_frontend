@@ -1,5 +1,5 @@
 /* SVG geometry for the Portfolio Analysis charts (cumulative realised P&L, P&L by period, basket EOD P&L). */
-import { CurvePoint, PeriodBar } from './models/portfolio.model';
+import { CurveChartPoint, PeriodBar } from './models/portfolio.model';
 
 export interface ChartGridLine { y: number; label: string; }
 export interface ChartAxisLabel { x: number; text: string; anchor: 'start' | 'middle' | 'end'; }
@@ -90,7 +90,7 @@ export function buildBarChart(data: readonly PeriodBar[], narrow: boolean, size:
     };
 }
 
-export function buildCurveChart(points: readonly CurvePoint[], group: string, narrow: boolean, tradeCount: number): CurveChartGeometry | null {
+export function buildCurveChart(points: readonly CurveChartPoint[], group: string, narrow: boolean, tradeCount: number): CurveChartGeometry | null {
     if (!points.length) return null;
     const W = narrow ? 340 : 1000, H = narrow ? 250 : 300;
     const padL = narrow ? 46 : 64, padR = narrow ? 12 : 22, padT = 16, padB = narrow ? 26 : 30;
@@ -99,8 +99,9 @@ export function buildCurveChart(points: readonly CurvePoint[], group: string, na
     const xAt = (i: number) => padL + (points.length > 1 ? i / (points.length - 1) : 0) * pw;
     const yAt = (v: number) => padT + ph - ((v - yMin) / (yMax - yMin)) * ph;
     const zeroY = Math.max(padT, Math.min(padT + ph, yAt(0)));
+    // The running peak comes from the API when it is provided; otherwise it is the running maximum.
     let peak = -Infinity;
-    const peaks = points.map(p => { peak = Math.max(peak, p.v); return { i: p.i, v: peak }; });
+    const peaks = points.map(p => { peak = Math.max(peak, p.v); return { i: p.i, v: p.peak ?? peak }; });
     const path = (list: ReadonlyArray<{ i: number; v: number }>) =>
         list.map((p, i) => `${i ? 'L' : 'M'}${xAt(p.i).toFixed(1)},${yAt(p.v).toFixed(1)}`).join(' ');
     const last = points[points.length - 1];
