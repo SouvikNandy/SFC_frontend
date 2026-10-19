@@ -67,3 +67,24 @@ export interface EodPaginatedData {
     has_next: boolean;
     has_previous: boolean;
 }
+
+/**
+ * `/fo/eod/chart` (verified live 2026-10-19): the same filters as `/fo/eod` without paging. `page` / `page_size` are
+ * ignored if sent. It answers the whole range in one response, oldest first, with no row cap
+ * (1,273 sessions for NIFTY futures over 5.8 years in a single call).
+ */
+export type EodChartRequest = Omit<EodRequest, 'page' | 'page_size'>;
+
+export interface EodChartPoint {
+    date: string; // YYYY-MM-DD
+    close: number;
+}
+
+/** Envelope `{ success, message: 'EOD_CHART_FETCHED', data: [{ date, close }] }`; an empty `data` array means no sessions. */
+export interface EodChartResponse {
+    success: boolean;
+    message?: string;
+    data: EodChartPoint[];
+    timestamp?: string;
+    path?: string;
+}

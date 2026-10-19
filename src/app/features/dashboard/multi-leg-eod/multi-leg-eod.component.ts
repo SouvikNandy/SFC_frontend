@@ -14,7 +14,7 @@ import { ChartTooltipComponent, ChartTooltipRow } from '../../../shared/componen
 import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
 import { DataTableColumn } from '../../../shared/components/data-table/data-table.types';
 import { DefaultStock } from '../../../shared/services/constantFile';
-import { fromPickerMin, tillPickerMax } from '../../../shared/utils/date-range';
+import { clearedMessage, fromConflict, fromPickerBounds, tillConflict, tillPickerBounds } from '../../../shared/utils/date-range';
 import { EodDataRow } from '../eod/eod.model';
 import { EodService } from '../eod/eod.service';
 import { isNoTradeBar } from '../eod/eod-rows.util';
@@ -113,9 +113,11 @@ export class MultiLegEodComponent implements OnInit {
     const resolved = this.rangeResolution();
     return 'error' in resolved ? resolved.error : '';
   });
-  /** Picker limits that keep a custom range within one year (see shared/utils/date-range.ts). */
-  readonly fromMin = computed(() => fromPickerMin(this.customTill()));
-  readonly tillMax = computed(() => tillPickerMax(this.customFrom(), this.today));
+  /** Picker limits (see shared/utils/date-range.ts): a chosen date is never blocked by the other; an empty one is narrowed to the valid window. */
+  readonly fromBounds = computed(() => fromPickerBounds(this.customFrom(), this.customTill(), this.today));
+  readonly tillBounds = computed(() => tillPickerBounds(this.customFrom(), this.customTill(), this.today));
+  /** Why a date was just cleared; shown in place of the generic "select both dates" message. */
+  readonly clearedNote = signal('');
 
   /* ---------- data ---------- */
   readonly series = signal<LegSeries[]>([]);
@@ -284,6 +286,7 @@ export class MultiLegEodComponent implements OnInit {
 
   setRange(range: RangePreset): void {
     this.range.set(range);
+    this.clearedNote.set('');
     if (range === 'Custom' && !this.customFrom()) {
       const till = this.today;
       const from = new Date(Date.parse(`${till}T00:00:00Z`) - 30 * 86400000);
@@ -294,14 +297,28 @@ export class MultiLegEodComponent implements OnInit {
     this.reload();
   }
 
+  /** A new From date is never refused; a To date that no longer fits it (earlier, or over a year later) is cleared to be picked again. */
   onCustomFrom(value: string): void {
     this.customFrom.set(value);
+    this.clearedNote.set('');
+    const conflict = tillConflict(value, this.customTill());
+    if (conflict) {
+      this.customTill.set('');
+      this.clearedNote.set(clearedMessage('To', conflict));
+    }
     this.page.set(0);
     this.reload();
   }
 
+  /** Mirror of onCustomFrom: a From date that no longer fits the new To date is cleared. */
   onCustomTill(value: string): void {
     this.customTill.set(value);
+    this.clearedNote.set('');
+    const conflict = fromConflict(this.customFrom(), value);
+    if (conflict) {
+      this.customFrom.set('');
+      this.clearedNote.set(clearedMessage('From', conflict));
+    }
     this.page.set(0);
     this.reload();
   }

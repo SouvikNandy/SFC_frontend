@@ -19,7 +19,7 @@ function fmtDateLabel(d: string) {
     return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
 }
 
-export function buildEodChart(rows: EodDataRow[], width = DEFAULT_W, height = DEFAULT_H): ChartResult {
+export function buildEodChart(rows: Array<Pick<EodDataRow, 'date' | 'close'>>, width = DEFAULT_W, height = DEFAULT_H): ChartResult {
     const chartW = width;
     const chartH = height;
     const marginLeft = 82, marginRight = 12, marginTop = 16, marginBottom = 30;

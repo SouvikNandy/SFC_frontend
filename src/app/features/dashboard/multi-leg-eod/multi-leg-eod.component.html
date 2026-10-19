@@ -51,11 +51,11 @@
             <div class="customdates">
                 <div class="field">
                     <label for="ml-from">From</label>
-                    <input id="ml-from" type="date" [min]="fromMin()" [max]="today" [value]="customFrom()" (change)="onCustomFrom($any($event.target).value)">
+                    <input id="ml-from" type="date" [attr.min]="fromBounds().min" [attr.max]="fromBounds().max" [value]="customFrom()" (change)="onCustomFrom($any($event.target).value)">
                 </div>
                 <div class="field">
                     <label for="ml-till">To</label>
-                    <input id="ml-till" type="date" [max]="tillMax()" [value]="customTill()" (change)="onCustomTill($any($event.target).value)">
+                    <input id="ml-till" type="date" [attr.min]="tillBounds().min" [attr.max]="tillBounds().max" [value]="customTill()" (change)="onCustomTill($any($event.target).value)">
                 </div>
             </div>
             }
@@ -66,7 +66,7 @@
         @if (symbolsLoading() || metaLoading()) {
         <p class="hint-line" role="status">{{ symbolsLoading() ? 'Loading symbol list…' : 'Loading strikes and expiries…' }}</p>
         }
-        @if (rangeError()) { <p class="input-error" role="alert">{{ rangeError() }}</p> }
+        @if (rangeError()) { <p class="input-error" role="alert">{{ clearedNote() || rangeError() }}</p> }
         @if (metaError()) { <p class="input-error" role="alert">{{ metaError() }}</p> }
     </div>
 

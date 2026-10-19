@@ -3,7 +3,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 import { Observable, Subject, of, throwError } from 'rxjs';
 import { MultiLegEodComponent } from './multi-leg-eod.component';
-import { MAX_RANGE_MESSAGE, minusOneYear, tillPickerMax } from '../../../shared/utils/date-range';
+import { minusOneYear, plusOneYear } from '../../../shared/utils/date-range';
 import { EodDataRow, EodRequest } from '../eod/eod.model';
 import { EodService } from '../eod/eod.service';
 
@@ -172,7 +172,7 @@ describe('MultiLegEodComponent', () => {
     requests.length = 0;
     component.onCustomTill('2026-10-01');
     await settle();
-    expect(host.textContent).toContain('From date cannot be after To date.');
+    expect(host.textContent).toContain('The From date was cleared because it was after the new To date.');   // reversed: From is cleared, not refused
     expect(requests).toHaveLength(0);
     component.onCustomFrom('2026-09-01');
     component.onCustomTill('2026-09-30');
@@ -181,36 +181,83 @@ describe('MultiLegEodComponent', () => {
     expect(component.rangeError()).toBe('');
   });
 
-  it('custom range is limited to one calendar year: picker limits, message, and no request when exceeded', async () => {
-    await click('.field .seg button', 'Custom');
-    const today = component.today;
-    const edge = minusOneYear(today);                            // exactly one year back: allowed
-    const dayBefore = new Date(Date.parse(`${edge}T00:00:00Z`) - 86400000).toISOString().slice(0, 10);
+  describe('custom range: one calendar year, never blocking a chosen date', () => {
     const typeDate = async (id: string, value: string) => {
       const input = host.querySelector<HTMLInputElement>(`#${id}`)!;
       input.value = value;
       input.dispatchEvent(new Event('change', { bubbles: true }));
       await settle();
     };
-    expect(host.querySelector<HTMLInputElement>('#ml-from')!.min).toBe(minusOneYear(component.customTill()));
-    expect(host.querySelector<HTMLInputElement>('#ml-till')!.max).toBe(tillPickerMax(component.customFrom(), today));
-    requests.length = 0;
-    await typeDate('ml-from', dayBefore);
-    expect(host.textContent).toContain(MAX_RANGE_MESSAGE);
-    expect(component.rangeError()).toBe(MAX_RANGE_MESSAGE);
-    expect(requests).toHaveLength(0);
-    await typeDate('ml-from', edge);
-    expect(component.rangeError()).toBe('');
-    expect(host.textContent).not.toContain(MAX_RANGE_MESSAGE);
-    expect(requests.at(-1)).toMatchObject({ date_from: edge, date_till: today });
-    // moving To earlier lowers the From floor and the To ceiling follows From + 1 year (never beyond today)
-    await typeDate('ml-till', today);
-    expect(host.querySelector<HTMLInputElement>('#ml-till')!.max).toBe(today);
-    // presets are unaffected
-    requests.length = 0;
-    await click('.field .seg button', '1M');
-    expect(component.rangeError()).toBe('');
-    expect(requests.length).toBeGreaterThan(0);
+    const value = (id: string) => host.querySelector<HTMLInputElement>(`#${id}`)!.value;
+    const note = () => host.querySelector('.input-error')?.textContent?.trim() ?? '';
+    // Back-dated so the cases do not depend on today's date: the component's own `today` is the upper bound.
+    const ago = (days: number) => new Date(Date.parse(`${component.today}T00:00:00Z`) - days * 86400000).toISOString().slice(0, 10);
+
+    beforeEach(async () => {
+      await click('.field .seg button', 'Custom');
+      requests.length = 0;
+    });
+
+    it('a chosen date is never blocked by the other; only an empty one is narrowed', async () => {
+      const from = host.querySelector<HTMLInputElement>('#ml-from')!;
+      const till = host.querySelector<HTMLInputElement>('#ml-till')!;
+      expect([from.min, from.max, till.min, till.max]).toEqual(['', component.today, '', component.today]);
+      await typeDate('ml-from', ago(800));                              // far more than a year before To: accepted, To cleared
+      expect(value('ml-from')).toBe(ago(800));
+      expect(value('ml-till')).toBe('');
+      expect(till.min).toBe(ago(800));
+      expect(till.max).toBe(plusOneYear(ago(800)));                    // From + 1 year (already before today)
+      await typeDate('ml-from', '');
+      await typeDate('ml-till', ago(10));
+      expect(from.max).toBe(ago(10));
+      expect(from.min).toBe(minusOneYear(ago(10)));
+    });
+
+    it('changing From clears a To that is earlier or over a year later, keeps one that fits, and requests only complete ranges', async () => {
+      await typeDate('ml-from', ago(20));                               // fits the default To (today)
+      expect(value('ml-till')).toBe(component.today);
+      expect(requests.length).toBeGreaterThan(0);
+      requests.length = 0;
+      await typeDate('ml-from', ago(366));                              // one day over a year: To cleared, message, no request
+      expect(value('ml-till')).toBe('');
+      expect(note()).toContain('The To date was cleared because it was more than one year after the new From date');
+      expect(requests).toHaveLength(0);
+      await typeDate('ml-till', ago(1));                                // pick To again
+      expect(note()).toBe('');
+      expect(requests.at(-1)).toMatchObject({ date_from: ago(366), date_till: ago(1) });
+      requests.length = 0;
+      component.onCustomFrom(component.today);                          // From after To: To cleared
+      await settle();
+      expect(component.customTill()).toBe('');
+      expect(note()).toContain('before the new From date');
+      expect(requests).toHaveLength(0);
+    });
+
+    it('changing To clears a From that is after it or over a year before it', async () => {
+      await typeDate('ml-from', ago(10));
+      requests.length = 0;
+      await typeDate('ml-till', ago(12));                               // before From: From cleared
+      expect(value('ml-from')).toBe('');
+      expect(value('ml-till')).toBe(ago(12));
+      expect(note()).toContain('The From date was cleared because it was after the new To date');
+      expect(requests).toHaveLength(0);
+      await typeDate('ml-from', ago(12 + 365));                         // exactly one year: allowed
+      expect(note()).toBe('');
+      expect(requests.at(-1)).toMatchObject({ date_from: ago(12 + 365), date_till: ago(12) });
+      requests.length = 0;
+      await typeDate('ml-till', ago(11));                               // one day too far from From: From cleared
+      expect(value('ml-from')).toBe('');
+      expect(note()).toContain('more than one year before the new To date');
+      expect(requests).toHaveLength(0);
+    });
+
+    it('presets still work and clear any leftover message', async () => {
+      await typeDate('ml-from', ago(400));
+      expect(note()).toContain('cleared');
+      await click('.field .seg button', '1M');
+      expect(note()).toBe('');
+      expect(requests.length).toBeGreaterThan(0);
+    });
   });
 
   it('combined table shows one close column per leg, latest first; missing values are explicit', async () => {

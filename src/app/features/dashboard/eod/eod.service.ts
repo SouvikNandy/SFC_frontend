@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
 import { GreeksCalculatorService } from '../greeks/greeks-calculator.service';
-import { DdGreeksRequest, DdGreeksResponse, EodDataRow, EodRequest, EodResponse } from './eod.model';
+import { DdGreeksRequest, DdGreeksResponse, EodChartRequest, EodChartResponse, EodDataRow, EodRequest, EodResponse } from './eod.model';
 import { readEodPage } from './eod-rows.util';
 import { Observable, map, of, switchMap } from 'rxjs';
 
@@ -27,6 +27,11 @@ export class EodService {
 
     getEod(request: EodRequest): Observable<EodResponse> {
         return this.api.post<EodResponse, EodRequest>('/fo/eod', request);
+    }
+
+    /** The whole selected range for the F&O EOD chart (/fo/eod/chart); the paginated table keeps using getEod. */
+    getEodChart(request: EodChartRequest): Observable<EodChartResponse> {
+        return this.api.post<EodChartResponse, EodChartRequest>('/fo/eod/chart', request);
     }
 
     /**

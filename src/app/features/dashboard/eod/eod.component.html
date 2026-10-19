@@ -104,11 +104,11 @@
       <div class="custom-dates" *ngIf="range === 'Custom'">
         <div class="control">
           <label class="label" for="eod-from">From</label>
-          <input id="eod-from" class="date-input" type="date" [min]="customFromMin" [max]="todayStr" [value]="customFrom" (change)="onCustomFromChange($event)" />
+          <input id="eod-from" class="date-input" type="date" [attr.min]="customFromBounds.min" [attr.max]="customFromBounds.max" [value]="customFrom" (change)="onCustomFromChange($event)" />
         </div>
         <div class="control">
           <label class="label" for="eod-till">To</label>
-          <input id="eod-till" class="date-input" type="date" [max]="customTillMax" [value]="customTill" (change)="onCustomTillChange($event)" />
+          <input id="eod-till" class="date-input" type="date" [attr.min]="customTillBounds.min" [attr.max]="customTillBounds.max" [value]="customTill" (change)="onCustomTillChange($event)" />
         </div>
       </div>
 
@@ -134,7 +134,7 @@
       <div class="legend">Price (₹)</div>
     </div>
 
-    <div class="chart" *ngIf="chart; else emptyChart">
+    <div class="chart" *ngIf="!chartLoading && !chartError && chart; else chartFallback">
       <svg
         [attr.viewBox]="chart.viewBox"
         preserveAspectRatio="xMidYMid meet"
@@ -188,8 +188,13 @@
         ></app-chart-tooltip>
       }
     </div>
-    <ng-template #emptyChart>
-      <div class="empty">
+    <ng-template #chartFallback>
+      <div class="empty" role="status" *ngIf="chartLoading">Loading chart…</div>
+      <div class="empty chart-error" role="alert" *ngIf="!chartLoading && chartError">
+        {{ chartError }}
+        <button type="button" class="btn-retry" (click)="retryChart()">Retry</button>
+      </div>
+      <div class="empty" *ngIf="!chartLoading && !chartError">
         {{ symbol ? 'No EOD data is available for the selected filters.' : 'Select a symbol to view EOD data.' }}
       </div>
     </ng-template>

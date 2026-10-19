@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { exceedsOneYear, fromPickerMin, isIsoDate, localTodayIso, minusOneYear, plusOneYear, tillPickerMax } from './date-range';
+import { clearedMessage, exceedsOneYear, fromConflict, fromPickerBounds, fromPickerMin, isIsoDate, localTodayIso, minusOneYear, plusOneYear, tillConflict, tillPickerBounds, tillPickerMax } from './date-range';
 
 describe('one-year date range', () => {
     it('allows exactly one calendar year, inclusive, and rejects one day more', () => {
@@ -52,6 +52,40 @@ describe('one-year date range', () => {
         expect(exceedsOneYear('2020-01-01', '2026-02-31')).toBe(false);
         expect(isIsoDate('2026-02-31')).toBe(false);
         expect(isIsoDate('2024-02-29')).toBe(true);
+    });
+
+    it('reports which date to clear: To is cleared when before From or over a year after it, From the mirror', () => {
+        expect(tillConflict('2026-10-05', '2026-10-18')).toBeNull();
+        expect(tillConflict('2026-10-18', '2026-10-18')).toBeNull();
+        expect(tillConflict('2026-10-19', '2026-10-18')).toBe('order');
+        expect(tillConflict('2025-10-18', '2026-10-18')).toBeNull();
+        expect(tillConflict('2025-10-17', '2026-10-18')).toBe('span');
+        expect(tillConflict('2024-02-29', '2025-02-28')).toBeNull();
+        expect(tillConflict('2024-02-29', '2025-03-01')).toBe('span');
+        expect(fromConflict('2026-10-19', '2026-10-18')).toBe('order');
+        expect(fromConflict('2025-10-17', '2026-10-18')).toBe('span');
+        expect(fromConflict('2025-10-18', '2026-10-18')).toBeNull();
+        for (const blank of [['', '2026-10-18'], ['2026-10-18', ''], ['2026-02-31', '2026-10-18']]) {
+            expect(tillConflict(blank[0], blank[1])).toBeNull();      // nothing to reconcile until both dates exist
+            expect(fromConflict(blank[0], blank[1])).toBeNull();
+        }
+    });
+
+    it('words the cleared-date messages', () => {
+        expect(clearedMessage('To', 'order')).toBe('The To date was cleared because it was before the new From date. Select the To date again.');
+        expect(clearedMessage('To', 'span')).toBe('The To date was cleared because it was more than one year after the new From date. Select the To date again.');
+        expect(clearedMessage('From', 'order')).toBe('The From date was cleared because it was after the new To date. Select the From date again.');
+        expect(clearedMessage('From', 'span')).toBe('The From date was cleared because it was more than one year before the new To date. Select the From date again.');
+    });
+
+    it('narrows only an empty picker, never one that already has a value', () => {
+        expect(fromPickerBounds('2025-01-01', '2026-10-18', '2026-10-18')).toEqual({ min: null, max: '2026-10-18' });
+        expect(tillPickerBounds('2026-10-01', '2026-10-18', '2026-10-18')).toEqual({ min: null, max: '2026-10-18' });
+        expect(fromPickerBounds('', '2026-06-01', '2026-10-18')).toEqual({ min: '2025-06-01', max: '2026-06-01' });
+        expect(fromPickerBounds('', '2026-12-01', '2026-10-18')).toEqual({ min: '2025-12-01', max: '2026-10-18' });
+        expect(tillPickerBounds('2025-01-01', '', '2026-10-18')).toEqual({ min: '2025-01-01', max: '2026-01-01' });
+        expect(tillPickerBounds('2026-03-01', '', '2026-10-18')).toEqual({ min: '2026-03-01', max: '2026-10-18' });
+        expect(tillPickerBounds('', '', '2026-10-18')).toEqual({ min: null, max: '2026-10-18' });
     });
 
     it('takes today from the local calendar, not UTC', () => {

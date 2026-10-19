@@ -9,6 +9,8 @@ import { CommonModule } from '@angular/common';
 import { EodService } from './eod.service';
 import {
   DdGreeksData,
+  EodChartPoint,
+  EodChartRequest,
   EodDataRow,
   EodPaginatedData,
   EodRequest,
@@ -16,6 +18,7 @@ import {
   EodSymbol,
 } from './eod.model';
 import { buildEodChart, ChartResult } from './eod-chart.util';
+import { readChartPoints } from './eod-chart-points.util';
 import { extractEodPage } from './eod-rows.util';
 import { DataTableColumn } from '../../../shared/components/data-table/data-table.types';
 import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
@@ -25,9 +28,9 @@ import {
 } from '../../../shared/components/chart-tooltip/chart-tooltip.component';
 import { ToastService } from '../../../core/services/toast.service';
 import { DefaultStock } from '../../../shared/services/constantFile';
-import { MAX_RANGE_MESSAGE, exceedsOneYear, fromPickerMin, isIsoDate, localTodayIso, tillPickerMax } from '../../../shared/utils/date-range';
+import { MAX_RANGE_MESSAGE, clearedMessage, exceedsOneYear, fromConflict, fromPickerBounds, isIsoDate, localTodayIso, tillConflict, tillPickerBounds } from '../../../shared/utils/date-range';
 import { EMPTY, Subject, of } from 'rxjs';
-import { catchError, finalize, switchMap, takeUntil, tap } from 'rxjs/operators';
+import { catchError, finalize, map, switchMap, takeUntil, tap } from 'rxjs/operators';
 
 @Component({
   selector: 'app-eod',
@@ -60,6 +63,8 @@ export class EodComponent implements OnInit, OnDestroy {
   // custom date range values (YYYY-MM-DD)
   customFrom = '';
   customTill = '';
+  /** Why a date was just cleared; shown in place of the generic "select both dates" message. */
+  private clearNote = '';
   todayStr = '';
 
   loading = false;
@@ -74,6 +79,13 @@ export class EodComponent implements OnInit, OnDestroy {
   hasNextPage = false;
   hasPreviousPage = false;
   chartTooltip: { index: number; left: number; top: number } | null = null;
+  /** The whole selected range from /fo/eod/chart; independent of the table page. */
+  chartPoints: EodChartPoint[] = [];
+  chartLoading = false;
+  chartError = '';
+  private chartKey = '';
+  /** A request body starts a load; null cancels any load in flight and clears the chart (symbol changed or cleared). */
+  private readonly chartRequest$ = new Subject<EodChartRequest | null>();
   private restoreScrollTop: number | null = null;
 
   readonly eodColumns: DataTableColumn<EodDataRow>[] = [
@@ -126,6 +138,7 @@ export class EodComponent implements OnInit, OnDestroy {
     this.customFrom = this.daysBeforeToday(7);
     this.customTill = this.todayStr;
     this.setupReload();
+    this.setupChart();
     this.loadSymbols();
     this.refresh$.next({ loadMetadata: true });
   }
@@ -160,6 +173,7 @@ export class EodComponent implements OnInit, OnDestroy {
           this.isEodLoading = !loadMetadata;
           this.error = '';
           if (loadMetadata) {
+            this.cancelChart();
             this.rows = [];
             this.chart = null;
             this.ddGreeksData = null;
@@ -177,6 +191,7 @@ export class EodComponent implements OnInit, OnDestroy {
             this.isEodLoading = false;
             this.rows = [];
             this.chart = null;
+            this.cancelChart();
             this.changeDetector.markForCheck();
             return EMPTY;
           }
@@ -190,6 +205,7 @@ export class EodComponent implements OnInit, OnDestroy {
                   this.expiry = this.expiryOptions[0];
                   this.isMetadataLoading = false;
                   this.isEodLoading = true;
+                  this.requestChart();
                 }),
               )
             : EMPTY;
@@ -218,10 +234,88 @@ export class EodComponent implements OnInit, OnDestroy {
         this.rows = paginatedData.results
           .map((row) => this.normalizeEodRow(row))
           .sort((a, b) => String(a.date).localeCompare(String(b.date)));
-        this.chart = buildEodChart(this.rows.slice(-200));
         this.changeDetector.markForCheck();
         this.restorePageScroll();
       });
+  }
+
+  /**
+   * The chart has its own request (`/fo/eod/chart`: the whole selected range, independent of the table page). It is
+   * requested only when a filter changes, never for paging, and switchMap drops a superseded response, so a slow
+   * answer for an earlier selection can never replace the current chart. A failure affects only the chart.
+   */
+  private setupChart(): void {
+    this.chartRequest$
+      .pipe(
+        takeUntil(this.destroy$),
+        tap((request) => {
+          this.chartLoading = request !== null;
+          this.chartError = '';
+          this.chart = null;
+          this.chartPoints = [];
+          this.chartTooltip = null;
+          this.changeDetector.markForCheck();
+        }),
+        switchMap((request) =>
+          request === null
+            ? EMPTY
+            : this.svc.getEodChart(request).pipe(
+                map((res) => ({ points: readChartPoints(res.data) })),
+                catchError(() => of({ points: null })),
+              ),
+        ),
+      )
+      .subscribe(({ points }) => {
+        this.chartLoading = false;
+        if (points === null) {
+          this.chartKey = '';                       // a failed request must be retryable with the same filters
+          this.chartError = 'Unable to load the chart.';
+        } else {
+          this.chartPoints = points;
+          this.chart = points.length ? buildEodChart(points) : null;
+        }
+        this.changeDetector.markForCheck();
+      });
+  }
+
+  /** Same filters as the table, without paging. Null while the selection is incomplete (nothing is requested). */
+  private chartRequestBody(): EodChartRequest | null {
+    if (!this.symbol || !this.isChartRangeValid()) return null;
+    const option = this.instrument !== 'FUT';
+    if (option && (this.strike == null || !this.expiry)) return null;
+    const { date_from, date_till } = this.calcDateRange(this.range);
+    return {
+      symbol: this.symbol,
+      option_type: option ? (this.instrument as 'CE' | 'PE') : 'XX',
+      date_from,
+      date_till,
+      ...(option ? { strike: Math.round(this.strike as number), expiry: this.expiry } : {}),
+    };
+  }
+
+  /** Re-requests the chart when its filters differ from the last request (or after a failure), so repeat clicks cost nothing. */
+  private requestChart(force = false): void {
+    const body = this.chartRequestBody();
+    if (!body) return;
+    const key = JSON.stringify(body);
+    if (!force && key === this.chartKey) return;
+    this.chartKey = key;
+    this.chartRequest$.next(body);
+  }
+
+  retryChart(): void {
+    this.requestChart(true);
+  }
+
+  private cancelChart(): void {
+    this.chartKey = '';
+    this.chartRequest$.next(null);
+  }
+
+  private isChartRangeValid(): boolean {
+    if (this.range !== 'Custom') return true;
+    return Boolean(this.customFrom && this.customTill && isIsoDate(this.customFrom) && isIsoDate(this.customTill)
+      && this.customFrom <= this.customTill && this.customTill <= this.todayStr && !exceedsOneYear(this.customFrom, this.customTill));
   }
 
   /** Payload shape detection is shared with the Multi-Leg EOD screen; the row defaults below stay specific to this screen. */
@@ -282,9 +376,9 @@ export class EodComponent implements OnInit, OnDestroy {
     const row = this.chartTooltipRow;
     return row ? [{ label: 'Close', value: this.formatPrice(row.close), tone: 'neutral' }] : [];
   }
-  get chartTooltipRow(): EodDataRow | undefined {
+  get chartTooltipRow(): EodChartPoint | undefined {
     if (!this.chart || !this.chartTooltip) return undefined;
-    return this.rows[this.rows.length - this.chart.points.length + this.chartTooltip.index];
+    return this.chartPoints[this.chartTooltip.index];
   }
 
   private loadEod() {
@@ -440,6 +534,7 @@ export class EodComponent implements OnInit, OnDestroy {
   }
   onRange(r: '1W' | '1M' | '3M' | 'Custom') {
     this.range = r;
+    this.clearNote = '';
     if (r === 'Custom') {
       // ensure defaults exist and validate
       if (!this.customFrom) this.customFrom = this.daysBeforeToday(7);
@@ -450,13 +545,27 @@ export class EodComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** A new From date is never refused; a To date that no longer fits it (earlier, or over a year later) is cleared to be picked again. */
   onCustomFromChange(value: Event | string) {
     this.onCustomFrom(typeof value === 'string' ? value : (value.target as HTMLInputElement).value);
+    this.clearNote = '';
+    const conflict = tillConflict(this.customFrom, this.customTill);
+    if (conflict) {
+      this.customTill = '';
+      this.clearNote = clearedMessage('To', conflict);
+    }
     this.applyCustomDates();
   }
 
+  /** Mirror of onCustomFromChange: a From date that no longer fits the new To date is cleared. */
   onCustomTillChange(value: Event | string) {
     this.onCustomTill(typeof value === 'string' ? value : (value.target as HTMLInputElement).value);
+    this.clearNote = '';
+    const conflict = fromConflict(this.customFrom, this.customTill);
+    if (conflict) {
+      this.customFrom = '';
+      this.clearNote = clearedMessage('From', conflict);
+    }
     this.applyCustomDates();
   }
 
@@ -490,6 +599,7 @@ export class EodComponent implements OnInit, OnDestroy {
   private resetPageAndRefresh(): void {
     this.currentPage = 1;
     this.refreshEod();
+    if (!this.isMetadataLoading) this.requestChart();   // a filter changed; paging (below) never touches the chart
   }
 
   goToNextPage(): void {
@@ -516,7 +626,7 @@ export class EodComponent implements OnInit, OnDestroy {
   validateCustomDates(): boolean {
     this.error = '';
     if (!this.customFrom || !this.customTill) {
-      this.error = 'Select both start and end dates';
+      this.error = this.clearNote || 'Select both start and end dates';
       return false;
     }
     if (!isIsoDate(this.customFrom) || !isIsoDate(this.customTill)) {
@@ -542,11 +652,9 @@ export class EodComponent implements OnInit, OnDestroy {
     return true;
   }
 
-  /** Earliest From the picker offers: one year before the To date. */
-  get customFromMin(): string | null { return fromPickerMin(this.customTill); }
-
-  /** Latest To the picker offers: one year after From, never in the future. */
-  get customTillMax(): string { return tillPickerMax(this.customFrom, this.todayStr); }
+  /** Picker limits: a chosen date is never blocked by the other one; an empty date is narrowed to the valid window. */
+  get customFromBounds() { return fromPickerBounds(this.customFrom, this.customTill, this.todayStr); }
+  get customTillBounds() { return tillPickerBounds(this.customFrom, this.customTill, this.todayStr); }
 
   private daysBeforeToday(days: number): string {
     const d = new Date(`${this.todayStr}T00:00:00Z`);

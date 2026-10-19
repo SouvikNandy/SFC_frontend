@@ -43,6 +43,45 @@ export function exceedsOneYear(from: string, till: string): boolean {
     return isIsoDate(from) && isIsoDate(till) && till > plusOneYear(from);
 }
 
+export type ClearReason = 'order' | 'span';
+
+/** Why the To date no longer fits a newly chosen From date, or null when it still does (or either is blank or invalid). */
+export function tillConflict(from: string, till: string): ClearReason | null {
+    if (!isIsoDate(from) || !isIsoDate(till)) return null;
+    return till < from ? 'order' : till > plusOneYear(from) ? 'span' : null;
+}
+
+/** Why the From date no longer fits a newly chosen To date, or null when it still does (or either is blank or invalid). */
+export function fromConflict(from: string, till: string): ClearReason | null {
+    if (!isIsoDate(from) || !isIsoDate(till)) return null;
+    return from > till ? 'order' : till > plusOneYear(from) ? 'span' : null;
+}
+
+/** Message shown after one date was emptied because it no longer fits the date the user just changed. */
+export function clearedMessage(cleared: 'From' | 'To', reason: ClearReason): string {
+    const changed = cleared === 'To' ? 'From' : 'To';
+    const side = cleared === 'To' ? 'after' : 'before';
+    const relation = reason === 'span'
+        ? `more than one year ${side} the new ${changed} date`
+        : `${cleared === 'To' ? 'before' : 'after'} the new ${changed} date`;
+    return `The ${cleared} date was cleared because it was ${relation}. Select the ${cleared} date again.`;
+}
+
+/**
+ * Picker limits for the From input. A From that is already chosen is never blocked by the To date (changing it
+ * may clear To instead); only an empty From is narrowed to the one-year window that ends at a chosen To.
+ */
+export function fromPickerBounds(from: string, till: string, today: string): { min: string | null; max: string } {
+    if (from || !isIsoDate(till)) return { min: null, max: today };
+    return { min: minusOneYear(till), max: till < today ? till : today };
+}
+
+/** Picker limits for the To input, mirroring {@link fromPickerBounds}: only an empty To is narrowed to the window after From. */
+export function tillPickerBounds(from: string, till: string, today: string): { min: string | null; max: string } {
+    if (till || !isIsoDate(from)) return { min: null, max: today };
+    return { min: from, max: tillPickerMax(from, today) };
+}
+
 /** `min` for the From picker: nothing earlier than one year before the To date (none while To is blank or invalid). */
 export function fromPickerMin(till: string): string | null {
     return isIsoDate(till) ? minusOneYear(till) : null;

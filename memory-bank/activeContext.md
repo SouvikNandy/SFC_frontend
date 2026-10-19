@@ -55,3 +55,7 @@ Client feedback round (QuantSFC_Change_Instructions.pdf): C1 EOD Close, C2 EOD C
 - OTP is intentionally local and accepts only `DEFAULT_OTP = '0000'` until the backend verification contract is confirmed.
 
 _Update when the task or branch focus changes._
+
+## DONE (2026-10-19): F&O EOD chart via `/fo/eod/chart`
+- Contract (verified live): POST, same body as `/fo/eod` minus paging (page/page_size ignored). Response `{success, message:'EOD_CHART_FETCHED', data:[{date, close}]}`, oldest first, no row cap (1,273 rows/5.8y), empty array = no data, unknown symbol = empty; 500 when option strike/expiry or dates are missing; 422 for bad option_type or reversed dates; XX ignores `expiry`. Rows equal `/fo/eod` closes exactly, INCLUDING no-trade carried closes (flat stale stretches for illiquid contracts), because only date+close are sent.
+- Implementation: `EodService.getEodChart`, `eod-chart-points.util.ts` (`readChartPoints`), chart pipeline in `eod.component.ts` (`setupChart/requestChart/cancelChart`, deduped by request body, only on filter changes, cancelled on symbol change), chart-specific loading/error+Retry/empty states, tooltip reads the chart series. Table (`/fo/eod`) paging untouched. Multi-Leg NOT changed (backend has not confirmed it applies there).
