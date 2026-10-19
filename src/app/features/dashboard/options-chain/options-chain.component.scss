@@ -43,6 +43,21 @@ h1 {
   font-size: 11px;
 }
 
+/* Up to ~620px the source note wraps onto its own line once it has text; reserve that line (14px) from the start so the page does not shift. */
+@media (max-width: 620px) {
+  .srcnote {
+    flex-basis: 100%;
+    min-height: 14px;
+  }
+}
+
+/* Below 412px the price no longer fits beside the symbol chip once loaded and wraps; put it on its own row from the start. */
+@media (max-width: 411px) {
+  .lastpx {
+    flex-basis: 100%;
+  }
+}
+
 .panel {
   margin-bottom: 16px;
   padding: 18px 20px 20px;
@@ -390,6 +405,11 @@ h1 {
   padding: 18px 20px 20px;
 }
 
+/* While loading (including the symbol list, before the default script is selected), reserve the height the table will take (header + 40px rows, capped like .chain-scroll) so the charts below do not jump. */
+.chain-loading {
+  min-height: min(640px, calc(68px + var(--chain-rows, 1) * 40px));
+}
+
 .side-tabs {
   display: none;
   margin-bottom: 10px;
@@ -718,6 +738,10 @@ table.chain td.itm {
 
   .chain-scroll {
     max-height: 65vh;
+  }
+
+  .chain-loading {
+    min-height: min(65vh, calc(55px + var(--chain-rows, 1) * 40px));
   }
 
   .chain th,

@@ -45,13 +45,15 @@
                 }
             </svg>
         </div>
+        } @else if (reserveSpace()) {
+        <div class="ladder-wrap"><div class="reserve" [style.aspect-ratio]="ladderAspect()">{{ emptyMessage() }}</div></div>
         } @else {
         <div class="chart-empty">{{ emptyMessage() }}</div>
         }
     </div>
 
     <!-- SUMMARY -->
-    <div class="stat-strip">
+    <div class="stat-strip" [class.is-loading]="reserveSpace()">
         <div class="stat">
             <div class="stat-label"><span aria-hidden="true">▣</span> Net {{ summary()?.premiumWord ?? 'debit' }}</div>
             <div [class]="'stat-value ' + (summary()?.premiumTone ?? '')">{{ summary()?.premium ?? '–' }}</div>
@@ -143,6 +145,9 @@
             }
         </div>
         <div class="date-caption"><span>{{ dateCaption().left }}</span><span>{{ dateCaption().right }}</span></div>
+        } @else if (reserveSpace()) {
+        <div class="chart-wrap"><div class="reserve" [style.aspect-ratio]="chartAspect()">{{ emptyMessage() }}</div></div>
+        <div class="date-caption" aria-hidden="true"><span>&nbsp;</span></div>
         } @else {
         <div class="chart-empty">{{ emptyMessage() }}</div>
         }

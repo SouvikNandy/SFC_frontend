@@ -295,9 +295,15 @@ interface ChartTooltipState {
         <p class="input-error">{{ error }}</p>
       }
       @if (loading) {
-        <div class="empty">Loading option chain…</div>
+        <div class="empty chain-loading" [style.--chain-rows]="strikeFilter ? strikeFilter * 2 + 1 : 100">
+          Loading option chain…
+        </div>
       } @else if (!visibleRows.length) {
-        <div class="empty">
+        <div
+          class="empty"
+          [class.chain-loading]="symbolsLoading"
+          [style.--chain-rows]="strikeFilter ? strikeFilter * 2 + 1 : 100"
+        >
           {{
             symbol ? 'No option chain data available.' : 'Select a script to load the option chain.'
           }}

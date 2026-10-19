@@ -102,6 +102,8 @@ path.ladder-connector { fill: none; }
 .stat-value.profit { color: var(--teal); }
 .stat-value.loss { color: var(--red); }
 .stat-zones { margin-top: 6px; font-family: var(--font-mono); font-size: 12px; line-height: 1.55; }
+/* While loading, reserve the breakeven lines of the default strategy (2 bands: 4 wrapped lines in the 5-column strip, 2 lines otherwise). */
+.stat-strip.is-loading .stat-zones { min-height: calc(12px * 1.55 * 4); }
 .stat-hint { min-height: 14px; margin-top: 3px; color: var(--muted-2); font-size: 11px; }
 
 /* ---------- chart ---------- */
@@ -147,6 +149,18 @@ path.ladder-connector { fill: none; }
 .chart-dot.eval { fill: var(--accent-dark); }
 
 .date-caption { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; }
+
+/* Loading placeholders: same frame as the loaded ladder/chart, sized from the SVG viewBox aspect ratio (set inline). */
+.reserve {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--muted-2);
+  font-size: 12px;
+  text-align: center;
+}
 
 .chart-empty {
   padding: 32px 12px;
@@ -343,6 +357,7 @@ select { font-family: var(--font-body); cursor: pointer; }
 }
 
 @media (max-width: 900px) {
+  .stat-strip.is-loading .stat-zones { min-height: calc(12px * 1.55 * 2); }
   .stat-strip { grid-template-columns: repeat(2, 1fr); }
   .stat { border-bottom: 1px solid var(--border); }
   .position-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

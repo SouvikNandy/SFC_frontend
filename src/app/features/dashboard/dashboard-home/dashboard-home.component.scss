@@ -58,6 +58,7 @@
 }
 
 .summary-card.placeholder {
+    min-height: 103px; /* height of a loaded card (measured at 360-1350px) so the grid does not grow when data arrives */
     background: linear-gradient(135deg, #fff, var(--head-bg));
 }
 

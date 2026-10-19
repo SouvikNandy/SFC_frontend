@@ -37,7 +37,7 @@ const NAV_LABELS: Record<string, string> = {
       <div class="sfc-sidebar__inner">
         <div class="sfc-sidebar__brand">
           <a [routerLink]="['/']" (click)="sidebar.close()">
-            <img src="assets/images/logo.webp" alt="QuantSFC" class="sfc-logo" />
+            <img src="assets/images/logo.webp" alt="QuantSFC" class="sfc-logo" width="240" height="160" />
           </a>
         </div>
 

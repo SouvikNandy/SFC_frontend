@@ -17,8 +17,26 @@ import {
 
 export const formatRupee = (value: number) => '₹' + value.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
+/**
+ * viewBox sizes of the payoff chart and the strike ladder. The builders use them, and the component
+ * derives the aspect ratio of its loading placeholders from them so the page does not shift when data arrives.
+ */
+const CHART_SIZE = { wide: { width: 1060, height: 390 }, narrow: { width: 340, height: 300 } };
+const LADDER = { wide: { width: 1100, pillH: 19, badgeH: 13 }, narrow: { width: 340, pillH: 21, badgeH: 14 }, rowGap: 6, axisPad: 30 };
+
+export const chartAspectRatio = (narrow: boolean): string => {
+    const { width, height } = narrow ? CHART_SIZE.narrow : CHART_SIZE.wide;
+    return `${width} / ${height}`;
+};
+
+/** Smallest ladder: one pill row above and one below the axis. */
+export const ladderMinAspectRatio = (narrow: boolean): string => {
+    const { width, pillH, badgeH } = narrow ? LADDER.narrow : LADDER.wide;
+    return `${width} / ${2 * (pillH + badgeH + LADDER.rowGap) + 2 * LADDER.axisPad}`;
+};
+
 export function buildPayoffChart(result: PayoffResult, legs: PayoffLeg[], spot: number, narrow: boolean): PayoffChart {
-    const width = narrow ? 340 : 1060, height = narrow ? 300 : 390;
+    const { width, height } = narrow ? CHART_SIZE.narrow : CHART_SIZE.wide;
     const padLeft = narrow ? 36 : 54, padRight = narrow ? 10 : 26, padTop = narrow ? 18 : 26, padBottom = narrow ? 24 : 32;
     const plotWidth = width - padLeft - padRight, plotHeight = height - padTop - padBottom, plotBottom = padTop + plotHeight;
     const expiry = result.curveExpiry, evaluation = result.curveEval;
@@ -110,7 +128,7 @@ function placeBreakevenLabels(xs: number[], values: number[], padTop: number, mi
 
 export function buildStrikeLadder(result: PayoffResult, legs: PayoffLeg[], spot: number, strikeStep: number,
     baseDate: Date, narrow: boolean): PayoffLadder {
-    const width = narrow ? 340 : 1100, padLeft = narrow ? 10 : 26, padRight = narrow ? 10 : 26;
+    const width = (narrow ? LADDER.narrow : LADDER.wide).width, padLeft = narrow ? 10 : 26, padRight = narrow ? 10 : 26;
     const { lo, hi, near, usedExpiries } = result;
     const xAt = (price: number) => padLeft + ((price - lo) / (hi - lo)) * (width - padLeft - padRight);
 
@@ -123,7 +141,7 @@ export function buildStrikeLadder(result: PayoffResult, legs: PayoffLeg[], spot:
         else groups.push({ strike: leg.strike, type: leg.type, expiryDays: leg.expiryDays, qty: signed });
     });
 
-    const pillH = narrow ? 21 : 19, badgeH = narrow ? 14 : 13, rowGap = 6, gapX = narrow ? 4 : 7;
+    const { pillH, badgeH } = narrow ? LADDER.narrow : LADDER.wide, rowGap = LADDER.rowGap, gapX = narrow ? 4 : 7;
     const rowStep = pillH + badgeH + rowGap;
     const items = groups.map(g => {
         const qtyTag = Math.abs(g.qty) > 1 ? '×' + Math.abs(g.qty) : '';
@@ -154,7 +172,7 @@ export function buildStrikeLadder(result: PayoffResult, legs: PayoffLeg[], spot:
         return rows.length;
     };
     const rowsAbove = pack(items.filter(i => i.above)), rowsBelow = pack(items.filter(i => !i.above));
-    const axisPad = 30;
+    const axisPad = LADDER.axisPad;
     const axisY = Math.max(rowsAbove, 1) * rowStep + axisPad;
     const height = axisY + Math.max(rowsBelow, 1) * rowStep + axisPad;
 

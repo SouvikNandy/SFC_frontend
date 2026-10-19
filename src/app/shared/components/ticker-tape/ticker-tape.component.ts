@@ -26,6 +26,7 @@ import { signal } from '@angular/core';
     `
       .ticker-wrap {
         width: 100%;
+        min-height: 30px;
         background: var(--panel);
         border-bottom: 1px solid var(--border);
         overflow: hidden;

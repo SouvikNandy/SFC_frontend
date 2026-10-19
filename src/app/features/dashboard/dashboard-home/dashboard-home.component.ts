@@ -86,11 +86,10 @@ export class DashboardHomeComponent {
 
   private load(): void {
     this.loading.set(true);
+    // Quick links are static (they do not depend on the market summary), so they render at once instead of after the ticker request.
+    this.home.getQuickLinks().subscribe({ next: (q) => { this.quickLinks = q; }, error: () => { this.error.set('Failed to load quick links'); this.toast.error('Unable to load dashboard quick links.'); } });
     this.home.getMarketSummary().subscribe({
-      next: (cards) => {
-        this.cards = cards;
-        this.home.getQuickLinks().subscribe({ next: (q) => { this.quickLinks = q; this.loading.set(false); }, error: () => { this.error.set('Failed to load quick links'); this.toast.error('Unable to load dashboard quick links.'); this.loading.set(false); } });
-      },
+      next: (cards) => { this.cards = cards; this.loading.set(false); },
       error: () => { this.error.set('Failed to load market summary'); this.toast.error('Unable to load the market summary.'); this.loading.set(false); }
     });
   }

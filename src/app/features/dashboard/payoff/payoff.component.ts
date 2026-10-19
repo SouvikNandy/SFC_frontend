@@ -24,7 +24,7 @@ import {
 import { DefaultStock } from '../../../shared/services/constantFile';
 import { addDays, computePayoff } from './payoff-engine';
 import { chainIV, nearestExpiryAverageIv, theoreticalPremium } from './payoff-pricing';
-import { buildPayoffChart, buildStrikeLadder, formatRupee } from './payoff-chart.util';
+import { buildPayoffChart, buildStrikeLadder, chartAspectRatio, formatRupee, ladderMinAspectRatio } from './payoff-chart.util';
 import {
   STRATEGY_GROUPS,
   STRATEGY_NAMES,
@@ -303,6 +303,10 @@ export class PayoffComponent implements OnInit {
     if (this.quotesLoading()) return 'Loading BhavCopy prices for the selected expiry…';
     return this.validationError() || 'Enter valid inputs to display the payoff.';
   });
+  /** True while EOD data is loading: the chart, ladder and summary reserve their final space so the page does not shift. */
+  readonly reserveSpace = computed(() => this.mode() !== 'live' && (this.symbolsLoading() || this.marketLoading() || this.quotesLoading()));
+  readonly chartAspect = computed(() => chartAspectRatio(this.narrow()));
+  readonly ladderAspect = computed(() => ladderMinAspectRatio(this.narrow()));
   readonly hoverPoint = computed(() => {
     const hover = this.hover(), chart = this.chart();
     const point = hover && chart ? chart.points[hover.index] : undefined;
