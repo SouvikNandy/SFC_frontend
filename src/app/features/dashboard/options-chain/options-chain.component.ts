@@ -653,16 +653,30 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
     } else if (event.key === 'Escape') this.suggestionsOpen = false;
   }
   loadChain(): void {
-    if (this.symbol && this.expiry && !this.live)
-      this.chainRequest = this.chainApi
-        .getOptionChain({ symbol: this.symbol, expiry: this.expiry })
-        .pipe(takeUntil(this.destroy$))
-        .subscribe((view) => {
+    if (!this.symbol || !this.expiry || this.live) return;
+    // Only the newest request may update the screen: a superseded one is cancelled here.
+    this.chainRequest?.unsubscribe();
+    this.error = '';
+    this.loading = true;
+    this.chainRequest = this.chainApi
+      .getOptionChain({ symbol: this.symbol, expiry: this.expiry })
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (view) => {
           this.view = view;
           this.rows = view.rows.map((row) => this.calculateRowGreeks(row));
           this.loading = false;
           this.cd.markForCheck();
-        });
+        },
+        error: () => {
+          this.view = null;
+          this.rows = [];
+          this.loading = false;
+          this.error = 'Unable to load the option chain. Please try again.';
+          this.toast.error(this.error);
+          this.cd.markForCheck();
+        },
+      });
   }
   formatExpiry(value: string): string {
     const date = new Date(`${value}T00:00:00`);
@@ -936,6 +950,8 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
       .pipe(
         takeUntil(this.destroy$),
         tap((symbol) => {
+          this.chainRequest?.unsubscribe();
+          this.error = '';
           this.detailsLoading = Boolean(symbol);
           this.loading = Boolean(symbol);
           this.rows = [];

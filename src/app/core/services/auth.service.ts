@@ -44,46 +44,30 @@ export class AuthService {
   private persistSessionFromResponse(response: LoginResponse | VerifyOtpResponse | RefreshTokenResponse): void {
     const payload = response.data as any;
 
-    if (!payload) {
-      console.warn('[Auth] Payload is empty or null');
-      return;
-    }
+    if (!payload) return;
 
-    console.log('[Auth] Processing response payload:', payload);
 
     // Handle new format (direct access_token/refresh_token in payload)
     const hasDirectTokens = payload.access_token && payload.refresh_token;
     // Handle old format (tokens object)
     const hasTokensObject = payload.tokens && payload.tokens.accessToken && payload.tokens.refreshToken;
 
-    if (!hasDirectTokens && !hasTokensObject) {
-      console.warn('[Auth] No valid tokens found in response');
-      return;
-    }
+    if (!hasDirectTokens && !hasTokensObject) return;
 
     const tokensToNormalize = hasDirectTokens
       ? { accessToken: payload.access_token, refreshToken: payload.refresh_token }
       : payload.tokens;
 
-    console.log('[Auth] Tokens to normalize:', tokensToNormalize);
 
     const tokens = this.normalizeTokens(tokensToNormalize);
-    if (!tokens) {
-      console.warn('[Auth] Failed to normalize tokens');
-      return;
-    }
+    if (!tokens) return;
 
     const user = payload.user;
-    if (!user) {
-      console.warn('[Auth] No user data in response');
-      return;
-    }
+    if (!user) return;
 
-    console.log('[Auth] Persisting session with user:', user.email);
     this.storageService.setSession(tokens, user);
     this.currentUser.set(user);
     this.isAuthenticated.set(true);
-    console.log('[Auth] Session persisted successfully');
   }
 
   private clearSession(): void {
@@ -93,15 +77,9 @@ export class AuthService {
   }
 
   login(request: LoginRequest): Observable<LoginResponse> {
-    console.log('[Auth] Starting login with email:', request.email);
     return this.apiService.post<LoginResponse, LoginRequest>('/auth/login', request).pipe(
       tap((response) => {
-        console.log('[Auth] Login response received:', response);
-        if (response.success) {
-          this.persistSessionFromResponse(response);
-        } else {
-          console.warn('[Auth] Login response not successful:', response.message);
-        }
+        if (response.success) this.persistSessionFromResponse(response);
       })
     );
   }

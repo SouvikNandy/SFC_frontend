@@ -1,21 +1,20 @@
 import { Injectable } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
+import { GreeksCalculatorService } from '../greeks/greeks-calculator.service';
 import {
     HistoricalVolatilityApiRow,
     HistoricalVolatilityRequest,
     HistoricalVolatilityResponse,
-    SymbolListResponse,
 } from './historical-volatility.model';
 
 @Injectable({ providedIn: 'root' })
 export class HistoricalVolatilityService {
-    constructor(private readonly api: ApiService) { }
+    constructor(private readonly api: ApiService, private readonly greeks: GreeksCalculatorService) { }
 
+    /** The shared `/fo/dd_list` symbol list. */
     getSymbols(): Observable<string[]> {
-        return this.api.get<SymbolListResponse>('/fo/dd_list').pipe(
-            map(response => response.data ?? response.SYMBOL_LIST ?? [])
-        );
+        return this.greeks.getSymbols();
     }
 
     calculate(request: HistoricalVolatilityRequest): Observable<HistoricalVolatilityApiRow[]> {
@@ -23,6 +22,4 @@ export class HistoricalVolatilityService {
             map(response => response.data ?? [])
         );
     }
-
-
 }

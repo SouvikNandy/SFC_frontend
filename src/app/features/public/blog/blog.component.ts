@@ -95,14 +95,12 @@ export class BlogComponent {
 
   downloadReport(id: number): void {
     // TODO: Replace with actual API call when backend is ready
-    console.log('Downloading report:', id);
     alert(`Report ${id} downloaded`);
   }
 
   subscribe(): void {
     if (this.subscriberEmail) {
       // TODO: Replace with actual API call when backend is ready
-      console.log('Subscribed:', this.subscriberEmail);
       this.isSubscribed.set(true);
       this.subscriberEmail = '';
     }

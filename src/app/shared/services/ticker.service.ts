@@ -1,8 +1,7 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
 import { Observable, of } from 'rxjs';
 import { map, catchError, shareReplay } from 'rxjs/operators';
-import { environment } from '../../../environments/environment';
+import { ApiService } from '../../core/services/api.service';
 
 export interface TickerItem {
   symbol: string;
@@ -29,36 +28,44 @@ export interface TickerApiResponse {
 
 @Injectable({ providedIn: 'root' })
 export class TickerService {
-  private readonly http = inject(HttpClient);
+  private readonly api = inject(ApiService);
+  private ticker$: Observable<TickerItem[]> | null = null;
 
-  /** One request shared by the ticker tape and the dashboard market summary. */
-  private readonly ticker$ = this.http.post<TickerApiResponse>(`${environment.apiBaseUrl}/fo/ticker`, {}).pipe(
-    map((response) => {
-      if (response && response.success && Array.isArray(response.data)) {
-        return response.data.map((item) => {
-          const numericChange = Number(item.change);
-          return {
-            symbol: item.symbol,
-            price: typeof item.price === 'number' ? item.price.toFixed(2) : String(item.price),
-            change:
-              (numericChange > 0 ? '+' : '') +
-              (typeof item.change === 'number' ? item.change.toFixed(2) : String(item.change)),
-            positive: numericChange > 0,
-            priceValue: Number(item.price),
-            changeValue: numericChange,
-          };
-        });
-      }
-      return [];
-    }),
-    catchError((error) => {
-      console.error('Ticker API error:', error);
-      return of([] as TickerItem[]);
-    }),
-    shareReplay({ bufferSize: 1, refCount: false }),
-  );
-
+  /**
+   * One request shared by the ticker tape and the dashboard market summary. A successful result is reused;
+   * a failed or unsuccessful one emits an empty list but is not kept, so the next caller requests again.
+   */
   getTicker(): Observable<TickerItem[]> {
+    if (!this.ticker$) {
+      const shared$ = this.api.post<TickerApiResponse, Record<string, never>>('/fo/ticker', {}).pipe(
+        map((response) => this.toItems(response)),
+        shareReplay({ bufferSize: 1, refCount: false }),
+      );
+      const current$: Observable<TickerItem[]> = shared$.pipe(
+        catchError(() => {
+          if (this.ticker$ === current$) this.ticker$ = null;
+          return of([] as TickerItem[]);
+        }),
+      );
+      this.ticker$ = current$;
+    }
     return this.ticker$;
+  }
+
+  private toItems(response: TickerApiResponse): TickerItem[] {
+    if (!response || !response.success || !Array.isArray(response.data)) throw new Error('Invalid ticker response');
+    return response.data.map((item) => {
+      const numericChange = Number(item.change);
+      return {
+        symbol: item.symbol,
+        price: typeof item.price === 'number' ? item.price.toFixed(2) : String(item.price),
+        change:
+          (numericChange > 0 ? '+' : '') +
+          (typeof item.change === 'number' ? item.change.toFixed(2) : String(item.change)),
+        positive: numericChange > 0,
+        priceValue: Number(item.price),
+        changeValue: numericChange,
+      };
+    });
   }
 }

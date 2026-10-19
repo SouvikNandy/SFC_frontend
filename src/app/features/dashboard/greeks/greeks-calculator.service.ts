@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Observable, map } from 'rxjs';
+import { Observable, catchError, map, shareReplay, throwError } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { GreeksSymbolDetails, GreeksSymbolDetailsRequest, GreeksSymbolDetailsResponse, GreeksSymbolListResponse } from './greeks.model';
 
@@ -17,13 +17,30 @@ export interface GreeksInput {
 export class GreeksCalculatorService {
     constructor(private readonly api: ApiService) { }
 
+    private symbols$: Observable<string[]> | null = null;
+
+    /**
+     * All F&O symbols (`/fo/dd_list`), requested once and reused by every screen. A failed or unsuccessful
+     * response is not kept, so the next caller requests again. Each caller receives its own array.
+     */
     getSymbols(): Observable<string[]> {
-        return this.api.get<GreeksSymbolListResponse>('/fo/dd_list').pipe(
-            map(response => {
-                if (!response.success) throw new Error('Invalid symbol list response');
-                return response.data ?? response.SYMBOL_LIST ?? [];
-            })
-        );
+        if (!this.symbols$) {
+            const shared$ = this.api.get<GreeksSymbolListResponse>('/fo/dd_list').pipe(
+                map(response => {
+                    if (!response.success) throw new Error('Invalid symbol list response');
+                    return response.data ?? response.SYMBOL_LIST ?? [];
+                }),
+                shareReplay({ bufferSize: 1, refCount: false }),
+            );
+            const current$: Observable<string[]> = shared$.pipe(
+                catchError(error => {
+                    if (this.symbols$ === current$) this.symbols$ = null;
+                    return throwError(() => error);
+                }),
+            );
+            this.symbols$ = current$;
+        }
+        return this.symbols$.pipe(map(symbols => symbols.slice()));
     }
 
     getSymbolDetails(request: GreeksSymbolDetailsRequest): Observable<GreeksSymbolDetails> {

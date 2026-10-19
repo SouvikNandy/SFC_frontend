@@ -32,6 +32,9 @@ import { MAX_RANGE_MESSAGE, clearedMessage, exceedsOneYear, fromConflict, fromPi
 import { EMPTY, Subject, of } from 'rxjs';
 import { catchError, finalize, map, switchMap, takeUntil, tap } from 'rxjs/operators';
 
+const PRICE_FORMAT = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const THOUSANDS_FORMAT = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
 @Component({
   selector: 'app-eod',
   standalone: true,
@@ -72,6 +75,8 @@ export class EodComponent implements OnInit, OnDestroy {
   isEodLoading = false;
   error = '';
   rows: EodDataRow[] = [];
+  /** `rows` newest first, rebuilt only when `rows` changes so the table gets a stable array. */
+  displayRows: EodDataRow[] = [];
   chart: ChartResult | null = null;
   currentPage = 1;
   currentPageSize = 10;
@@ -174,7 +179,7 @@ export class EodComponent implements OnInit, OnDestroy {
           this.error = '';
           if (loadMetadata) {
             this.cancelChart();
-            this.rows = [];
+            this.setRows([]);
             this.chart = null;
             this.ddGreeksData = null;
             this.strikeOptions = [];
@@ -189,7 +194,7 @@ export class EodComponent implements OnInit, OnDestroy {
             this.loading = false;
             this.isMetadataLoading = false;
             this.isEodLoading = false;
-            this.rows = [];
+            this.setRows([]);
             this.chart = null;
             this.cancelChart();
             this.changeDetector.markForCheck();
@@ -231,9 +236,11 @@ export class EodComponent implements OnInit, OnDestroy {
         this.currentPage = paginatedData.page;
         this.hasNextPage = paginatedData.has_next;
         this.hasPreviousPage = paginatedData.has_previous;
-        this.rows = paginatedData.results
-          .map((row) => this.normalizeEodRow(row))
-          .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+        this.setRows(
+          paginatedData.results
+            .map((row) => this.normalizeEodRow(row))
+            .sort((a, b) => String(a.date).localeCompare(String(b.date))),
+        );
         this.changeDetector.markForCheck();
         this.restorePageScroll();
       });
@@ -411,8 +418,9 @@ export class EodComponent implements OnInit, OnDestroy {
     return strikes.includes(atmStrike) ? atmStrike : strikes[0];
   }
 
-  get displayRows(): EodDataRow[] {
-    return this.rows.slice().reverse();
+  private setRows(rows: EodDataRow[]): void {
+    this.rows = rows;
+    this.displayRows = rows.slice().reverse();
   }
 
   get displayColumns(): DataTableColumn<EodDataRow>[] {
@@ -420,15 +428,12 @@ export class EodComponent implements OnInit, OnDestroy {
   }
 
   private formatPrice(value: number): string {
-    return new Intl.NumberFormat('en-IN', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value);
+    return PRICE_FORMAT.format(value);
   }
 
   private formatThousands(value: unknown): string {
     const numericValue = typeof value === 'number' ? value : Number(value);
-    return `${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(numericValue / 1000)}K`;
+    return `${THOUSANDS_FORMAT.format(numericValue / 1000)}K`;
   }
 
   private calcDateRange(range: string) {

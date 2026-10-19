@@ -5,13 +5,6 @@ export interface HistoricalVolatilityRequest {
     date: string;
 }
 
-export interface SymbolListResponse {
-    success: boolean;
-    message?: string;
-    data?: string[];
-    SYMBOL_LIST?: string[];
-}
-
 export interface HistoricalVolatilityApiRow {
     trade_date: string;
     symbol: string;

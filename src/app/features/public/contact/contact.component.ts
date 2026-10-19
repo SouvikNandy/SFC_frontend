@@ -127,8 +127,6 @@ export class ContactComponent {
 
   submitContact(): void {
     // TODO: Replace with actual API call when backend is ready
-    console.log('Contact form submitted:', { name: this.name, email: this.email, message: this.message });
-    
     // Reset form
     this.name = '';
     this.email = '';

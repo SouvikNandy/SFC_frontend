@@ -85,7 +85,7 @@ export class GreeksComponent implements OnInit, OnDestroy {
             this.form.patchValue({ presetKey: 'custom' }, { emitEvent: false });
             this.badgeText = 'Manual entry: edit any field below';
             const spot = Number(val) || 0;
-            this.populateStrikeOptions(spot, this.niceStep(spot), Number(this.form.value.strike));
+            this.populateStrikeOptions(spot, this.niceStep(spot));
             this.form.patchValue({ spotKey: 'custom' }, { emitEvent: false });
             this.calculate();
             this.autofillIvPrice();
@@ -125,7 +125,7 @@ export class GreeksComponent implements OnInit, OnDestroy {
         return strikes;
     }
 
-    populateStrikeOptions(spot: number, step: number, selected?: number) {
+    populateStrikeOptions(spot: number, step: number) {
         this.strikeOptions = this.buildStrikeChain(spot, step);
     }
 

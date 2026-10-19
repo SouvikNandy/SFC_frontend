@@ -57,26 +57,15 @@ export class LoginComponent {
     const passwordValue = password ?? '';
 
     this.isSubmitting.set(true);
-    console.log('[LoginComponent] Submitting login form');
 
     this.authService.login({ email: emailValue, password: passwordValue, method: 'direct' }).subscribe({
       next: () => {
-        console.log('[LoginComponent] Login successful, navigating to dashboard');
-        console.log('[LoginComponent] Auth state - isAuthenticated:', this.authService.isAuthenticated());
-        console.log('[LoginComponent] Auth state - currentUser:', this.authService.currentUser());
-
         window.setTimeout(() => {
           this.isSubmitting.set(false);
-          const target = this.returnUrl();
-          console.log('[LoginComponent] Attempting navigation to', target);
-          this.router.navigateByUrl(target).then(
-            (success) => console.log('[LoginComponent] Navigation result:', success),
-            (error) => console.error('[LoginComponent] Navigation error:', error)
-          );
+          void this.router.navigateByUrl(this.returnUrl());
         }, 450);
       },
-      error: (error) => {
-        console.error('[LoginComponent] Login error:', error);
+      error: () => {
         this.isSubmitting.set(false);
         this.toast.error('Unable to sign in. Please check your credentials and try again.');
       }

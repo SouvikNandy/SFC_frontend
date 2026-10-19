@@ -70,7 +70,7 @@ export class DataTableComponent<T extends object> {
     }
 
     alignClass(column: DataTableColumn<T>): DataTableAlign {
-        return column.align ?? (column.type === 'number' || column.type === 'currency' || column.type === 'percentage' || column.type === 'change' ? 'left' : 'left');
+        return column.align ?? 'left';
     }
 
     changeClass(value: unknown): string {

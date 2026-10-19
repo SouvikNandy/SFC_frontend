@@ -51,8 +51,8 @@
 
 **Known issues**
 
-- `npm test -- --watch=false` is blocked by the existing `toBeTrue()` matcher error in `login.component.spec.ts`.
-- `npm run build` passes; existing Angular warnings remain, including the Historical Volatility stylesheet budget warning.
+- None blocking. `npm run build` passes with 10 `anyComponentStyle` budget warnings (4 kB warning; error budget is 16 kB). `ng test` runs clean (the test matcher problem is fixed); jsdom prints "Window's scrollTo() not implemented" noise.
+- No ESLint config or lint script exists.
 
 _Keep bullets factual and small; link issues or PRs when useful._
 
@@ -74,3 +74,14 @@ _Keep bullets factual and small; link issues or PRs when useful._
 ## One-year custom date range (2026-10-18)
 - Only F&O EOD and Multi-Leg EOD (Portfolio Performance, Historical Volatility untouched by decision). Shared rules in `src/app/shared/utils/date-range.ts`: inclusive one calendar year (From 18 Oct 2025 -> To 18 Oct 2026 ok; 17 Oct fails), 29 Feb + 1y = 28 Feb, picker limits `fromPickerMin` / `tillPickerMax`, `localTodayIso()`.
 - F&O EOD: fixed `todayStr` (was `toISOString()` of local midnight = yesterday in IST). Invalid range -> no request, previous rows stay. Multi-Leg: `resolveRange` returns the error; an invalid range already clears the legs' rows (existing behaviour, unchanged).
+
+## Technical-debt cleanup (2026-10-19)
+- Baseline before: build passes, 232/232 tests. After: build passes (same 10 budget warnings), 256/256 tests (24 added).
+- Removed console logging of tokens, login responses, user email and contact/subscribe PII (auth.service, auth.guard, login, blog, contact). Auth control flow, OTP (`0000`), registration/session persistence, guards, refresh and JWT storage are unchanged.
+- Options Chain `loadChain()`: cancels the superseded request, sets loading, handles errors (toast + inline message, spinner cleared); a symbol change cancels a pending chain request and clears the error.
+- `TickerService` uses `ApiService`; a failed or unsuccessful `/fo/ticker` response emits [] but is not cached (next caller retries); a success is shared and reused.
+- `GreeksCalculatorService.getSymbols()` caches `/fo/dd_list` for the session (failures not cached, each caller gets its own array); `HistoricalVolatilityService.getSymbols()` delegates to it, so HV now also rejects `success:false` like the other screens.
+- F&O EOD: `displayRows` is built once per `rows` change (`setRows`); `Intl.NumberFormat` instances hoisted. Output, paging, chart, CSV and API calls unchanged.
+- `dist1810.zip` (zipped `ng build` output) untracked and ignored via `/dist*.zip`; the local file is kept.
+- New specs: auth.service, options-chain.component, ticker.service, greeks-calculator.service (symbol list), eod.component.table.
+- Deferred (post live-data): shared autocomplete extraction, erf/normCdf + chainIV + resolveExpiryDays de-duplication, Options Chain template/getter restructuring, `as any` in auth.service (add tests first), signal/`inject` migration of older screens, ESLint, auth design points (interceptor redirect on public pages, localStorage JWT, hard-coded OTP).
