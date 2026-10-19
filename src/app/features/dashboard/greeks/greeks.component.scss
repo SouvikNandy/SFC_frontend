@@ -156,57 +156,6 @@ input:focus {
   margin-bottom: 20px;
 }
 
-.live-lock {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  background: var(--teal-tint);
-  border: 1px solid #d7e3cb;
-  border-radius: var(--radius-lg);
-  padding: 18px 20px;
-  margin-bottom: 22px;
-}
-
-.live-lock-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: #fff;
-  border: 1px solid #d7e3cb;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  font-size: 18px;
-  color: var(--teal-dark);
-}
-
-.live-lock-copy {
-  flex: 1;
-  min-width: 0;
-}
-
-.live-lock-title {
-  font-weight: 600;
-  font-size: 14.5px;
-  margin: 0 0 3px;
-  color: var(--teal-dark);
-}
-
-.live-lock-desc {
-  font-size: 13px;
-  color: var(--ink-soft);
-  margin: 0;
-  line-height: 1.5;
-}
-
-#gridInputs.locked,
-.iv-panel.locked {
-  opacity: 0.45;
-  pointer-events: none;
-  filter: grayscale(0.4);
-}
-
 .input-error {
   font-size: 13px;
   color: #8a2c1a;
@@ -215,11 +164,6 @@ input:focus {
   border-radius: var(--radius);
   padding: 10px 14px;
   margin: 2px 0 0;
-}
-
-.field-invalid {
-  border-color: var(--red) !important;
-  box-shadow: 0 0 0 3px var(--red-tint) !important;
 }
 
 .badge {

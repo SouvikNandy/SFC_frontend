@@ -1,3 +1,5 @@
+@use '../../../../scss/abstracts/dashboard-calculator' as calc;
+
 .probability-page {
   margin: 0 auto;
 }
@@ -84,14 +86,9 @@
 }
 
 .field-block label {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  @include calc.calc-field-label;
 }
 
-.preset-field,
 .autocomplete-field {
   min-width: 230px;
   flex: 1;
@@ -161,46 +158,6 @@ select:focus {
   color: var(--muted-2);
   font-family: var(--font-mono);
   font-size: 11px;
-}
-
-.live-lock {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 18px 20px;
-  margin-bottom: 22px;
-  border: 1px solid var(--input-border);
-  border-radius: 14px;
-  background: var(--teal-tint);
-}
-
-.live-lock-icon {
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  flex-shrink: 0;
-  border: 1px solid var(--input-border);
-  border-radius: 50%;
-  background: var(--panel);
-}
-
-.live-lock-copy {
-  flex: 1;
-}
-
-.live-lock-title {
-  margin: 0 0 3px;
-  color: var(--teal-dark);
-  font-size: 14.5px;
-  font-weight: 600;
-}
-
-.live-lock-desc {
-  margin: 0;
-  color: var(--ink-soft);
-  font-size: 13px;
-  line-height: 1.5;
 }
 
 .calc {
@@ -314,16 +271,11 @@ select:focus {
 }
 
 .chart-legend span {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  @include calc.calc-legend-item;
 }
 
 .chart-legend i {
-  display: inline-block;
-  width: 14px;
-  height: 0;
-  border-top: 2.5px solid;
+  @include calc.calc-legend-swatch;
 }
 
 .legend-curve {
@@ -421,19 +373,6 @@ select:focus {
   }
 
   .actions .calc {
-    width: 100%;
-  }
-
-  .live-lock {
-    align-items: flex-start;
-    flex-wrap: wrap;
-  }
-
-  .live-lock-copy {
-    flex-basis: calc(100% - 56px);
-  }
-
-  .live-lock .calc {
     width: 100%;
   }
 }

@@ -98,59 +98,13 @@
   font-size: 12.5px;
 }
 
-.live-lock {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  padding: 16px 18px;
-  margin-bottom: 16px;
-  border: 1px solid var(--input-border);
-  border-radius: var(--radius-lg);
-  background: var(--teal-tint);
-}
-
-.live-lock-icon {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  flex-shrink: 0;
-  border: 1px solid var(--input-border);
-  border-radius: 50%;
-  background: var(--panel);
-}
-
-.live-lock-copy {
-  flex: 1;
-}
-
-.live-lock-title {
-  margin: 0 0 3px;
-  color: var(--teal-dark);
-  font-size: 13.5px;
-  font-weight: 600;
-}
-
-.live-lock-desc {
-  margin: 0;
-  color: var(--ink-soft);
-  font-size: 12.5px;
-  line-height: 1.5;
-}
-
-.grid4,
-.grid3 {
+.grid4 {
   display: grid;
   gap: 12px;
 }
 
 .grid4 {
   grid-template-columns: repeat(4, 1fr);
-}
-
-.grid3 {
-  grid-template-columns: repeat(3, 1fr);
-  margin-top: 12px;
 }
 
 .field-block label {
@@ -443,8 +397,7 @@ select:focus {
 }
 
 @media (max-width: 640px) {
-  .grid4,
-  .grid3 {
+  .grid4 {
     grid-template-columns: 1fr;
   }
 
@@ -478,14 +431,5 @@ select:focus {
   .seg button {
     flex: 1;
     min-height: 44px;
-  }
-
-  .live-lock {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .live-lock .calc {
-    width: 100%;
   }
 }

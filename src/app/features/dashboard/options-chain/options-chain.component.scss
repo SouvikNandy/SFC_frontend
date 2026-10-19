@@ -37,11 +37,6 @@ h1 {
   font-weight: 700;
 }
 
-.spot-change {
-  font-family: var(--font-mono);
-  font-size: 11px;
-}
-
 .srcnote {
   color: var(--muted-2);
   font-family: var(--font-mono);
@@ -58,7 +53,6 @@ h1 {
 
 .sect-label,
 .lab,
-.chipgroup-label,
 .field-block label {
   color: var(--muted-2);
   font-size: 10.5px;
@@ -77,7 +71,6 @@ h1 {
 }
 
 .source-tabs,
-.chipbar,
 .side-tabs {
   display: flex;
   gap: 8px;
@@ -153,12 +146,6 @@ h1 {
   box-shadow: 0 0 0 3px var(--teal-tint);
 }
 
-.field-hint {
-  min-height: 14px;
-  color: var(--muted-2);
-  font-size: 11px;
-}
-
 .autocomplete-field {
   z-index: 30;
 }
@@ -168,52 +155,11 @@ h1 {
   z-index: 20;
 }
 
-.empty,
-.chart-empty {
+.empty {
   padding: 24px;
   color: var(--muted-2);
   text-align: center;
   font-size: 13px;
-}
-
-.live-lock {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 16px;
-  padding: 15px 17px;
-  border: 1px solid var(--input-border);
-  border-radius: var(--radius-lg);
-  background: var(--teal-tint);
-}
-
-.live-lock-icon {
-  flex: 0 0 34px;
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border-radius: 50%;
-  border: 1px solid var(--input-border);
-  background: var(--panel);
-}
-
-.live-lock-copy {
-  flex: 1;
-}
-
-.live-lock-title {
-  margin: 0 0 3px;
-  color: var(--teal-dark);
-  font-weight: 700;
-  font-size: 13px;
-}
-
-.live-lock-desc {
-  margin: 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.45;
 }
 
 .calc {
@@ -430,12 +376,6 @@ h1 {
   font-weight: 700;
 }
 
-.hint,
-.colnote {
-  color: var(--muted-2);
-  font-size: 10px;
-}
-
 .call-value,
 .positive {
   color: var(--teal);
@@ -610,10 +550,6 @@ table.chain td.itm {
   width: 30px;
 }
 
-.colnote {
-  margin: 9px 2px 0;
-}
-
 .input-error {
   color: var(--red);
   font-size: 12px;
@@ -635,32 +571,6 @@ table.chain td.itm {
   height: auto;
   border-bottom: 1px solid var(--border);
   background: var(--panel);
-}
-
-.chart-line {
-  fill: none;
-  stroke-width: 2.5;
-  pointer-events: none;
-}
-
-.chart-point {
-  pointer-events: none;
-  stroke: var(--panel);
-  stroke-width: 1.5;
-  opacity: 0.55;
-}
-
-.call-point {
-  fill: var(--teal);
-}
-
-.put-point {
-  fill: var(--red);
-}
-
-.chart-point.hovered {
-  r: 5;
-  opacity: 1;
 }
 
 .oi-bar-chart {
@@ -719,14 +629,6 @@ table.chain td.itm {
   stroke: var(--teal);
   stroke-width: 1;
   stroke-dasharray: 3 4;
-}
-
-.call-line {
-  stroke: var(--teal);
-}
-
-.put-line {
-  stroke: var(--red);
 }
 
 @media (max-width: 1100px) {
@@ -840,11 +742,6 @@ table.chain td.itm {
 
   .chain thead tr:nth-child(2) th.strikehdr {
     display: table-cell;
-  }
-
-  .live-lock {
-    flex-direction: column;
-    align-items: stretch;
   }
 
   .calc {

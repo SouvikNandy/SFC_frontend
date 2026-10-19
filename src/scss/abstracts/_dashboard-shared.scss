@@ -1,0 +1,49 @@
+// Declaration blocks that are identical in Multi-Leg EOD and Portfolio Analysis.
+// Mixins only: this module emits no CSS and is not registered in styles.scss.
+// Selectors, rule order and responsive overrides stay in each component.
+
+@mixin leg-titlebar {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 13px;
+  margin-bottom: 3px;
+}
+
+@mixin leg-badge {
+  padding: 4px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--teal-tint);
+  color: var(--teal-dark);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+@mixin leg-field {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+@mixin leg-control {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--input-border);
+  border-radius: 9px;
+  background: var(--panel);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  outline: none;
+}
+
+@mixin leg-control-focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px var(--teal-tint);
+}

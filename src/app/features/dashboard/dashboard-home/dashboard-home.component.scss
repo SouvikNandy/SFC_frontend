@@ -1,3 +1,5 @@
+@use '../../../../assets/scss/variables' as *;
+
 // .dashboard-home {}
 
 // .sfc-page-pad.dashboard-home {
@@ -10,20 +12,20 @@
 
 .dh-title {
     font-family: var(--font-display);
-    font-size: 19px;
+    font-size: $font-size-19;
     font-weight: 700;
     color: var(--ink);
     margin: 0 0 4px
 }
 
 .dh-date {
-    font-size: 12.5px;
+    font-size: $font-size-12-5;
     color: var(--muted);
     margin: 0
 }
 
 .dh-section-heading {
-    font-size: 11px;
+    font-size: $font-size-11;
     font-weight: 700;
     color: var(--muted-2);
     text-transform: uppercase;
@@ -39,7 +41,7 @@
     background: var(--panel-2);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 16px 18px;
+    padding: $space-16 $space-18;
     min-height: 64px;
     display: flex;
     flex-direction: column
@@ -47,11 +49,11 @@
 
 .summary-empty {
     grid-column: 1 / -1;
-    padding: 18px;
+    padding: $space-18;
     border: 1px dashed var(--border);
     border-radius: var(--radius);
     color: var(--muted-2);
-    font-size: 13px;
+    font-size: $font-size-13;
     text-align: center;
 }
 
@@ -60,7 +62,7 @@
 }
 
 .summary-card__symbol {
-    font-size: 11px;
+    font-size: $font-size-11;
     color: var(--muted-2);
     text-transform: uppercase;
     letter-spacing: 0.4px;
@@ -68,13 +70,13 @@
 }
 
 .summary-card__value {
-    font-size: 19px;
+    font-size: $font-size-19;
     font-weight: 600;
     color: var(--ink)
 }
 
 .summary-card__pnl {
-    font-size: 12px;
+    font-size: $font-size-12;
     font-weight: 600;
     margin-top: 4px
 }
@@ -95,23 +97,23 @@
     background: var(--panel-2);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 18px;
+    padding: $space-18;
     cursor: pointer;
     transition: border-color .12s ease
 }
 
 .quick-link-card__title {
-    font-size: 14px;
+    font-size: $font-size-14;
     font-weight: 700;
     color: var(--ink);
-    margin-bottom: 6px;
+    margin-bottom: $space-6;
     display: flex;
     align-items: center;
     justify-content: space-between
 }
 
 .quick-link-card__desc {
-    font-size: 12.5px;
+    font-size: $font-size-12-5;
     color: var(--muted);
     line-height: 1.5
 }
@@ -124,14 +126,14 @@
 }
 
 .platform-overview p {
-    font-size: 13.5px;
+    font-size: $font-size-13-5;
     color: var(--ink-soft);
     line-height: 1.7;
     margin: 0 0 12px
 }
 
 .platform-overview p:last-child {
-    font-size: 12px;
+    font-size: $font-size-12;
     color: var(--muted-2);
     line-height: 1.6;
     margin: 0

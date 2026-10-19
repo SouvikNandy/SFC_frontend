@@ -1,10 +1,12 @@
+@use '../../../../assets/scss/variables' as *;
+
 .toast-stack {
     position: fixed;
     top: 20px;
     right: 20px;
     z-index: 1100;
     display: grid;
-    gap: 10px;
+    gap: $space-10;
     width: min(380px, calc(100vw - 40px));
 }
 
@@ -12,15 +14,15 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
-    padding: 12px 14px;
+    gap: $space-16;
+    padding: $space-12 $space-14;
     border: 1px solid var(--border);
     border-left: 4px solid var(--teal);
-    border-radius: 8px;
+    border-radius: $radius-8;
     color: var(--ink);
     background: var(--panel);
     box-shadow: 0 8px 20px rgba(18, 20, 26, 0.12);
-    font-size: 13px;
+    font-size: $font-size-13;
 }
 
 .toast--error {
@@ -34,6 +36,6 @@
     color: var(--muted);
     background: transparent;
     cursor: pointer;
-    font-size: 20px;
+    font-size: $font-size-20;
     line-height: 1;
 }

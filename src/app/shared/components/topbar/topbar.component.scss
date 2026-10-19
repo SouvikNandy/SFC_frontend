@@ -1,10 +1,12 @@
+@use '../../../../assets/scss/variables' as *;
+
 .sfc-topbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 24px 36px 18px;
+    padding: $space-24 $space-36 $space-18;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: $space-12;
     border-bottom: 1px solid var(--border);
     background: rgba(255, 255, 255, 0.82);
     backdrop-filter: blur(12px);
@@ -15,7 +17,7 @@
     display: none;
     background: none;
     border: none;
-    font-size: 20px;
+    font-size: $font-size-20;
 }
 
 .sfc-topbar__title {
@@ -28,7 +30,7 @@
 
 .sfc-topbar__user {
     display: flex;
-    gap: 10px;
+    gap: $space-10;
     align-items: center
 }
 
@@ -40,8 +42,8 @@
 .sfc-topbar__logout {
     background: none;
     border: 1px solid var(--input-border);
-    padding: 8px 10px;
-    border-radius: 9px;
+    padding: $space-8 $space-10;
+    border-radius: $radius-9;
     cursor: pointer;
     font-weight: 700
 }
@@ -55,7 +57,7 @@
         height: 34px;
         flex: none;
         border: 1px solid var(--input-border);
-        border-radius: 8px;
+        border-radius: $radius-8;
         background: var(--panel);
         color: var(--ink-soft);
         cursor: pointer

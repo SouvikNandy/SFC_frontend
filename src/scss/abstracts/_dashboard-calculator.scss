@@ -1,0 +1,26 @@
+// Declaration blocks that are identical on the Historical Volatility, Probability
+// and Payoff calculator screens.
+// Mixins only: this module emits no CSS and is not registered in styles.scss.
+// Selectors, rule order and everything that differs between the screens
+// (.chart-legend container, panels, source tabs) stay in each component.
+
+@mixin calc-field-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+@mixin calc-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@mixin calc-legend-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 0;
+  border-top: 2.5px solid;
+}

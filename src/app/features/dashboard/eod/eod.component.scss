@@ -1,39 +1,41 @@
+@use '../../../../assets/scss/variables' as *;
+
 // .eod-page {
 //     padding: 28px 36px 60px;
 // }
 
 .head h1 {
-  margin: 0 0 6px;
+  margin: 0 0 $space-6;
 }
 
 .head .sub {
-  margin: 0 0 18px;
+  margin: 0 0 $space-18;
   color: var(--muted);
 }
 
 .card {
   background: var(--panel-2);
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 18px;
-  margin-bottom: 18px;
+  border-radius: $radius-14;
+  padding: $space-18;
+  margin-bottom: $space-18;
 }
 
 .controls .controls-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 18px;
+  gap: $space-18;
   align-items: flex-end;
 }
 
 .control {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: $space-8;
 }
 
 .label {
-  font-size: 12px;
+  font-size: $font-size-12;
   color: var(--muted-2);
 }
 
@@ -45,13 +47,13 @@
 .symbol-input {
   width: 200px;
   box-sizing: border-box;
-  padding: 10px 32px 10px 12px;
+  padding: $space-10 $space-32 $space-10 $space-12;
   border: 1.5px solid var(--input-border);
-  border-radius: 8px;
+  border-radius: $radius-8;
   color: var(--ink);
   background: var(--panel);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: $font-size-12;
 
   &:focus {
     border-color: var(--teal);
@@ -62,16 +64,16 @@
 
 .seg {
   display: flex;
-  gap: 6px;
+  gap: $space-6;
   background: var(--panel-alt);
-  border-radius: 8px;
-  padding: 4px;
+  border-radius: $radius-8;
+  padding: $space-4;
 }
 
 .seg button {
   border: none;
-  padding: 8px 12px;
-  border-radius: 8px;
+  padding: $space-8 $space-12;
+  border-radius: $radius-8;
   background: transparent;
   color: var(--muted);
   font-weight: 600;
@@ -87,12 +89,12 @@
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
+  gap: $space-8;
+  padding: $space-10 $space-16;
   border: 1.5px solid var(--input-border);
-  border-radius: 8px;
+  border-radius: $radius-8;
   background: var(--panel);
-  font-size: 13.5px;
+  font-size: $font-size-13-5;
   font-weight: 600;
   color: var(--ink-soft);
   cursor: pointer;
@@ -102,17 +104,17 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: $space-12;
 }
 
 .legend {
-  font-size: 11px;
+  font-size: $font-size-11;
   color: var(--muted-2);
   font-family: var(--font-body);
 }
 
 .title {
-  font-size: 13.5px;
+  font-size: $font-size-13-5;
   font-weight: 700;
   color: var(--ink);
 }
@@ -135,34 +137,34 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 0;
+  gap: $space-12;
+  padding: $space-12 0;
   color: var(--muted-2);
-  font-size: 13px;
+  font-size: $font-size-13;
 }
 
 .pagination-controls {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: $space-10;
   color: var(--muted-2);
-  font-size: 12px;
+  font-size: $font-size-12;
 }
 
 .pagination-controls label {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: $space-6;
 }
 
 .pagination-controls select,
 .pagination-controls button {
   padding: 5px 8px;
   border: 1px solid var(--input-border);
-  border-radius: 6px;
+  border-radius: $radius-6;
   color: var(--ink-soft);
   background: var(--panel);
-  font-size: 12px;
+  font-size: $font-size-12;
 }
 
 .pagination-controls button {
@@ -176,9 +178,9 @@
 }
 
 .empty {
-  padding: 18px;
+  padding: $space-18;
   color: var(--muted-2);
-  font-size: 13px;
+  font-size: $font-size-13;
 }
 
 @media (max-width: 880px) {
@@ -193,7 +195,7 @@
 .date-range-control {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: $space-8;
   flex-wrap: wrap;
 }
 
@@ -207,13 +209,13 @@
 
 .date-input {
   width: 150px;
-  padding: 8px 10px;
+  padding: $space-8 $space-10;
   border: 1.5px solid var(--input-border);
-  border-radius: 8px;
+  border-radius: $radius-8;
   color: var(--ink);
   background: var(--panel);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: $font-size-12;
 }
 
 .chart-error {
@@ -221,10 +223,10 @@
 }
 
 .btn-retry {
-  margin-left: 10px;
-  padding: 6px 14px;
+  margin-left: $space-10;
+  padding: $space-6 $space-14;
   border: 1.5px solid var(--input-border);
-  border-radius: 8px;
+  border-radius: $radius-8;
   background: transparent;
   color: var(--ink);
   font: inherit;
@@ -232,9 +234,9 @@
 }
 
 .range-error {
-  margin: 8px 0 0;
+  margin: $space-8 0 0;
   color: var(--red);
-  font-size: 12px;
+  font-size: $font-size-12;
 }
 
 .date-input:focus {
@@ -256,10 +258,10 @@
 input[type='text'] {
   width: 100%;
   box-sizing: border-box;
-  padding: 10px 12px;
+  padding: $space-10 $space-12;
   border: 1.5px solid var(--input-border);
-  border-radius: 8px;
-  font-size: 12px;
+  border-radius: $radius-8;
+  font-size: $font-size-12;
   color: var(--ink);
   background: var(--panel);
   font-family: var(--font-mono);
@@ -269,7 +271,7 @@ input[type='text'] {
 @media (max-width: 700px) {
   .custom-dates {
     display: flex;
-    gap: 12px;
+    gap: $space-12;
     width: 100%;
   }
   .custom-dates .control {

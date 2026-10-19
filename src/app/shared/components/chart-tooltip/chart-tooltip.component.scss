@@ -1,3 +1,5 @@
+@use '../../../../assets/scss/variables' as *;
+
 :host {
     position: absolute;
     inset: 0;
@@ -9,30 +11,30 @@
     position: absolute;
     display: grid;
     width: 174px;
-    gap: 4px;
-    padding: 9px 10px;
+    gap: $space-4;
+    padding: $space-9 $space-10;
     border: 1px solid var(--border);
-    border-radius: 7px;
+    border-radius: $radius-7;
     color: var(--ink-soft);
     background: var(--panel);
     box-shadow: 0 8px 18px rgba(28, 35, 27, .14);
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: $font-size-11;
 }
 
 strong {
-    margin-bottom: 2px;
+    margin-bottom: $space-2;
     padding-bottom: 5px;
     border-bottom: 1px solid var(--border);
     color: var(--ink);
     font-family: var(--font-body);
-    font-size: 11px;
+    font-size: $font-size-11;
 }
 
 span {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: $space-6;
 }
 
 b {

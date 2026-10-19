@@ -1,11 +1,13 @@
 /* Portfolio Analysis: layout follows prototype/portfolio-analysis (6).html; colours and fonts are the app tokens. */
+@use '../../../../scss/abstracts/dashboard-shared' as dash;
+
 .portfolio-page { display: block; min-width: 0; }
 
 /* ---------- heading ---------- */
-.titlebar { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 13px; margin-bottom: 3px; }
+.titlebar { @include dash.leg-titlebar; }
 .page-title { margin: 0; font-family: var(--font-display); font-size: 23px; font-weight: 700; }
 
-.badge { padding: 4px 11px; border: 1px solid var(--border); border-radius: 999px; background: var(--teal-tint); color: var(--teal-dark); font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; }
+.badge { @include dash.leg-badge; }
 
 .source-note { color: var(--ink-faint); font-family: var(--font-mono); font-size: 11.5px; }
 .sub { margin: 0 0 16px; color: var(--ink-soft); font-size: 13.5px; }
@@ -62,11 +64,7 @@
 
 /* ---------- form ---------- */
 .field {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
+  @include dash.leg-field;
 
   &.grow { flex: 1; min-width: 200px; }
 }
@@ -78,18 +76,9 @@
 
 input,
 select {
-  width: 100%;
-  min-width: 0;
-  padding: 9px 10px;
-  border: 1px solid var(--input-border);
-  border-radius: 9px;
-  background: var(--panel);
-  color: var(--ink);
-  font-family: var(--font-mono);
-  font-size: 13.5px;
-  outline: none;
+  @include dash.leg-control;
 
-  &:focus { border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-tint); }
+  &:focus { @include dash.leg-control-focus; }
   &.invalid { border-color: var(--red); box-shadow: 0 0 0 3px var(--red-tint); }
 }
 
