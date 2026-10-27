@@ -7,11 +7,13 @@ import { describe, expect, it } from 'vitest';
 
 import { DashboardLayoutComponent } from './layouts/dashboard-layout/dashboard-layout.component';
 import { PublicLayoutComponent } from './layouts/public-layout/public-layout.component';
-import { HIDDEN_DASHBOARD_PATHS, RETIRED_PUBLIC_PATHS, routes } from './app.routes';
+import { DASHBOARD_TOOL_PATHS, HIDDEN_DASHBOARD_PATHS, RETIRED_PUBLIC_PATHS, routes } from './app.routes';
 
-/** The one layout route that serves "/" (Home) and every /dashboard/* tool. */
+/** The one layout route that serves "/" (Home) and every top-level tool (/greeks, ...). */
 export const dashboardLayout = (): Route => routes.find((route) => route.component === DashboardLayoutComponent)!;
-export const dashboardTools = (): Route[] => dashboardLayout().children!.find((child) => child.path === 'dashboard')!.children!;
+export const dashboardTools = (): Route[] => dashboardLayout().children!;
+/** Compatibility redirects for the old /dashboard/<tool> URLs. */
+export const legacyDashboard = (): Route[] => dashboardTools().find((child) => child.path === 'dashboard')!.children!;
 
 const allPaths = (): string[] => [
   ...routes.map((route) => route.path ?? ''),
@@ -29,8 +31,8 @@ describe('route table', () => {
   });
 
   it('/dashboard and /dashboard/home send people to "/"', () => {
-    expect(dashboardTools().find((child) => child.path === '')).toMatchObject({ redirectTo: '/', pathMatch: 'full' });
-    expect(dashboardTools().find((child) => child.path === 'home')).toMatchObject({ redirectTo: '/', pathMatch: 'full' });
+    expect(legacyDashboard().find((child) => child.path === '')).toMatchObject({ redirectTo: '/', pathMatch: 'full' });
+    expect(legacyDashboard().find((child) => child.path === 'home')).toMatchObject({ redirectTo: '/', pathMatch: 'full' });
   });
 
   it('retired landing pages redirect to "/" and no longer have a page', () => {
@@ -54,12 +56,28 @@ describe('route table', () => {
     expect(routes.find((route) => route.path === 'termsconditions')).toBeUndefined();
   });
 
+  it('serves the nine tools at the top level, each lazy-loaded once, and never under /dashboard', () => {
+    expect([...DASHBOARD_TOOL_PATHS].sort()).toEqual(['eod', 'greeks', 'historical-volatility', 'implied-volatility', 'multi-leg-eod', 'options-chain', 'payoff', 'portfolio', 'probability']);
+    for (const path of DASHBOARD_TOOL_PATHS) {
+      const matches = dashboardTools().filter((child) => child.path === path);
+      expect(matches, path).toHaveLength(1);
+      expect(matches[0].loadComponent, path).toBeDefined();
+      expect(legacyDashboard().find((child) => child.path === path), path).toMatchObject({ pathMatch: 'full' });
+    }
+  });
+
+  it('has no top-level tool path that collides with a retired, public or auth path', () => {
+    const others = routes.filter((route) => route.component !== DashboardLayoutComponent).flatMap((route) => [route.path ?? '', ...(route.children ?? []).map((child) => child.path ?? '')]);
+    for (const path of DASHBOARD_TOOL_PATHS) expect(others, path).not.toContain(path);
+  });
+
   it('hides Price Alerts and Blog & Reports: their URLs redirect to "/" and have no page', () => {
     expect([...HIDDEN_DASHBOARD_PATHS].sort()).toEqual(['blog-reports', 'price-alerts']);
     for (const path of HIDDEN_DASHBOARD_PATHS) {
-      const child = dashboardTools().find((candidate) => candidate.path === path)!;
-      expect(child, path).toMatchObject({ redirectTo: '/', pathMatch: 'full' });
-      expect(child.loadComponent).toBeUndefined();
+      for (const child of [dashboardTools().find((candidate) => candidate.path === path)!, legacyDashboard().find((candidate) => candidate.path === path)!]) {
+        expect(child, path).toMatchObject({ redirectTo: '/', pathMatch: 'full' });
+        expect(child.loadComponent).toBeUndefined();
+      }
     }
   });
 
@@ -91,7 +109,7 @@ describe('navigation', () => {
     expect(await navigate(path)).toBe('/');
   });
 
-  it.each(['/dashboard/price-alerts', '/dashboard/blog-reports'])('%s redirects to "/"', async (path) => {
+  it.each(['/price-alerts', '/blog-reports', '/dashboard/price-alerts', '/dashboard/blog-reports'])('%s redirects to "/"', async (path) => {
     expect(await navigate(path)).toBe('/');
   });
 
@@ -110,7 +128,7 @@ describe('navigation', () => {
     expect(home?.classList.contains('active')).toBe(true);
   });
 
-  it.each([['/disclaimer', 'app-public-layout'], ['/privacy-policy', 'app-public-layout'], ['/login', 'app-auth-layout'], ['/register', 'app-auth-layout'], ['/dashboard/greeks', 'app-dashboard-layout'], ['/terms-conditions', 'app-public-layout'], ['/termsconditions', 'app-public-layout']])('%s renders in its own layout, not the dashboard Home', async (url, layout) => {
+  it.each([['/disclaimer', 'app-public-layout'], ['/privacy-policy', 'app-public-layout'], ['/login', 'app-auth-layout'], ['/register', 'app-auth-layout'], ['/greeks', 'app-dashboard-layout'], ['/terms-conditions', 'app-public-layout'], ['/termsconditions', 'app-public-layout']])('%s renders in its own layout, not the dashboard Home', async (url, layout) => {
     TestBed.configureTestingModule({ providers: [provideRouter(routes), provideHttpClient(), provideHttpClientTesting()] });
     const harness = await RouterTestingHarness.create(url);
     harness.fixture.detectChanges();
@@ -122,8 +140,20 @@ describe('navigation', () => {
     expect(page.querySelector('app-dashboard-home')).toBeNull();
   });
 
-  it('keeps the dashboard tools where they are', async () => {
-    expect(await navigate('/dashboard/greeks')).toBe('/dashboard/greeks');
+  it.each([...DASHBOARD_TOOL_PATHS])('/%s opens at its top-level URL (no redirect)', async (tool) => {
+    expect(await navigate('/' + tool)).toBe('/' + tool);
+  });
+
+  it.each([...DASHBOARD_TOOL_PATHS])('old /dashboard/%s redirects to /%s', async (tool) => {
+    expect(await navigate('/dashboard/' + tool)).toBe('/' + tool);
+  });
+
+  it('old /dashboard/closed-trades lands on /multi-leg-eod', async () => {
+    expect(await navigate('/dashboard/closed-trades')).toBe('/multi-leg-eod');
+  });
+
+  it('keeps the query string when an old tool URL redirects', async () => {
+    expect(await navigate('/dashboard/payoff?x=1')).toBe('/payoff?x=1');
   });
 
   it('/termsconditions renders the terms page at its own URL (no redirect)', async () => {

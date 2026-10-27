@@ -74,7 +74,7 @@ describe('opening tools from the sidebar', () => {
 
   it('Greeks, then Probability, then Implied Volatility each show data on first open, from the cached symbol list', async () => {
     // First tool opened: the symbol list is fetched.
-    await harness.navigateByUrl('/dashboard/greeks');
+    await harness.navigateByUrl('/greeks');
     expect(await answerApi()).toBe(1);
     const greeks = component(GreeksComponent);
     expect(greeks.form.value.sourceMode).toBe('eod');
@@ -83,7 +83,7 @@ describe('opening tools from the sidebar', () => {
     expect(greeks.form.value.expiry).toBe(3); // IST 24 Oct -> 27 Oct
 
     // Probability: the list is now cached, so no dd_list request; the details must still load.
-    await harness.navigateByUrl('/dashboard/probability');
+    await harness.navigateByUrl('/probability');
     expect(await answerApi()).toBe(0);
     const probability = component(ProbabilityComponent);
     expect(probability.symbolDetails?.symbol).toBe('NIFTY');
@@ -97,7 +97,7 @@ describe('opening tools from the sidebar', () => {
     expect(probability.volControl.value).not.toBe(17);
 
     // Implied Volatility: same, with its price taken from the chain close.
-    await harness.navigateByUrl('/dashboard/implied-volatility');
+    await harness.navigateByUrl('/implied-volatility');
     expect(await answerApi()).toBe(0);
     const iv = component(ImpliedVolatilityComponent);
     expect(iv.symbolDetails?.symbol).toBe('NIFTY');
@@ -110,11 +110,11 @@ describe('opening tools from the sidebar', () => {
   }, 30000);
 
   it('opening Probability first and Greeks second works the same way', async () => {
-    await harness.navigateByUrl('/dashboard/probability');
+    await harness.navigateByUrl('/probability');
     await answerApi();
     expect(component(ProbabilityComponent).spotControl.value).toBe(22600);
 
-    await harness.navigateByUrl('/dashboard/greeks');
+    await harness.navigateByUrl('/greeks');
     expect(await answerApi()).toBe(0);
     const greeks = component(GreeksComponent);
     expect(greeks.form.value.strike).toBe(22600);

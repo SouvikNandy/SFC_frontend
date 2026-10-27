@@ -26,11 +26,11 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
         <div class="not-found__links">
           <p class="not-found__links-title">Popular pages:</p>
           <ul class="not-found__links-list">
-            <li><a routerLink="/dashboard/options-chain" class="not-found__link">Options Chain</a></li>
-            <li><a routerLink="/dashboard/greeks" class="not-found__link">Greeks Calculator</a></li>
-            <li><a routerLink="/dashboard/implied-volatility" class="not-found__link">Implied Volatility</a></li>
-            <li><a routerLink="/dashboard/payoff" class="not-found__link">Payoff Simulator</a></li>
-            <li><a routerLink="/dashboard/eod" class="not-found__link">F&amp;O EOD Data</a></li>
+            <li><a routerLink="/options-chain" class="not-found__link">Options Chain</a></li>
+            <li><a routerLink="/greeks" class="not-found__link">Greeks Calculator</a></li>
+            <li><a routerLink="/implied-volatility" class="not-found__link">Implied Volatility</a></li>
+            <li><a routerLink="/payoff" class="not-found__link">Payoff Simulator</a></li>
+            <li><a routerLink="/eod" class="not-found__link">F&amp;O EOD Data</a></li>
           </ul>
         </div>
       </div>

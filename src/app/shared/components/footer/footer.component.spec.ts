@@ -15,7 +15,7 @@ import { FooterComponent } from './footer.component';
 const CLIENT_SUMMARY =
   'SFC Quant is a market-analytics platform for Indian equities. It is not investment advice, and we are not registered with SEBI as an investment adviser or research analyst. Backtests are hypothetical, and past performance does not predict future results.';
 const CLIENT_LOSSES =
-  '9 out of 10 individual traders in the equity Futures and Options segment incurred net losses. On average, loss makers registered a net trading loss close to 50,000. Over and above the net trading losses incurred, loss makers expended an additional 28% of net trading losses as transaction costs. Those making net trading profits incurred between 15% and 50% of such profits as transaction costs.';
+  '9 out of 10 individual traders in the equity Futures and Options segment incurred net losses. On average, loss makers registered a net trading loss close to ₹50,000. Over and above the net trading losses incurred, loss makers expended an additional 28% of net trading losses as transaction costs. Those making net trading profits incurred between 15% and 50% of such profits as transaction costs.';
 
 const setup = () => TestBed.configureTestingModule({ providers: [provideRouter([]), provideHttpClient(), provideHttpClientTesting()] });
 const text = (el: Element | null | undefined) => (el?.textContent ?? '').replace(/\s+/g, ' ').trim();

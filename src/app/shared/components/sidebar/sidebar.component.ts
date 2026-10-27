@@ -44,7 +44,7 @@ const NAV_LABELS: Record<string, string> = {
               <div class="sfc-nav__heading">{{ group.label }}</div>
               <div *ngFor="let key of group.keys">
                 <a
-                  [routerLink]="key === 'home' ? ['/'] : ['/dashboard', key]"
+                  [routerLink]="key === 'home' ? ['/'] : ['/', key]"
                   routerLinkActive="active"
                   [routerLinkActiveOptions]="{ exact: true }"
                   (click)="sidebar.close()"

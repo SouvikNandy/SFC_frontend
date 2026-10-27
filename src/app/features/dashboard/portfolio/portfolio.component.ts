@@ -347,7 +347,7 @@ export class PortfolioComponent implements OnInit {
   }
 
   signIn(): void {
-    void this.router.navigate(['/login'], { queryParams: { returnUrl: '/dashboard/portfolio' } });
+    void this.router.navigate(['/login'], { queryParams: { returnUrl: '/portfolio' } });
   }
 
   private bootstrap(): void {

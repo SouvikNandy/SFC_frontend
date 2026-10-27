@@ -41,7 +41,7 @@ export class TopbarComponent {
 
     get title(): string {
         const url = (this.currentUrl() || '').split(/[?#]/)[0];
-        const seg = url.split('/').filter(Boolean)[1] ?? 'home';
+        const seg = url.split('/').filter(Boolean)[0] ?? 'home';
         return this.labels[seg] ?? 'Workspace';
     }
 

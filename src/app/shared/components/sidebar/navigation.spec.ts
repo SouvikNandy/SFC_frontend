@@ -11,7 +11,7 @@ class BlankComponent {}
 
 describe('dashboard navigation', () => {
   beforeEach(() => TestBed.configureTestingModule({
-    providers: [provideHttpClient(), provideRouter([{ path: 'dashboard/:screen', component: BlankComponent }])],
+    providers: [provideHttpClient(), provideRouter([{ path: ':screen', component: BlankComponent }])],
   }));
 
   it('sidebar shows Portfolio Analysis and Multi-Leg EOD Data (and no Closed Trades) with correct links', async () => {
@@ -19,8 +19,8 @@ describe('dashboard navigation', () => {
     fixture.detectChanges();
     const links = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLAnchorElement>('a.nav-item'));
     const byText = (text: string) => links.find(a => a.textContent?.trim() === text);
-    expect(byText('Portfolio Analysis')?.getAttribute('href')).toBe('/dashboard/portfolio');
-    expect(byText('Multi-Leg EOD Data')?.getAttribute('href')).toBe('/dashboard/multi-leg-eod');
+    expect(byText('Portfolio Analysis')?.getAttribute('href')).toBe('/portfolio');
+    expect(byText('Multi-Leg EOD Data')?.getAttribute('href')).toBe('/multi-leg-eod');
     expect(byText('Closed Trades')).toBeUndefined();
     expect(byText('Portfolio')).toBeUndefined();
     expect(links.filter(a => a.textContent?.trim() === 'Multi-Leg EOD Data')).toHaveLength(1);
@@ -42,19 +42,21 @@ describe('dashboard navigation', () => {
   it('topbar title follows the renamed screens', async () => {
     const router = TestBed.inject(Router);
     const fixture = TestBed.createComponent(TopbarComponent);
-    await router.navigateByUrl('/dashboard/portfolio');
+    await router.navigateByUrl('/portfolio');
     fixture.detectChanges();
     expect(fixture.componentInstance.title).toBe('Portfolio Analysis');
-    await router.navigateByUrl('/dashboard/multi-leg-eod');
+    await router.navigateByUrl('/multi-leg-eod');
     expect(fixture.componentInstance.title).toBe('Multi-Leg EOD Data');
   });
 
   it('routes: portfolio and multi-leg-eod exist once; the old closed-trades URL redirects', () => {
-    const children = routes.flatMap(route => route.children ?? []).find(child => child.path === 'dashboard')?.children ?? [];
+    const children = routes.flatMap(route => route.children ?? []).filter(child => child.path !== 'dashboard');
     const count = (path: string) => children.filter(child => child.path === path).length;
     expect(count('portfolio')).toBe(1);
     expect(count('multi-leg-eod')).toBe(1);
-    expect(children.find(child => child.path === 'closed-trades')).toMatchObject({ redirectTo: 'multi-leg-eod' });
+    const legacy = routes.flatMap(route => route.children ?? []).find(child => child.path === 'dashboard')?.children ?? [];
+    expect(legacy.find(child => child.path === 'closed-trades')).toMatchObject({ pathMatch: 'full' });
+    expect(typeof legacy.find(child => child.path === 'closed-trades')?.redirectTo).toBe('function');
     expect(children.find(child => child.path === 'portfolio')?.redirectTo).toBeUndefined();
   });
 });

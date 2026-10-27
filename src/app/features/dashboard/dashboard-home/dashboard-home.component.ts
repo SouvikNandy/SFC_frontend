@@ -102,11 +102,11 @@ export class DashboardHomeComponent {
   go(key: string): void {
     // map quicklink keys to existing app routes
     const routeMap: Record<string, string> = {
-      portfolio: '/dashboard/portfolio',
-      chain: '/dashboard/options-chain',
-      greeks: '/dashboard/greeks',
-      payoff: '/dashboard/payoff',
-      eod: '/dashboard/eod'
+      portfolio: '/portfolio',
+      chain: '/options-chain',
+      greeks: '/greeks',
+      payoff: '/payoff',
+      eod: '/eod'
     };
 
     const path = routeMap[key] ?? '/';

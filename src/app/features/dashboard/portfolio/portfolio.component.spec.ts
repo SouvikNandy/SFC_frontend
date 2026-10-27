@@ -114,7 +114,7 @@ describe('PortfolioComponent (live Portfolio API)', () => {
       expect(api.baskets).not.toHaveBeenCalled();
       const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
       await click('button.primary', 'Sign in');
-      expect(navigate).toHaveBeenCalledWith(['/login'], { queryParams: { returnUrl: '/dashboard/portfolio' } });
+      expect(navigate).toHaveBeenCalledWith(['/login'], { queryParams: { returnUrl: '/portfolio' } });
     });
   });
 
@@ -286,7 +286,7 @@ describe('PortfolioComponent (live Portfolio API)', () => {
       expect(TestBed.inject(ToastService).messages()).toHaveLength(1);         // not one toast per failed call
       const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
       await click('button.primary', 'Sign in');
-      expect(navigate).toHaveBeenCalledWith(['/login'], { queryParams: { returnUrl: '/dashboard/portfolio' } });
+      expect(navigate).toHaveBeenCalledWith(['/login'], { queryParams: { returnUrl: '/portfolio' } });
     });
 
     it('an empty successful response is an empty state, not an error', async () => {

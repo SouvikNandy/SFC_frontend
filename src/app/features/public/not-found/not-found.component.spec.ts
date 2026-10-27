@@ -12,11 +12,11 @@ describe('NotFoundComponent', () => {
     fixture.detectChanges();
     const hrefs = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('.not-found__links a')).map((a) => a.getAttribute('href'));
     expect(hrefs).toEqual([
-      '/dashboard/options-chain',
-      '/dashboard/greeks',
-      '/dashboard/implied-volatility',
-      '/dashboard/payoff',
-      '/dashboard/eod',
+      '/options-chain',
+      '/greeks',
+      '/implied-volatility',
+      '/payoff',
+      '/eod',
     ]);
     for (const retired of ['/about', '/services', '/blog', '/contact']) expect(hrefs).not.toContain(retired);
   });

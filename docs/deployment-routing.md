@@ -10,7 +10,7 @@ contains no hosting configuration. The current deployment answers **HTTP 200 wit
 router cannot change an HTTP status.
 
 What the app does in the browser (useful for users, but **not** an HTTP 301 or 404):
-- `/` renders the dashboard Home directly. `/dashboard` and `/dashboard/home` redirect to `/`.
+- `/` renders the dashboard Home directly. The nine tools live at the top level (`/greeks`, `/payoff`, ...). The old `/dashboard/<tool>` URLs redirect to them, and `/dashboard` and `/dashboard/home` redirect to `/`.
 - The retired paths below redirect to `/`.
 - Unknown URLs show the app's "Page Not Found" view (kept), at the address that was requested.
 
@@ -26,17 +26,29 @@ What the app does in the browser (useful for users, but **not** an HTTP 301 or 4
 | `/home` | 301 | `/` |
 | `/data` | 301 | `/` |
 | `/faq` | 301 | `/` |
-| `/dashboard/price-alerts` | 301 | `/` |
-| `/dashboard/blog-reports` | 301 | `/` |
-| `/dashboard`, `/dashboard/home` (optional, the app already does this) | 301 | `/` |
+| `/price-alerts`, `/blog-reports` (hidden pages) | 301 | `/` |
+| `/dashboard/price-alerts`, `/dashboard/blog-reports` | 301 | `/` |
+| `/dashboard`, `/dashboard/home` | 301 | `/` |
+| `/dashboard/portfolio` | 301 | `/portfolio` |
+| `/dashboard/options-chain` | 301 | `/options-chain` |
+| `/dashboard/eod` | 301 | `/eod` |
+| `/dashboard/multi-leg-eod` | 301 | `/multi-leg-eod` |
+| `/dashboard/closed-trades` (old name) | 301 | `/multi-leg-eod` |
+| `/dashboard/greeks` | 301 | `/greeks` |
+| `/dashboard/probability` | 301 | `/probability` |
+| `/dashboard/historical-volatility` | 301 | `/historical-volatility` |
+| `/dashboard/implied-volatility` | 301 | `/implied-volatility` |
+| `/dashboard/payoff` | 301 | `/payoff` |
+
+The `/dashboard/*` rows are compatibility redirects for old bookmarks; the app does the same in the browser. A server 301 should keep the query string. **Deployment dependency:** the new 200 allow-list below must go live together with, or before, any rule that returns 404 for unknown URLs, otherwise the new tool URLs would 404.
 
 The client's "old landing path" was never named. `/home` is the only other candidate; confirm with the client.
 
 ### 2. HTTP 200 (serve `index.html`) only for real app routes
 ```
 /
-/dashboard/portfolio  /dashboard/options-chain  /dashboard/eod  /dashboard/multi-leg-eod  /dashboard/closed-trades
-/dashboard/greeks  /dashboard/probability  /dashboard/historical-volatility  /dashboard/implied-volatility  /dashboard/payoff
+/portfolio  /options-chain  /eod  /multi-leg-eod
+/greeks  /probability  /historical-volatility  /implied-volatility  /payoff
 /privacy-policy  /terms-conditions  /termsconditions  /disclaimer
 /login  /register  /reset-password  /verify-otp  /verify-email-success  /invalid-reset-link
 /404
@@ -52,6 +64,9 @@ Any other URL must return status **404**. Using `index.html` as the response bod
 curl -sI https://quantsfc.com/about                   # expect 301, Location: /
 curl -sI https://quantsfc.com/faq                     # expect 301, Location: /
 curl -sI https://quantsfc.com/dashboard/price-alerts  # expect 301, Location: /
+curl -sI https://quantsfc.com/dashboard/greeks        # expect 301, Location: /greeks
+curl -sI https://quantsfc.com/greeks                  # expect 200
+curl -sI https://quantsfc.com/multi-leg-eod           # expect 200
 curl -sI https://quantsfc.com/                        # expect 200
 curl -sI https://quantsfc.com/disclaimer              # expect 200
 curl -sI https://quantsfc.com/termsconditions         # expect 200 (the client's spelling stays; no redirect)
