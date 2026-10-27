@@ -63,8 +63,7 @@
                 <div class="field-block"><label for="underlying">Underlying price</label><input id="underlying"
                         type="number" formControlName="underlying" step="0.05"
                         [readonly]="modeControl.value !== 'custom'" (input)="onFieldChange()"><span
-                        class="field-hint">{{ modeControl.value === 'custom' ? 'Entered
-                        manually' : 'API EOD underlying' }}</span></div>
+                        class="field-hint">{{ underlyingHint }}</span></div>
                 <div class="field-block"><label for="strike">Strike</label>
                     @if (modeControl.value === 'custom') { <input id="strike" type="number" formControlName="strike"
                         step="1" (input)="onFieldChange()"> }
@@ -88,7 +87,7 @@
                     </select>
                     }
                     <span class="field-hint">{{ modeControl.value === 'custom' ? 'Days to expiry' : (expiryDate ?
-                        expiryDate + ' · ' + expiryControl.value + 'd' : 'Days to expiry') }}</span>
+                        expiryDisplayNote : 'Days to expiry') }}</span>
                 </div>
             </div>
 
@@ -106,14 +105,21 @@
                             (click)="selectPriceSource('manual')">Manual</button></div> }
                     <input id="marketPrice" type="number" formControlName="marketPrice" step="0.05"
                         [readonly]="priceSource === 'auto'"
-                        (input)="onFieldChange()"><span class="field-hint">{{ priceSource === 'auto' ? (optionType ===
-                        'call' ? 'API market_price.CE' : 'API
-                        market_price.PE') : 'Entered manually' }}</span>
+                        (input)="onFieldChange()"><span class="field-hint">{{ priceSource === 'auto' ? closePriceHint : 'Entered manually' }}</span>
                 </div>
-                <div class="field-block"><label for="rate">Interest rate %</label><input id="rate" type="number"
-                        formControlName="rate" step="0.05" (input)="onFieldChange()"><span class="field-hint">Risk-free
-                        rate
-                        used in discounting</span></div>
+                @if (modeControl.value === 'custom') {
+                <div class="field-block"><label>Instrument</label>
+                    <div class="seg type"><button type="button" [class.active]="customKind === 'index'"
+                            (click)="selectCustomKind('index')">Index</button><button type="button"
+                            [class.active]="customKind === 'stock'" (click)="selectCustomKind('stock')">Stock</button></div>
+                </div>
+                }
+                <div class="field-block"><label for="rate">Risk-free rate %</label><input id="rate" type="number"
+                        formControlName="rate" step="0.01" [readonly]="modeControl.value !== 'custom'"
+                        (input)="onFieldChange()"><span class="field-hint">{{ ratesHint }}</span></div>
+                <div class="field-block"><label for="dividend">Dividend yield %</label><input id="dividend" type="number"
+                        formControlName="dividend" step="0.01" [readonly]="modeControl.value !== 'custom'"
+                        (input)="onFieldChange()"><span class="field-hint">{{ ratesHint }}</span></div>
             </div>
             @if (error) { <p class="input-error" role="alert">{{ error }}</p> }
             }

@@ -5,35 +5,54 @@ import { AuthLayoutComponent } from './layouts/auth-layout/auth-layout.component
 import { DashboardLayoutComponent } from './layouts/dashboard-layout/dashboard-layout.component';
 import { PublicLayoutComponent } from './layouts/public-layout/public-layout.component';
 
+/*
+ * Browser-side routing only. The real HTTP status codes (301 for the retired paths, 404 for unknown URLs) must come
+ * from the web server; see docs/deployment-routing.md, which lists the same paths.
+ */
+
+/** Public landing pages that no longer exist; each redirects to the dashboard at "/". */
+export const RETIRED_PUBLIC_PATHS = ['home', 'about', 'services', 'blog', 'contact', 'data', 'faq'] as const;
+
+/** Dashboard placeholders hidden until further notice; direct URLs redirect to "/". */
+export const HIDDEN_DASHBOARD_PATHS = ['blog-reports', 'price-alerts'] as const;
+
 export const routes: Routes = [
+  ...RETIRED_PUBLIC_PATHS.map((path) => ({ path, pathMatch: 'full' as const, redirectTo: '/' })),
+  // Must come before the other empty-path layouts: an empty-path parent also matches "/" even when none of its children do.
+  {
+    // One dashboard layout serves "/" (Home) and every tool, so moving between them keeps the sidebar and ticker.
+    path: '',
+    component: DashboardLayoutComponent,
+    children: [
+      { path: '', pathMatch: 'full', loadComponent: () => import('./features/dashboard/dashboard-home/dashboard-home.component').then((m) => m.DashboardHomeComponent) },
+      {
+        path: 'dashboard',
+        // Public dashboard: restricted features (Live Data) enforce access themselves.
+        children: [
+          // Home lives at "/"; these two keep old links working.
+          { path: '', redirectTo: '/', pathMatch: 'full' },
+          { path: 'home', redirectTo: '/', pathMatch: 'full' },
+          { path: 'portfolio', loadComponent: () => import('./features/dashboard/portfolio/portfolio.component').then((m) => m.PortfolioComponent) },
+          { path: 'options-chain', loadComponent: () => import('./features/dashboard/options-chain/options-chain.component').then((m) => m.OptionsChainComponent) },
+          { path: 'eod', loadComponent: () => import('./features/dashboard/eod/eod.component').then((m) => m.EodComponent) },
+          { path: 'multi-leg-eod', loadComponent: () => import('./features/dashboard/multi-leg-eod/multi-leg-eod.component').then((m) => m.MultiLegEodComponent) },
+          // The screen formerly named Closed Trades is now Multi-Leg EOD Data; keep old links working.
+          { path: 'closed-trades', redirectTo: 'multi-leg-eod', pathMatch: 'full' },
+          { path: 'greeks', loadComponent: () => import('./features/dashboard/greeks/greeks.component').then((m) => m.GreeksComponent) },
+          { path: 'probability', loadComponent: () => import('./features/dashboard/probability/probability.component').then((m) => m.ProbabilityComponent) },
+          { path: 'historical-volatility', loadComponent: () => import('./features/dashboard/historical-volatility/historical-volatility.component').then((m) => m.HistoricalVolatilityComponent) },
+          { path: 'implied-volatility', loadComponent: () => import('./features/dashboard/implied-volatility/implied-volatility.component').then((m) => m.ImpliedVolatilityComponent) },
+          { path: 'payoff', loadComponent: () => import('./features/dashboard/payoff/payoff.component').then((m) => m.PayoffComponent) },
+          // Placeholder pages, hidden until further notice: no menu entry, and direct URLs go to the dashboard.
+          ...HIDDEN_DASHBOARD_PATHS.map((path) => ({ path, pathMatch: 'full' as const, redirectTo: '/' }))
+        ]
+      }
+    ]
+  },
   {
     path: '',
     component: PublicLayoutComponent,
     children: [
-      {
-        path: '',
-        loadComponent: () => import('./features/public/home/home.component').then((m) => m.HomeComponent)
-      },
-      {
-        path: 'about',
-        loadComponent: () => import('./features/public/about/about.component').then((m) => m.AboutComponent)
-      },
-      {
-        path: 'services',
-        loadComponent: () => import('./features/public/services/services.component').then((m) => m.ServicesComponent)
-      },
-      {
-        path: 'blog',
-        loadComponent: () => import('./features/public/blog/blog.component').then((m) => m.BlogComponent)
-      },
-      {
-        path: 'contact',
-        loadComponent: () => import('./features/public/contact/contact.component').then((m) => m.ContactComponent)
-      },
-      {
-        path: 'data',
-        loadComponent: () => import('./features/public/data/data.component').then((m) => m.DataComponent)
-      },
       {
         path: 'privacy-policy',
         loadComponent: () => import('./features/public/privacy-policy/privacy-policy.component').then((m) => m.PrivacyPolicyComponent)
@@ -43,8 +62,13 @@ export const routes: Routes = [
         loadComponent: () => import('./features/public/terms-conditions/terms-conditions.component').then((m) => m.TermsConditionsComponent)
       },
       {
-        path: 'faq',
-        loadComponent: () => import('./features/public/faq/faq.component').then((m) => m.FaqComponent)
+        // The client's spelling must stay reachable (HTTP 200), so it renders the same page instead of redirecting.
+        path: 'termsconditions',
+        loadComponent: () => import('./features/public/terms-conditions/terms-conditions.component').then((m) => m.TermsConditionsComponent)
+      },
+      {
+        path: 'disclaimer',
+        loadComponent: () => import('./features/public/disclaimer/disclaimer.component').then((m) => m.DisclaimerComponent)
       }
     ]
   },
@@ -83,33 +107,12 @@ export const routes: Routes = [
     ]
   },
   {
-    path: 'dashboard',
-    // Public dashboard: restricted features (Live Data) enforce access themselves.
-    component: DashboardLayoutComponent,
-    children: [
-      { path: '', redirectTo: 'home', pathMatch: 'full' },
-      { path: 'home', loadComponent: () => import('./features/dashboard/dashboard-home/dashboard-home.component').then((m) => m.DashboardHomeComponent) },
-      { path: 'portfolio', loadComponent: () => import('./features/dashboard/portfolio/portfolio.component').then((m) => m.PortfolioComponent) },
-      { path: 'options-chain', loadComponent: () => import('./features/dashboard/options-chain/options-chain.component').then((m) => m.OptionsChainComponent) },
-      { path: 'eod', loadComponent: () => import('./features/dashboard/eod/eod.component').then((m) => m.EodComponent) },
-      { path: 'multi-leg-eod', loadComponent: () => import('./features/dashboard/multi-leg-eod/multi-leg-eod.component').then((m) => m.MultiLegEodComponent) },
-      // The screen formerly named Closed Trades is now Multi-Leg EOD Data; keep old links working.
-      { path: 'closed-trades', redirectTo: 'multi-leg-eod', pathMatch: 'full' },
-      { path: 'greeks', loadComponent: () => import('./features/dashboard/greeks/greeks.component').then((m) => m.GreeksComponent) },
-      { path: 'probability', loadComponent: () => import('./features/dashboard/probability/probability.component').then((m) => m.ProbabilityComponent) },
-      { path: 'historical-volatility', loadComponent: () => import('./features/dashboard/historical-volatility/historical-volatility.component').then((m) => m.HistoricalVolatilityComponent) },
-      { path: 'implied-volatility', loadComponent: () => import('./features/dashboard/implied-volatility/implied-volatility.component').then((m) => m.ImpliedVolatilityComponent) },
-      { path: 'payoff', loadComponent: () => import('./features/dashboard/payoff/payoff.component').then((m) => m.PayoffComponent) },
-      { path: 'blog-reports', loadComponent: () => import('./features/dashboard/blog-reports/blog-reports.component').then((m) => m.BlogReportsComponent) },
-      { path: 'price-alerts', loadComponent: () => import('./features/dashboard/price-alerts/price-alerts.component').then((m) => m.PriceAlertsComponent) }
-    ]
-  },
-  {
     path: '404',
     loadComponent: () => import('./features/public/not-found/not-found.component').then((m) => m.NotFoundComponent)
   },
   {
+    // Unknown URLs render the not-found page in place. The browser cannot set an HTTP status; the server must (see docs).
     path: '**',
-    redirectTo: '404'
+    loadComponent: () => import('./features/public/not-found/not-found.component').then((m) => m.NotFoundComponent)
   }
 ];

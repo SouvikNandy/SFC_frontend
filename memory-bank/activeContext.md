@@ -62,3 +62,5 @@ _Update when the task or branch focus changes._
 
 ## DONE (2026-10-19): technical-debt cleanup before live-data integration
 Scope and results are listed in progress.md ("Technical-debt cleanup"). Login flow is under client discussion: OTP, registration/session persistence, guards, refresh and JWT storage must stay as they are until that is decided. Shared unused components (avatar, badge, empty-state, error-state, input, otp-input, page-header, section-title, spinner) are intentionally kept as the design system. WebSocketService is an unused skeleton reserved for live data.
+
+## 2026-10-24: client items 5/6/7 implemented in the frontend (see progress.md); server-side 301/404 pending the deployment owner (docs/deployment-routing.md). Pricing migration is blocked on backend data (docs/backend-requirements-pricing.md, docs/pricing-migration-readiness.md).

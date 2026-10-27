@@ -9,25 +9,13 @@ import { AuthService } from '../../../core/services/auth.service';
   template: `
     <header class="header" [class.header--shrunk]="shrunk()">
       <div class="header__brand">
-        <span class="header__brand-mark">
+        <span class="header__brand-mark" [routerLink]="['/']" style="cursor: pointer">
           <img src="assets/images/logo.webp" alt="QuantSFC logo" width="240" height="160" />
         </span>
       </div>
 
       <nav class="header__nav" aria-label="Primary navigation">
-        <a
-          class="header__link"
-          routerLink="/"
-          routerLinkActive="active"
-          [routerLinkActiveOptions]="{ exact: true }"
-          >Home</a
-        >
-        <a class="header__link" routerLink="/about" routerLinkActive="active">About</a>
-        <a class="header__link" routerLink="/services" routerLinkActive="active">Services</a>
-        <a class="header__link" routerLink="/blog" routerLinkActive="active">Blog</a>
-        <a class="header__link" routerLink="/contact" routerLinkActive="active">Contact</a>
-        <!-- <a class="header__link" routerLink="/data" routerLinkActive="active">Data</a> -->
-        <a class="header__link" routerLink="/dashboard/home" routerLinkActive="active">Dashboard</a>
+        <a class="header__link" routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Dashboard</a>
 
         @if (!authService.isAuthenticated()) {
           <a class="header__link header__login-btn" routerLink="/login" routerLinkActive="active"
@@ -36,7 +24,7 @@ import { AuthService } from '../../../core/services/auth.service';
         } @else {
           <a
             class="header__link header__login-btn"
-            routerLink="/dashboard"
+            routerLink="/"
             routerLinkActive="active"
             >{{ getUserDisplayName() }}</a
           >
@@ -61,42 +49,6 @@ import { AuthService } from '../../../core/services/auth.service';
           routerLinkActive="active"
           [routerLinkActiveOptions]="{ exact: true }"
           (click)="toggleMobileNav()"
-          >Home</a
-        >
-        <a
-          class="mobile-nav__link"
-          routerLink="/about"
-          routerLinkActive="active"
-          (click)="toggleMobileNav()"
-          >About</a
-        >
-        <a
-          class="mobile-nav__link"
-          routerLink="/services"
-          routerLinkActive="active"
-          (click)="toggleMobileNav()"
-          >Services</a
-        >
-        <a
-          class="mobile-nav__link"
-          routerLink="/blog"
-          routerLinkActive="active"
-          (click)="toggleMobileNav()"
-          >Blog</a
-        >
-        <!-- <a
-          class="mobile-nav__link"
-          routerLink="/data"
-          routerLinkActive="active"
-          (click)="toggleMobileNav()"
-          >Data</a
-        > -->
-
-        <a
-          class="mobile-nav__link"
-          routerLink="/dashboard/home"
-          routerLinkActive="active"
-          (click)="toggleMobileNav()"
           >Dashboard</a
         >
 
@@ -111,7 +63,7 @@ import { AuthService } from '../../../core/services/auth.service';
         } @else {
           <a
             class="header__link header__login-btn"
-            routerLink="/dashboard"
+            routerLink="/"
             routerLinkActive="active"
             >{{ getUserDisplayName() }}</a
           >

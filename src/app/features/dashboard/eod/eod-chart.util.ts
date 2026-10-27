@@ -1,4 +1,5 @@
 import { EodDataRow } from './eod.model';
+import { formatDisplayDate } from '../../../shared/utils/date-format';
 
 export interface ChartResult {
     path: string;
@@ -15,8 +16,7 @@ const DEFAULT_W = 720;
 const DEFAULT_H = 300;
 
 function fmtDateLabel(d: string) {
-    const dt = new Date(d + 'T00:00:00');
-    return dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+    return formatDisplayDate(d, false);
 }
 
 export function buildEodChart(rows: Array<Pick<EodDataRow, 'date' | 'close'>>, width = DEFAULT_W, height = DEFAULT_H): ChartResult {

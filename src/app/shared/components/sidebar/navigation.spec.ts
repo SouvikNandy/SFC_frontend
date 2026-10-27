@@ -27,6 +27,18 @@ describe('dashboard navigation', () => {
     expect(links.filter(a => a.textContent?.trim() === 'Portfolio Analysis')).toHaveLength(1);
   });
 
+  it('does not list Price Alerts or Blog & Reports anywhere in the sidebar', () => {
+    const fixture = TestBed.createComponent(SidebarComponent);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    const hrefs = Array.from(root.querySelectorAll('a')).map(a => a.getAttribute('href') ?? '');
+    expect(hrefs.some(href => href.includes('price-alerts') || href.includes('blog-reports'))).toBe(false);
+    expect(root.textContent).not.toContain('Price Alerts');
+    expect(root.textContent).not.toContain('Blog & Reports');
+    expect(root.querySelector('.sfc-nav__heading')?.textContent).toBeTruthy();
+    expect(Array.from(root.querySelectorAll('.sfc-nav__heading')).map(h => h.textContent?.trim())).toEqual(['Trading', 'Tools']);
+  });
+
   it('topbar title follows the renamed screens', async () => {
     const router = TestBed.inject(Router);
     const fixture = TestBed.createComponent(TopbarComponent);
@@ -38,8 +50,7 @@ describe('dashboard navigation', () => {
   });
 
   it('routes: portfolio and multi-leg-eod exist once; the old closed-trades URL redirects', () => {
-    const dashboard = routes.find(route => route.path === 'dashboard')!;
-    const children = dashboard.children ?? [];
+    const children = routes.flatMap(route => route.children ?? []).find(child => child.path === 'dashboard')?.children ?? [];
     const count = (path: string) => children.filter(child => child.path === path).length;
     expect(count('portfolio')).toBe(1);
     expect(count('multi-leg-eod')).toBe(1);

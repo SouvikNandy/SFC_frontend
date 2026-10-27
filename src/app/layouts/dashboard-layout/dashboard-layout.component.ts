@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 
+import { FooterComponent } from '../../shared/components/footer/footer.component';
 import { SidebarComponent } from '../../shared/components/sidebar/sidebar.component';
 import { TopbarComponent } from '../../shared/components/topbar/topbar.component';
 import { TickerTapeComponent } from '../../shared/components/ticker-tape/ticker-tape.component';
@@ -8,7 +9,7 @@ import { SidebarService } from '../../shared/services/sidebar.service';
 @Component({
   selector: 'app-dashboard-layout',
   standalone: true,
-  imports: [RouterOutlet, SidebarComponent, TopbarComponent, TickerTapeComponent],
+  imports: [RouterOutlet, SidebarComponent, TopbarComponent, TickerTapeComponent, FooterComponent],
   template: `
     <div class="sfc-shell">
       <app-sidebar></app-sidebar>
@@ -18,6 +19,7 @@ import { SidebarService } from '../../shared/services/sidebar.service';
         <main class="sfc-page-pad">
           <router-outlet />
         </main>
+        <app-footer></app-footer>
       </div>
       <div class="sfc-sidebar-backdrop" [class.open]="sidebar.isOpen()" (click)="sidebar.close()"></div>
     </div>

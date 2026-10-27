@@ -13,7 +13,7 @@ import { AuthService } from '../../../core/services/auth.service';
   template: `
     <section class="sfc-page-pad dashboard-home">
       <div class="dh-welcome">
-        <h2 class="dh-title">Welcome back, {{ userName }}</h2>
+        <h2 class="dh-title">{{ greeting }}</h2>
         <p class="dh-date num">{{ today }}</p>
       </div>
 
@@ -27,7 +27,8 @@ import { AuthService } from '../../../core/services/auth.service';
             <div class="summary-card">
               <div class="summary-card__symbol">{{ card.symbol }}</div>
               <div class="summary-card__value num">{{ card.value }}</div>
-              <div class="summary-card__pnl num" [class.pnl-positive]="card.up" [class.pnl-negative]="!card.up">{{ card.change }}</div>
+              <div class="summary-card__pnl num" [class.pnl-positive]="card.direction === 'up'" [class.pnl-negative]="card.direction === 'down'">{{ card.change }}</div>
+              <div class="summary-card__asof num" *ngIf="card.asOf">as of {{ card.asOf }}</div>
             </div>
           </ng-container>
           <div *ngIf="!cards.length" class="summary-empty">Market data is not available right now. Please try again later.</div>
@@ -49,8 +50,8 @@ import { AuthService } from '../../../core/services/auth.service';
 
       <div class="dh-section-heading">Platform overview</div>
       <div class="platform-overview">
-        <p>QuantSFC is an NSE F&amp;O analytics platform: a 5-year historical futures &amp; options database with daily EOD auto-updates, a live options chain, and a full suite of statistical tools (Probability, Greeks, Payoff, Historical Volatility and Implied Volatility), each with a table and chart view.</p>
-        <p>Live broker-fed price and Greeks updates are planned for Stage 2. Everything on this page currently reflects the most recent EOD sync.</p>
+        <p>QuantSFC is an NSE F&amp;O analytics platform: a 5-year historical futures &amp; options database with daily EOD auto-updates, a daily EOD options chain, and a full suite of statistical tools (Probability, Greeks, Payoff, Historical Volatility and Implied Volatility), each with a table and chart view.</p>
+        <p>Everything on this page currently reflects the most recent EOD sync.</p>
       </div>
     </section>
   `,
@@ -70,6 +71,10 @@ export class DashboardHomeComponent {
 
   constructor() {
     this.load();
+  }
+
+  get greeting(): string {
+    return this.auth.isAuthenticated() ? `Welcome back, ${this.userName}` : 'Welcome to QuantSFC';
   }
 
   get userName(): string {
@@ -101,11 +106,10 @@ export class DashboardHomeComponent {
       chain: '/dashboard/options-chain',
       greeks: '/dashboard/greeks',
       payoff: '/dashboard/payoff',
-      eod: '/dashboard/eod',
-      alerts: '/dashboard/price-alerts'
+      eod: '/dashboard/eod'
     };
 
-    const path = routeMap[key] ?? '/dashboard';
+    const path = routeMap[key] ?? '/';
     this.router.navigateByUrl(path);
   }
 }

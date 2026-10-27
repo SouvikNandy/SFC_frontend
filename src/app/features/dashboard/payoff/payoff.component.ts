@@ -22,8 +22,17 @@ import {
   DataTableColumn,
 } from '../../../shared/components/data-table/data-table.types';
 import { DefaultStock } from '../../../shared/services/constantFile';
+import { formatDisplayDate } from '../../../shared/utils/date-format';
+import { CLOSE_EOD_LABEL } from '../../../shared/utils/price-labels';
+import { daysToExpiry, istToday } from '../../../shared/utils/expiry';
 import { addDays, computePayoff } from './payoff-engine';
-import { chainIV, nearestExpiryAverageIv, theoreticalPremium } from './payoff-pricing';
+import { modelPremium, nearestExpiryAverageIv } from './payoff-pricing';
+import { atmImpliedVolatility } from '../../../shared/pricing/atm-iv';
+import { FuturesQuote, UnderlyingResolution, resolveUnderlying, solveIvInContext } from '../../../shared/pricing/contract-iv';
+import { FuturesCloseService } from '../../../shared/pricing/futures-close.service';
+import { InstrumentKindService } from '../../../shared/pricing/instrument-kind.service';
+import { InstrumentKind, marketParams } from '../../../shared/pricing/option-pricing';
+import { describePricingFailure } from '../../../shared/pricing/pricing-context.service';
 import { buildPayoffChart, buildStrikeLadder, chartAspectRatio, formatRupee, ladderMinAspectRatio } from './payoff-chart.util';
 import {
   STRATEGY_GROUPS,
@@ -80,6 +89,8 @@ const formatMoney = (value: number) =>
 })
 export class PayoffComponent implements OnInit {
   private readonly payoff = inject(PayoffService);
+  private readonly kinds = inject(InstrumentKindService);
+  private readonly futuresClose = inject(FuturesCloseService);
   private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly route = inject(ActivatedRoute);
@@ -136,6 +147,15 @@ export class PayoffComponent implements OnInit {
   private readonly heatPriceCell = viewChild.required<HeatCellTemplate>('heatPriceCell');
   private readonly heatValueCell = viewChild.required<HeatCellTemplate>('heatValueCell');
 
+  /** What the scenario axis starts on in EOD mode: the spot index value, or for a stock the nearest expiry's futures close. */
+  get spotHint(): string {
+    if (this.mode() === 'custom') return 'Entered manually';
+    const kind = this.kind();
+    if (kind === 'index') return 'Spot index value (EOD)';
+    if (kind === 'stock') return 'Futures close (EOD), nearest expiry';
+    return '';
+  }
+
   readonly legTrackBy = (_index: number, leg: PayoffLeg) => leg.id;
   readonly legActions: DataTableAction<PayoffLeg>[] = [
     { id: 'remove', label: 'Remove', icon: '×', variant: 'danger' },
@@ -149,24 +169,69 @@ export class PayoffComponent implements OnInit {
     if (listed?.byStrike.size) return deriveStrikeStep([...listed.byStrike.keys()], spot);
     return spot > 0 ? defaultStrikeStep(spot) : 1;
   });
-  readonly baseDate = computed(() => this.parseLocalDate(this.details()?.trade_date) ?? this.today());
+  /** Valuation date: today in IST (not the EOD trade date). Refreshed whenever a symbol is (re)loaded. */
+  readonly valuationDate = signal(istToday());
+  readonly baseDate = computed(() => this.parseLocalDate(this.valuationDate()) ?? this.today());
   /** EOD legs whose expiry prices are still being fetched. */
   readonly quotesLoading = computed(() =>
     this.mode() === 'eod' && this.legs().some(leg => this.quotes().get(leg.expiryDays)?.status === 'loading'));
-  /**
-   * Underlying reference volatility (percent): the symbol's HV-20 from the loaded details. It only seeds the
-   * chain-IV formula; there is no editable base volatility. NaN when the feed has no usable HV-20.
-   */
-  readonly referenceVol = computed(() => {
-    const hv = this.details()?.hv20;
-    return typeof hv === 'number' && Number.isFinite(hv) && hv > 0 ? Math.round(hv * 100) / 100 : Number.NaN;
+  /* ---------- pricing inputs: instrument type, underlying per expiry, rate and dividend ---------- */
+  /** EOD: the symbol's instrument type from /fo/dd_list_v2; null until loaded or when the backend does not classify it. */
+  readonly kind = signal<InstrumentKind | null>(null);
+  /** EOD stock options: the futures close of each listed expiry (YYYY-MM-DD); null when that expiry has none. */
+  readonly futures = signal<ReadonlyMap<string, FuturesQuote | null>>(new Map());
+  /** Custom mode: which approved parameters (index or stock) apply. The underlying is the price typed in. */
+  readonly customKind = signal<InstrumentKind>('index');
+  /** Custom mode: volatility (percent) used to turn a typed leg into a model premium. Never filled from HV-20. */
+  readonly customModelVol = signal<number | null>(null);
+  readonly activeKind = computed(() => (this.mode() === 'custom' ? this.customKind() : this.kind()));
+  /** Approved risk-free rate and dividend yield of the instrument type; null while the type is unknown. */
+  readonly rates = computed(() => {
+    const kind = this.activeKind();
+    return kind ? marketParams(kind) : null;
   });
-  /** Each leg's own chain IV (decimal, before the multiplier); legs without a usable strike/expiry are skipped. */
+
+  /**
+   * Underlying for options expiring on `iso`: Custom = the price typed in; EOD index = the spot index value; EOD stock = the
+   * futures close of that same expiry. Nothing else is ever substituted.
+   */
+  underlyingFor(iso: string | null): UnderlyingResolution {
+    if (this.mode() === 'custom') {
+      const spot = this.spot();
+      return spot > 0 ? { ok: true, kind: this.customKind(), underlying: spot } : { ok: false, reason: 'missing-spot-price' };
+    }
+    return resolveUnderlying(this.kind(), { spot: this.details()?.underlying, futures: iso ? this.futures().get(iso) ?? null : null, optionExpiry: iso ?? '' });
+  }
+
+  /** Each leg's implied volatility (decimal) solved from its own premium, or why it cannot be. Expiry-day legs need none. */
+  readonly legIvDetails = computed(() => {
+    const out = new Map<number, { iv: number } | { failure: string }>();
+    const rates = this.rates();
+    for (const leg of this.legs()) {
+      if (!(leg.strike > 0) || !(leg.expiryDays > 0) || leg.premium === null) continue;
+      const iso = this.expiries().find(expiry => expiry.days === leg.expiryDays)?.iso ?? null;
+      const underlying = this.underlyingFor(iso);
+      if (!underlying.ok) { out.set(leg.id, { failure: underlying.reason }); continue; }
+      if (!rates) { out.set(leg.id, { failure: 'missing-instrument-type' }); continue; }
+      const solved = solveIvInContext(
+        { underlying: underlying.underlying, riskFreeRate: rates.riskFreeRate, dividendYield: rates.dividendYield },
+        { side: leg.type, strike: leg.strike, days: leg.expiryDays, close: leg.premium },
+      );
+      out.set(leg.id, solved.ok ? { iv: solved.ivPct / 100 } : { failure: solved.reason });
+    }
+    return out;
+  });
+  readonly legIvById = computed(() => {
+    const byId: Record<number, number> = {};
+    this.legIvDetails().forEach((detail, id) => { if ('iv' in detail) byId[id] = detail.iv; });
+    return byId;
+  });
+  /** Each leg's own IV (decimal, before the multiplier); legs without one are NaN. */
   readonly legIvs = computed(() => {
-    const spot = this.spot(), reference = this.referenceVol(), live = this.mode() === 'live';
+    const byId = this.legIvById();
     return this.legs()
-      .filter(leg => leg.strike > 0 && leg.expiryDays > 0)
-      .map(leg => ({ expiryDays: leg.expiryDays, iv: chainIV(spot, leg.strike, reference, live) }));
+      .filter(leg => leg.strike > 0 && leg.expiryDays >= 0)
+      .map(leg => ({ expiryDays: leg.expiryDays, iv: byId[leg.id] ?? Number.NaN }));
   });
   /** Nearest-expiry average leg IV × multiplier, in percent (the IV label and the probability distribution). */
   readonly effVol = computed(() => nearestExpiryAverageIv(this.legIvs()) * this.ivMultiplier());
@@ -177,12 +242,14 @@ export class PayoffComponent implements OnInit {
   readonly result = computed<PayoffResult | null>(() => {
     if (this.mode() === 'live' || this.marketLoading() || this.quotesLoading() || this.validationError()) return null;
     const legs = this.legs();
-    if (!legs.length || !legs.every(isPricedLeg)) return null;
+    const rates = this.rates();
+    if (!legs.length || !rates || !legs.every(isPricedLeg)) return null;
     return computePayoff({
       legs,
       spot: this.spot(),
-      referenceVol: this.referenceVol(),
-      live: this.mode() === 'live',
+      rate: rates.riskFreeRate,
+      dividend: rates.dividendYield,
+      legIvs: this.legIvById(),
       ivMultiplier: this.ivMultiplier(),
       rangePct: this.rangePct(),
       evalDay: this.evalDay(),
@@ -218,7 +285,7 @@ export class PayoffComponent implements OnInit {
 
   readonly legColumns = computed<DataTableColumn<PayoffLeg>[]>(() => {
     const mode = this.mode();
-    const premiumSource = mode === 'custom' ? '(entered)' : mode === 'live' ? '(live LTP)' : '(BhavCopy settle)';
+    const premiumSource = mode === 'custom' ? '(entered or model)' : mode === 'live' ? '(live LTP)' : `(${CLOSE_EOD_LABEL})`;
     return [
       { key: 'type', label: 'Call / Put', template: this.typeCell() },
       { key: 'direction', label: 'Long / Short', template: this.directionCell() },
@@ -234,12 +301,13 @@ export class PayoffComponent implements OnInit {
   readonly tickerLabel = computed(() => (this.mode() === 'custom' ? 'CUSTOM' : this.selectedSymbol() || '–'));
   readonly lastPrice = computed(() => (this.spot() > 0 ? formatRupee(this.spot()) : '–'));
   readonly sourceNote = computed(() => {
-    if (this.mode() === 'custom') return 'Manual entry';
+    const valuation = `Valuation date ${formatDisplayDate(this.valuationDate())}`;
+    if (this.mode() === 'custom') return `Manual entry · ${valuation}`;
     if (this.mode() === 'live') return 'Live feed · Premium';
     const date = this.parseLocalDate(this.details()?.trade_date);
-    return date ? `BhavCopy EOD close · ${formatDay(date)} ${date.getFullYear()}` : '';
+    return date ? `Close (EOD) · ${formatDay(date)} ${date.getFullYear()} · ${valuation}` : '';
   });
-  readonly evalMax = computed(() => Math.max(this.result()?.near ?? this.evalDay(), 1));
+  readonly evalMax = computed(() => this.result()?.near ?? this.evalDay());
   readonly evalValue = computed(() => this.result()?.evalDay ?? this.evalDay());
   readonly evalLabel = computed(() => {
     const result = this.result();
@@ -262,7 +330,7 @@ export class PayoffComponent implements OnInit {
     return Number.isFinite(this.effVol()) ? `${multiplier} → ${this.effVol().toFixed(2)}%` : multiplier;
   });
   readonly expiryPill = computed(() => {
-    const used = Array.from(new Set(this.legs().map(leg => leg.expiryDays).filter(days => days > 0))).sort((a, b) => a - b);
+    const used = Array.from(new Set(this.legs().map(leg => leg.expiryDays).filter(days => days >= 0))).sort((a, b) => a - b);
     return used.length ? { text: `Expirations: ${used.map(days => `${days}d`).join(', ')}`, calendar: used.length > 1 } : null;
   });
   readonly calendarNote = computed(() => {
@@ -271,7 +339,7 @@ export class PayoffComponent implements OnInit {
     const nearLabel = formatDay(addDays(this.baseDate(), result.near));
     const farLabel = formatDay(addDays(this.baseDate(), result.far));
     return `Mixed expiries: the expiration line is drawn at ${nearLabel} (T+${result.near}), where the ${farLabel} leg still holds time value. ` +
-      `Each leg is priced with Black-Scholes at its own implied vol (near-leg average ${result.effVol.toFixed(2)}%), so this curve moves with the IV slider, unlike a single-expiry position.`;
+      `Each leg is priced with Black-Scholes at the implied volatility solved from its own premium (near-leg average ${result.effVol.toFixed(2)}%), so this curve moves with the vol multiplier, unlike a single-expiry position.`;
   });
   readonly summary = computed(() => {
     const result = this.result();
@@ -492,9 +560,21 @@ export class PayoffComponent implements OnInit {
     this.strategy.set('custom_position');
   }
 
-  /** Custom mode only: recompute Black-Scholes premiums at each leg's chain IV. EOD premiums always track the loaded settlements. */
+  /** Custom mode only: recompute every leg's model premium at the model volatility. EOD premiums always track the loaded Close (EOD) prices. */
   reprice(): void {
     this.legs.update(legs => legs.map(leg => ({ ...leg, premium: this.premiumFor(leg.type, leg.strike, leg.expiryDays) })));
+  }
+
+  /** Custom mode: choose the approved parameters (index or stock); leg IVs are re-solved from the premiums. */
+  setCustomKind(kind: InstrumentKind): void {
+    this.customKind.set(kind);
+  }
+
+  /** Custom mode: the volatility behind model premiums. Legs still without a premium are filled; typed premiums are kept. */
+  onModelVol(raw: string): void {
+    const value = parseFloat(raw);
+    this.customModelVol.set(Number.isFinite(value) && value > 0 ? value : null);
+    this.legs.update(legs => legs.map(leg => (leg.premium === null ? { ...leg, premium: this.premiumFor(leg.type, leg.strike, leg.expiryDays) } : leg)));
   }
 
   /** Strikes quoted for this leg's option type on this leg's expiry. */
@@ -581,6 +661,7 @@ export class PayoffComponent implements OnInit {
   private setupMarketData(): void {
     this.symbolSelection$.pipe(
       tap(symbol => {
+        this.valuationDate.set(istToday());
         this.resetMarketData();
         this.marketLoading.set(Boolean(symbol));
       }),
@@ -595,12 +676,14 @@ export class PayoffComponent implements OnInit {
         )
         : EMPTY),
       takeUntilDestroyed(this.destroyRef),
-    ).subscribe(({ symbol, details, expiries, quotes }) => {
+    ).subscribe(({ symbol, details, expiries, quotes, pricing }) => {
       this.marketLoading.set(false);
       if (symbol !== this.selectedSymbol()) return;
       this.details.set(details);
       this.expiries.set(expiries);
       this.quotes.set(quotes);
+      this.kind.set(pricing.kind);
+      this.futures.set(pricing.futures);
       if (this.mode() === 'eod') this.applyFeedValues();
     });
   }
@@ -608,12 +691,13 @@ export class PayoffComponent implements OnInit {
   /** Presets use the nearest listed expiry and the next one, so both are priced before the legs are built. */
   private loadInitialQuotes(symbol: string, details: PayoffSymbolDetails): Observable<{
     symbol: string; details: PayoffSymbolDetails; expiries: PayoffExpiry[]; quotes: Map<number, ExpiryQuotes>;
+    pricing: { kind: InstrumentKind | null; futures: ReadonlyMap<string, FuturesQuote | null> };
   }> {
     if (!(typeof details.underlying === 'number' && details.underlying > 0)) {
       return throwError(() => new MarketDataError(`Underlying price is not available for ${symbol}.`));
     }
-    const expiries = this.parseExpiries(details.expiry_date, this.parseLocalDate(details.trade_date) ?? this.today());
-    if (!expiries.length) return throwError(() => new MarketDataError(`No upcoming expiries are available for ${symbol}.`));
+    const expiries = this.parseExpiries(details.expiry_date, this.valuationDate());
+    if (!expiries.length) return throwError(() => new MarketDataError(`No current or upcoming expiries are available for ${symbol}.`));
     const days = expiries.map(expiry => expiry.days);
     const { near, next } = nearAndNextExpiry(days);
     const wanted = expiries.filter(expiry => expiry.days === near || expiry.days === next);
@@ -624,6 +708,19 @@ export class PayoffComponent implements OnInit {
           throw new MarketDataError(`No BhavCopy option prices are available for ${symbol}.`);
         }
         return { symbol, details, expiries, quotes: new Map(entries) };
+      }),
+      switchMap(loaded => this.loadPricing(symbol, loaded.expiries).pipe(map(pricing => ({ ...loaded, pricing })))),
+    );
+  }
+
+  /** Instrument type (/fo/dd_list_v2) and, for a stock, the futures close of every listed expiry (/fo/xx_close). */
+  private loadPricing(symbol: string, expiries: PayoffExpiry[]): Observable<{ kind: InstrumentKind | null; futures: ReadonlyMap<string, FuturesQuote | null> }> {
+    return this.kinds.kindOf(symbol).pipe(
+      switchMap(kind => {
+        const futures$ = kind === 'stock' && expiries.length
+          ? forkJoin(expiries.map(expiry => this.futuresClose.getClose(symbol, expiry.iso).pipe(map(quote => [expiry.iso, quote] as const))))
+          : of([] as Array<readonly [string, FuturesQuote | null]>);
+        return futures$.pipe(map(entries => ({ kind, futures: new Map(entries) as ReadonlyMap<string, FuturesQuote | null> })));
       }),
     );
   }
@@ -664,6 +761,8 @@ export class PayoffComponent implements OnInit {
 
   private resetMarketData(): void {
     this.quoteReset$.next();
+    this.kind.set(null);
+    this.futures.set(new Map());
     this.details.set(null);
     this.quotes.set(new Map());
     this.expiries.set([]);
@@ -688,10 +787,15 @@ export class PayoffComponent implements OnInit {
     if (!details) return;
     const lot = details.lot;
     const lotValid = typeof lot === 'number' && Number.isInteger(lot) && lot > 0;
-    this.spot.set(Math.round(details.underlying * 100) / 100);
+    // The scenario axis starts at the underlying the nearest expiry is priced on: the spot index value, or for a stock its futures close.
+    const base = this.underlyingFor(this.expiries()[0]?.iso ?? null);
+    this.spot.set(base.ok ? Math.round(base.underlying * 100) / 100 : Number.NaN);
     this.lotFromFeed.set(lotValid);
     if (lotValid) this.lotSize.set(lot);
     this.loadStrategy();
+    // Custom mode starts from the solved volatility of this instrument's nearest expiry (a real IV, not HV-20).
+    const solved = nearestExpiryAverageIv(this.legIvs());
+    if (Number.isFinite(solved) && this.customModelVol() === null) this.customModelVol.set(Math.round(solved * 10000) / 100);
   }
 
   /** Prototype loadStrategy(): build the preset legs, re-quote them (EOD), then reset the date slider to T+0. */
@@ -707,8 +811,8 @@ export class PayoffComponent implements OnInit {
       spot: this.spot(),
       step: this.strikeStep(),
       lotSize: this.lotSize() > 0 ? this.lotSize() : 1,
-      // Wing placement only: the ATM chain IV equals the reference vol, scaled by the multiplier as before.
-      sigma: (this.referenceVol() / 100) * (this.ivMultiplier() / 100),
+      // Wing placement only: the solved at-the-money IV of the nearest expiry (NaN when none, which places wings one strike out), scaled by the multiplier.
+      sigma: this.placementSigma() * (this.ivMultiplier() / 100),
       expiries: this.expiryDays(),
       existing: this.legs(),
       premium: (type, strike, days) => this.premiumFor(type, strike, days),
@@ -717,13 +821,33 @@ export class PayoffComponent implements OnInit {
     };
   }
 
-  /** Custom prices from Black-Scholes at the leg's chain IV (prototype pr()/Reprice); EOD reads that expiry's CE (call) / PE (put) price. */
+  /**
+   * Custom: a Black-Scholes model premium at the model volatility, or null until one is entered (nothing is guessed).
+   * EOD: that expiry's Close (EOD) for the call (CE) / put (PE).
+   */
   private premiumFor(type: OptionType, strike: number, days: number): number | null {
     if (this.mode() === 'custom') {
-      const premium = theoreticalPremium(type, this.spot(), strike, days, chainIV(this.spot(), strike, this.referenceVol()));
+      const vol = this.customModelVol(), rates = this.rates(), spot = this.spot();
+      if (vol === null || !rates || !(spot > 0) || !(strike > 0) || !(days >= 0)) return null;
+      const premium = modelPremium(type, spot, strike, days, vol / 100, rates.riskFreeRate, rates.dividendYield);
       return Number.isFinite(premium) ? premium : null;
     }
     return this.quoteFor(type, strike, days);
+  }
+
+  /** Solved at-the-money IV (decimal) of the nearest expiry, from its Close (EOD) prices; NaN when unavailable. */
+  private placementSigma(): number {
+    if (this.mode() === 'custom') {
+      const vol = this.customModelVol();
+      return vol === null ? Number.NaN : vol / 100;
+    }
+    const near = this.expiries()[0], rates = this.rates();
+    const quotes = near ? this.quotes().get(near.days) : undefined;
+    const underlying = near ? this.underlyingFor(near.iso) : null;
+    if (!near || !rates || !underlying?.ok || quotes?.status !== 'ready' || !(near.days > 0)) return Number.NaN;
+    const rows = [...quotes.byStrike.values()].map(quote => ({ strike: quote.strike, callClose: quote.ce, putClose: quote.pe }));
+    const atm = atmImpliedVolatility({ underlying: underlying.underlying, riskFreeRate: rates.riskFreeRate, dividendYield: rates.dividendYield }, rows, near.days);
+    return atm ? atm.averagePct / 100 : Number.NaN;
   }
 
   /** EOD strikes must exist on that expiry's chain: snap to the nearest strike quoted for this side. */
@@ -750,7 +874,7 @@ export class PayoffComponent implements OnInit {
   private commitLegs(legs: PayoffLeg[]): void {
     this.legs.set(legs);
     const near = this.nearestExpiry(legs);
-    if (near !== null && this.evalDay() > Math.max(near, 1)) this.evalDay.set(Math.max(near, 1));
+    if (near !== null && this.evalDay() > near) this.evalDay.set(near);
   }
 
   private rebuildIfIncomplete(): void {
@@ -759,7 +883,7 @@ export class PayoffComponent implements OnInit {
   }
 
   private nearestExpiry(legs: PayoffLeg[]): number | null {
-    const days = legs.map(leg => leg.expiryDays).filter(value => Number.isFinite(value) && value > 0);
+    const days = legs.map(leg => leg.expiryDays).filter(value => Number.isFinite(value) && value >= 0);
     return days.length ? Math.min(...days) : null;
   }
 
@@ -767,18 +891,16 @@ export class PayoffComponent implements OnInit {
     const mode = this.mode();
     if (mode === 'live') return '';
     if (mode === 'eod') {
-      if (!this.selectedSymbol()) return 'Select an instrument to load strike and settlement data.';
+      if (!this.selectedSymbol()) return 'Select an instrument to load strike and Close (EOD) data.';
       if (this.marketLoading() || this.quotesLoading()) return '';
       if (this.marketError()) return this.marketError();
+      if (!this.rates()) return describePricingFailure('missing-instrument-type');
+      const base = this.underlyingFor(this.expiries()[0]?.iso ?? null);
+      if (!base.ok) return describePricingFailure(base.reason);
     }
     const legs = this.legs(), lot = this.lotSize();
     if (!legs.length) return 'Add at least one leg to the position.';
     if (!(this.spot() > 0)) return 'Underlying price must be greater than 0.';
-    if (!(this.referenceVol() > 0)) {
-      return mode === 'eod'
-        ? `HV-20 volatility is not available for ${this.selectedSymbol()}, so leg implied vols cannot be calculated.`
-        : 'Reference volatility unavailable: load an instrument in EOD data first (its HV-20 seeds the leg implied vols).';
-    }
     if (!(lot > 0)) return 'Lot size must be at least 1.';
     for (let i = 0; i < legs.length; i++) {
       const leg = legs[i], n = i + 1;
@@ -793,7 +915,9 @@ export class PayoffComponent implements OnInit {
       }
       if (!(leg.premium >= 0)) return `Leg ${n}: premium cannot be negative.`;
       if (!(leg.quantity > 0)) return `Leg ${n}: quantity must be at least 1.`;
-      if (!(leg.expiryDays > 0)) return `Leg ${n}: expiry must be in the future.`;
+      if (!(leg.expiryDays >= 0)) return `Leg ${n}: expiry cannot be in the past.`;
+      const iv = this.legIvDetails().get(leg.id);
+      if (iv && 'failure' in iv) return `Leg ${n}: ${describePricingFailure(iv.failure)}`;
     }
     return '';
   }
@@ -803,14 +927,16 @@ export class PayoffComponent implements OnInit {
     return column.isExpiry ? `${label} · Exp` : label;
   }
 
-  private parseExpiries(raw: PayoffSymbolDetails['expiry_date'], base: Date): PayoffExpiry[] {
+  private parseExpiries(raw: PayoffSymbolDetails['expiry_date'], valuationDate: string): PayoffExpiry[] {
+    const base = this.parseLocalDate(valuationDate) ?? this.today();
     const values = Array.isArray(raw) ? raw : [raw];
     const byDays = new Map<number, PayoffExpiry>();
     values.forEach(value => {
       const date = typeof value === 'number' ? addDays(base, value) : this.parseLocalDate(value);
       if (!date) return;
-      const days = Math.round((date.getTime() - base.getTime()) / 86400000);
-      if (days > 0 && !byDays.has(days)) byDays.set(days, { days, date, iso: this.isoDate(date) });
+      const days = daysToExpiry(this.isoDate(date), valuationDate);
+      // Expiry day (0 days) is a valid, priceable expiry: it is worth its intrinsic value.
+      if (days >= 0 && !byDays.has(days)) byDays.set(days, { days, date, iso: this.isoDate(date) });
     });
     return [...byDays.values()].sort((a, b) => a.days - b.days);
   }

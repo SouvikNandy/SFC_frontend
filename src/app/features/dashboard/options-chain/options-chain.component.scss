@@ -800,3 +800,11 @@ table.chain thead tr:nth-child(2) th.puthdr {
 table.chain tr.atm:hover td {
   background: var(--teal-tint);
 }
+
+.expiry-note {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}

@@ -206,7 +206,7 @@ export class PortfolioComponent implements OnInit {
     });
   });
   readonly eodNote = computed(() => (this.openRows().some(p => p.cmp_source === 'eod')
-    ? ' Prices marked “EOD close” are the latest end-of-day close for that contract, not live prices; unrealised P&L uses them.'
+    ? ' Prices marked “Close (EOD)” are the latest end-of-day close for that contract, not live prices; unrealised P&L uses them.'
     : ''));
   /** Baskets with EOD-priced open positions; the bucket's unrealised total gains those positions' P&L. */
   readonly basketsView = computed<BasketsData | null>(() => {
@@ -616,7 +616,7 @@ export class PortfolioComponent implements OnInit {
   hasPrice(value: string | null): boolean { return amount(value) !== null; }
   /** Caption under CMP: where a price came from when it is not the API's own, or that there is none. */
   cmpNote(p: PortfolioPosition): string {
-    if (p.cmp_source === 'eod') return `EOD close${p.cmp_date ? ' · ' + dateLabel(p.cmp_date).replace(/ \d{4}$/, '') : ''}`;
+    if (p.cmp_source === 'eod') return `Close (EOD)${p.cmp_date ? ' · ' + dateLabel(p.cmp_date).replace(/ \d{4}$/, '') : ''}`;
     return amount(p.cmp) === null ? 'not priced' : '';
   }
   unrealCell(p: PortfolioPosition): string { const n = amount(p.unrealised); return n === null ? '—' : signed(n); }
@@ -835,7 +835,7 @@ export class PortfolioComponent implements OnInit {
       if (quote === undefined) return;
       if (quote) {
         this.fillPrice.set(quote.close.toFixed(2));
-        this.priceHint.set(`EOD close · ${dateLabel(quote.date).replace(/ \d{4}$/, '')}. Edit to your fill`);
+        this.priceHint.set(`Close (EOD) · ${dateLabel(quote.date).replace(/ \d{4}$/, '')}. Edit to your fill`);
       } else {
         this.priceHint.set('No EOD price for this contract. Enter your fill');
       }

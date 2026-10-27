@@ -1,11 +1,18 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
-import { EMPTY, Subject, catchError, finalize, switchMap, takeUntil, tap } from 'rxjs';
+import { EMPTY, Subject, catchError, combineLatest, finalize, switchMap, takeUntil, tap } from 'rxjs';
 import { GreeksCalculatorService, GreeksInput } from './greeks-calculator.service';
 import { GreeksSymbolDetails } from './greeks.model';
 import { ToastService } from '../../../core/services/toast.service';
 import { DefaultStock } from '../../../shared/services/constantFile';
+import { daysToExpiry, expiryNote } from '../../../shared/utils/expiry';
+import { CLOSE_EOD_LABEL } from '../../../shared/utils/price-labels';
+import { formatDisplayDate } from '../../../shared/utils/date-format';
+import { OptionsChainService } from '../options-chain/options-chain.service';
+import { solveIvInContext } from '../../../shared/pricing/contract-iv';
+import { BlackScholesGreeks, InstrumentKind, blackScholesGreeks, marketParams } from '../../../shared/pricing/option-pricing';
+import { PricingContext, PricingContextService, describePricingFailure } from '../../../shared/pricing/pricing-context.service';
 import { ActivatedRoute } from '@angular/router';
 import { LiveDataAccessComponent } from '../live-data/live-data-access.component';
 import { LiveDataAccessService } from '../live-data/live-data-access.service';
@@ -22,7 +29,17 @@ export class GreeksComponent implements OnInit, OnDestroy {
     form: ReturnType<FormBuilder['group']>;
 
     strikeOptions: number[] = [];
-    results: Partial<ReturnType<GreeksCalculatorService['calculateAll']> & { markerLeft: number; moneynessText: string }> = {};
+    /**
+     * Model prices and Greeks. In EOD mode call and put are evaluated at their own implied volatility (`callIvPct`, `putIvPct`),
+     * so gamma and vega exist per side (`gammaPut`, `vegaPut`).
+     */
+    results: Partial<BlackScholesGreeks & { gammaPut: number; vegaPut: number; callIvPct: number; putIvPct: number; markerLeft: number; moneynessText: string }> = {};
+    /** Why a side has no implied volatility (EOD mode), in words. */
+    ivSideNotes: { call: string; put: string } = { call: '', put: '' };
+    /** EOD mode: instrument type, underlying, rate and dividend resolved for the selected expiry. */
+    pricingContext: PricingContext | null = null;
+    /** Custom mode: which approved market parameters (index or stock) the rate and dividend start from. */
+    customKind: InstrumentKind = 'index';
     inputError = '';
     ivResultText = '';
     ivResultVisible = false;
@@ -33,10 +50,47 @@ export class GreeksComponent implements OnInit, OnDestroy {
     symbolDetailsLoading = false;
     suggestionsOpen = false;
     highlightedSymbolIndex = -1;
-    historicalVolatility20: number | null = null;
     symbolDetails: GreeksSymbolDetails | null = null;
+    /** Expiry date the day count was derived from; empty once the days are typed by hand. */
+    expiryDate = '';
+    /** Where the Annual volatility field (Custom mode) came from: a solved implied volatility, or typing. */
+    volSource: 'implied' | 'manual' = 'manual';
+    get volSourceNote(): string {
+        return this.volSource === 'implied' ? 'Implied volatility solved from the market price above' : '';
+    }
+    get underlyingNote(): string {
+        if (this.form.value.sourceMode !== 'eod') return '';
+        const context = this.pricingContext;
+        if (!context) return this.closeStatus === 'loading' ? 'Loading…' : '';
+        if (!context.ok) return describePricingFailure(context.reason);
+        return context.kind === 'index'
+            ? 'Spot index value'
+            : `Futures close, ${formatDisplayDate(this.closeExpiry)} expiry${context.futures?.tradeDate ? ` (${formatDisplayDate(context.futures.tradeDate)})` : ''}`;
+    }
+    get ratesNote(): string {
+        if (this.form.value.sourceMode === 'custom') return `Approved ${this.customKind} parameters; editable`;
+        return this.pricingContext?.ok ? `Approved ${this.pricingContext.kind} parameters` : '';
+    }
+    fmtIv(value: number | undefined): string { return value === undefined ? '–' : `${value.toFixed(2)}%`; }
+    readonly closeLabel = CLOSE_EOD_LABEL;
+    /** EOD close per strike for the expiry above (the chain's c_ltp / p_ltp fields carry the EOD close). */
+    private closeQuotes: Map<number, { call: number; put: number }> | null = null;
+    private closeExpiry = '';
+    closeStatus: 'idle' | 'loading' | 'ready' | 'error' = 'idle';
+    get closePriceHint(): string {
+        const where = this.closeExpiry ? ` · ${formatDisplayDate(this.closeExpiry)} expiry` : '';
+        if (this.closeStatus === 'loading') return `Loading ${this.closeLabel}…`;
+        if (this.closeStatus === 'error') return `${this.closeLabel} is unavailable. Switch to Custom to enter a price.`;
+        if (this.closeStatus === 'ready' && this.closePrice() === null) return `No ${this.closeLabel} for this strike`;
+        return `${this.closeLabel} · ${this.form.get('ivType')!.value === 'put' ? 'put' : 'call'}${where}, BhavCopy`;
+    }
+    get expiryDisplayNote(): string { return expiryNote(this.expiryDate); }
     private symbolsRequested = false;
+    private readonly chains = inject(OptionsChainService);
+    private readonly pricing = inject(PricingContextService);
     private readonly symbolSelection$ = new Subject<string>();
+    /** Request for the EOD close of every strike of one expiry; null cancels and clears. */
+    private readonly closeRequest$ = new Subject<{ symbol: string; expiry: string } | null>();
     private readonly destroy$ = new Subject<void>();
     private lastSolvedIv: number | null = null;
 
@@ -50,10 +104,10 @@ export class GreeksComponent implements OnInit, OnDestroy {
             spot: [24800, [Validators.required, Validators.min(0.0001)]],
             strikeKey: ['24800'],
             strike: [24800, [Validators.required, Validators.min(0.0001)]],
-            rate: [10, Validators.required],
+            rate: [marketParams('index').riskFreeRate * 100, Validators.required],
             vol: [12.5, Validators.required],
             expiry: [7, Validators.required],
-            dividend: [10, Validators.required],
+            dividend: [marketParams('index').dividendYield * 100, Validators.required],
             ivType: ['call'],
             ivPrice: [null],
             ivSource: ['auto']
@@ -62,9 +116,11 @@ export class GreeksComponent implements OnInit, OnDestroy {
 
     ngOnInit() {
         if (this.liveAccess.requestedLive(this.route.snapshot)) this.setMode('live');
+        // Subscribe before loading: the cached symbol list emits synchronously and would otherwise be lost.
+        this.setupSymbolDetailsLoading();
+        this.setupCloseLoading();
         // Live Data is a separate view: symbol/EOD APIs load only when EOD is opened.
         if (this.form.value.sourceMode === 'eod') this.loadSymbols();
-        this.setupSymbolDetailsLoading();
         // subscribe individually to replicate prototype 'input' behaviour and sync logic
         const spotCtrl = this.form.get('spot')!;
         const strikeCtrl = this.form.get('strike')!;
@@ -102,6 +158,11 @@ export class GreeksComponent implements OnInit, OnDestroy {
         });
 
         [rateCtrl, volCtrl, expiryCtrl, dividendCtrl].forEach(ctrl => ctrl.valueChanges.subscribe(() => manualChange()));
+        // The observed price belongs to the option side: switching Call/Put must re-read it.
+        this.form.get('ivType')!.valueChanges.subscribe(() => this.autofillIvPrice());
+        volCtrl.valueChanges.subscribe(() => { this.volSource = 'manual'; });
+        // A hand-edited day count no longer belongs to the loaded expiry date.
+        expiryCtrl.valueChanges.subscribe(() => { this.expiryDate = ''; });
     }
 
     ngOnDestroy(): void {
@@ -135,6 +196,10 @@ export class GreeksComponent implements OnInit, OnDestroy {
         this.badgeText = '';
         if (mode === 'custom') {
             this.form.patchValue({ presetKey: 'custom' });
+            this.expiryDate = '';
+            this.closeRequest$.next(null);
+            this.pricingContext = null;
+            this.selectCustomKind(this.customKind);
             // enable inputs for manual mode
             ['spot', 'strike', 'rate', 'vol', 'expiry', 'dividend', 'ivType'].forEach((c: string) => this.form.get(c)?.enable());
         } else if (mode === 'eod') {
@@ -147,27 +212,114 @@ export class GreeksComponent implements OnInit, OnDestroy {
             // Live Data is a separate view; cancel any in-flight EOD request.
             ['spot', 'strike', 'rate', 'vol', 'expiry', 'dividend', 'ivType'].forEach((c: string) => this.form.get(c)?.disable());
             if (this.symbolDetailsLoading) this.symbolSelection$.next('');
+            this.closeRequest$.next(null);
         }
+        if (mode === 'eod' && this.symbolDetails && this.closeStatus !== 'ready' && this.closeStatus !== 'loading') this.loadClosePrices();
     }
 
+    /**
+     * Fills the observed market price from the EOD close of the selected strike and side. A model (Black-Scholes)
+     * price is never written here: it is not an observation. Without a close the field is left empty, not guessed.
+     */
     autofillIvPrice() {
-        const mode = this.form.value.sourceMode;
-        const ivSrc = this.form.value.ivSource;
-        if (mode === 'custom' || ivSrc !== 'auto') return;
-        const S = Number(this.form.value.spot);
-        const K = Number(this.form.value.strike);
-        const r = Number(this.form.value.rate) / 100;
-        const q = Number(this.form.value.dividend) / 100;
-        const sigma = Number(this.form.value.vol) / 100;
+        if (this.form.value.sourceMode !== 'eod' || this.form.value.ivSource !== 'auto') return;
+        if (this.closeStatus === 'loading' || this.closeStatus === 'error') return;
+        this.form.patchValue({ ivPrice: this.closePrice() }, { emitEvent: false });
+    }
+
+    private closePrice(): number | null {
+        // Read the controls, not form.value: this runs inside a control's valueChanges, before the parent group updates.
+        const quote = this.closeQuotes?.get(Number(this.form.get('strike')!.value));
+        const price = quote ? (this.form.get('ivType')!.value === 'put' ? quote.put : quote.call) : null;
+        return price !== null && Number.isFinite(price) && price > 0 ? price : null;
+    }
+
+    private loadClosePrices(): void {
+        const symbol = this.form.value.symbol;
+        const request = this.form.value.sourceMode === 'eod' && symbol && this.expiryDate ? { symbol, expiry: this.expiryDate } : null;
+        this.closeRequest$.next(request);
+    }
+
+    private setupCloseLoading(): void {
+        this.closeRequest$.pipe(
+            takeUntil(this.destroy$),
+            tap(request => {
+                this.closeQuotes = null;
+                this.pricingContext = null;
+                this.closeExpiry = request?.expiry ?? '';
+                this.closeStatus = request ? 'loading' : 'idle';
+                if (this.form.value.ivSource === 'auto') this.form.patchValue({ ivPrice: null }, { emitEvent: false });
+                this.changeDetector.markForCheck();
+            }),
+            switchMap(request => request ? combineLatest({
+                view: this.chains.getOptionChain(request),
+                context: this.pricing.resolve(request.symbol, request.expiry, this.symbolDetails?.underlying),
+            }).pipe(
+                catchError(() => {
+                    this.closeStatus = 'error';
+                    this.changeDetector.markForCheck();
+                    return EMPTY;
+                })
+            ) : EMPTY)
+        ).subscribe(({ view, context }) => {
+            this.closeQuotes = new Map(view.rows.map(row => [row.strike, { call: row.call.ltp, put: row.put.ltp }] as const));
+            this.pricingContext = context;
+            this.closeStatus = 'ready';
+            // Underlying, rate and dividend come from the instrument type; nothing is carried over from another symbol.
+            if (context.ok) this.form.patchValue({ spot: context.underlying, rate: context.riskFreeRate * 100, dividend: context.dividendYield * 100 }, { emitEvent: false });
+            this.calculate();
+            this.autofillIvPrice();
+            this.changeDetector.markForCheck();
+        });
+    }
+
+    /** EOD mode: call and put are each evaluated at the IV solved from their own Close (EOD). */
+    private calculateEod(): void {
+        this.ivSideNotes = { call: '', put: '' };
+        const context = this.pricingContext;
+        if (!context?.ok) {
+            this.results = {};
+            this.inputError = context ? describePricingFailure(context.reason) : '';
+            return;
+        }
+        const strike = Number(this.form.value.strike);
         const days = Number(this.form.value.expiry);
-        const T = Math.max(days, 0.0001) / 365;
-        if ([S, K, r, q, sigma].some(v => isNaN(v)) || S <= 0 || K <= 0 || sigma <= 0) return;
-        const type = this.form.value.ivType;
-        const price = this.svc.bsPrice(type, S, K, r, q, T, sigma);
-        this.form.patchValue({ ivPrice: parseFloat(price.toFixed(2)) });
+        if (!(strike > 0)) {
+            this.results = {};
+            this.inputError = 'Strike price must be greater than 0.';
+            return;
+        }
+        this.inputError = '';
+        const quote = this.closeQuotes?.get(strike);
+        const solve = (side: 'call' | 'put') => {
+            const solved = solveIvInContext(context, { side, strike, days, close: quote ? (side === 'call' ? quote.call : quote.put) : null });
+            this.ivSideNotes[side] = solved.ok ? '' : describePricingFailure(solved.reason);
+            return solved.ok ? { ivPct: solved.ivPct, greeks: blackScholesGreeks(context.underlying, strike, context.riskFreeRate, context.dividendYield, solved.ivPct / 100, days / 365) } : null;
+        };
+        const call = solve('call');
+        const put = solve('put');
+        const any = call?.greeks ?? put?.greeks;
+        const probability = any ? this.svc.normCdf(any.d2) * 100 : undefined;
+        const ratio = context.underlying / strike;
+        this.results = {
+            callPrice: call?.greeks.callPrice, putPrice: put?.greeks.putPrice,
+            deltaCall: call?.greeks.deltaCall, deltaPut: put?.greeks.deltaPut,
+            gamma: call?.greeks.gamma, gammaPut: put?.greeks.gamma,
+            thetaCall: call?.greeks.thetaCall, thetaPut: put?.greeks.thetaPut,
+            vega: call?.greeks.vega, vegaPut: put?.greeks.vega,
+            rhoCall: call?.greeks.rhoCall, rhoPut: put?.greeks.rhoPut,
+            nd1: any?.nd1, d1: any?.d1, d2: any?.d2,
+            callIvPct: call?.ivPct, putIvPct: put?.ivPct,
+            ...(probability === undefined ? {} : {
+                markerLeft: Math.max(4, Math.min(96, probability)),
+                moneynessText: this.svc.fmt(probability, 1) + '% ITM probability' + ((ratio <= 1.003 && ratio >= 0.997) ? ' (ATM)' : ''),
+            }),
+        };
     }
 
     calculate() {
+        if (this.form.value.sourceMode === 'eod') { this.calculateEod(); return; }
+        this.ivSideNotes = { call: '', put: '' };
         const inVal: GreeksInput = {
             spot: Number(this.form.value.spot),
             strike: Number(this.form.value.strike),
@@ -199,25 +351,29 @@ export class GreeksComponent implements OnInit, OnDestroy {
         const r = Number(this.form.value.rate) / 100;
         const q = Number(this.form.value.dividend) / 100;
         const days = Number(this.form.value.expiry);
-        const T = Math.max(days, 0.0001) / 365;
         const type = this.form.value.ivType;
         const marketPrice = Number(this.form.value.ivPrice);
         if (isNaN(marketPrice) || marketPrice <= 0) { this.ivResultText = 'Enter a market price first'; this.ivResultVisible = true; return; }
-        const intrinsic = type === 'call' ? Math.max(S - K, 0) : Math.max(K - S, 0);
-        if (marketPrice < intrinsic * Math.exp(-r * T)) {
-            this.ivResultText = 'Price is below intrinsic value. Check your inputs.'; this.ivResultVisible = true; return;
-        }
-        const iv = this.svc.impliedVolatility(type, marketPrice, S, K, r, q, T);
-        this.ivResultText = 'Implied volatility ≈ ' + (iv * 100).toFixed(2) + '%';
+        const solved = solveIvInContext({ underlying: S, riskFreeRate: r, dividendYield: q }, { side: type, strike: K, days, close: marketPrice });
+        if (!solved.ok) { this.ivResultText = describePricingFailure(solved.reason); this.ivResultVisible = true; this.lastSolvedIv = null; return; }
+        this.ivResultText = 'Implied volatility ≈ ' + solved.ivPct.toFixed(2) + '%';
         this.ivResultVisible = true;
-        this.lastSolvedIv = iv * 100;
+        this.lastSolvedIv = solved.ivPct;
     }
 
     applyIv() {
         if (!this.lastSolvedIv) return;
         this.form.patchValue({ vol: this.lastSolvedIv });
+        this.volSource = 'implied';
         this.form.patchValue({ presetKey: 'custom' });
         this.ivResultVisible = false;
+    }
+
+    selectCustomKind(kind: InstrumentKind): void {
+        this.customKind = kind;
+        const params = marketParams(kind);
+        this.form.patchValue({ rate: params.riskFreeRate * 100, dividend: params.dividendYield * 100 }, { emitEvent: false });
+        this.calculate();
     }
 
     onSourceTabClick(mode: string) { this.setMode(mode); }
@@ -247,7 +403,8 @@ export class GreeksComponent implements OnInit, OnDestroy {
         this.highlightedSymbolIndex = -1;
         this.symbolDetailsLoading = false;
         this.symbolDetails = null;
-        this.historicalVolatility20 = null;
+        this.expiryDate = '';
+        this.closeRequest$.next(null);
         this.strikeOptions = [];
         this.results = {};
         this.inputError = '';
@@ -307,7 +464,8 @@ export class GreeksComponent implements OnInit, OnDestroy {
                 this.symbolDetailsLoading = Boolean(symbol);
                 this.inputError = '';
                 this.symbolDetails = null;
-                this.historicalVolatility20 = null;
+                this.expiryDate = '';
+                this.closeRequest$.next(null);
             }),
             switchMap(symbol => symbol ? this.svc.getSymbolDetails({ symbol }).pipe(
                 tap(details => {
@@ -325,41 +483,36 @@ export class GreeksComponent implements OnInit, OnDestroy {
 
     private applySymbolDetails(details: GreeksSymbolDetails): void {
         this.symbolDetails = details;
-        this.historicalVolatility20 = details.hv20 ?? null;
         const selectedStrike = details.strike.includes(details.atm_strike) ? details.atm_strike : Number(this.form.value.strike);
         const expiryDays = this.resolveExpiryDays(details);
+        this.expiryDate = this.firstExpiryDate(details);
         this.strikeOptions = details.strike;
         this.form.patchValue({
             // Stay on the Live tab if it is open (e.g. reopened after sign-in).
             sourceMode: this.form.value.sourceMode === 'live' ? 'live' : 'eod',
-            spot: details.underlying,
+            spot: 0, // set from the pricing context (spot index value, or the same-expiry futures close for a stock)
             strike: details.strike.includes(selectedStrike) ? selectedStrike : details.atm_strike,
             expiry: expiryDays,
-            vol: details.hv20 ?? this.form.value.vol,
             strikeKey: String(details.strike.includes(selectedStrike) ? selectedStrike : details.atm_strike),
-            ivPrice: this.form.value.ivType === 'put' ? details.market_price?.PE ?? null : details.market_price?.CE ?? null,
+            ivPrice: null, // filled from the EOD close once the chain for this expiry has loaded
         }, { emitEvent: false });
         this.badgeText = `${details.symbol} · ${details.trade_date} market metadata`;
         this.calculate();
+        this.loadClosePrices();
     }
 
-    private daysBetween(from: string, to: string): number {
-        const fromTime = this.parseApiDate(from);
-        const toTime = this.parseApiDate(to);
-        return Math.max(1, Math.round((toTime - fromTime) / 86400000));
-    }
-
+    /**
+     * Calendar days from today (IST) to the first listed expiry date (0 on expiry day). The backend's own day counts are not used.
+     */
     private resolveExpiryDays(details: GreeksSymbolDetails): number {
-        if (typeof details.expiry_days === 'number' && Number.isFinite(details.expiry_days)) return Math.max(1, details.expiry_days);
-        if (typeof details.expiry === 'number' && Number.isFinite(details.expiry)) return Math.max(1, details.expiry);
-        const expiry = Array.isArray(details.expiry_date) ? details.expiry_date[0] : details.expiry_date;
-        if (typeof expiry === 'number' && Number.isFinite(expiry)) return Math.max(1, expiry);
-        return typeof expiry === 'string' ? this.daysBetween(details.trade_date, expiry) : 1;
+        const expiry = this.firstExpiryDate(details);
+        const days = expiry ? daysToExpiry(expiry) : Number.NaN;
+        return Number.isFinite(days) ? days : 0;
     }
 
-    private parseApiDate(value: string): number {
-        const [year, month, day] = value.split('-').map(Number);
-        return Date.UTC(year, month - 1, day);
+    private firstExpiryDate(details: GreeksSymbolDetails): string {
+        const expiry = Array.isArray(details.expiry_date) ? details.expiry_date[0] : details.expiry_date;
+        return typeof expiry === 'string' && Number.isFinite(daysToExpiry(expiry)) ? expiry : '';
     }
     onStrikeSelectChange(val: string) { if (val === 'custom') return; this.form.patchValue({ strike: Number(val) }); }
     onIvSrcClick(src: string) { this.form.patchValue({ ivSource: src }); this.autofillIvPrice(); }

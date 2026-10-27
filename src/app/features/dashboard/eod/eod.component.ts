@@ -28,6 +28,7 @@ import {
 } from '../../../shared/components/chart-tooltip/chart-tooltip.component';
 import { ToastService } from '../../../core/services/toast.service';
 import { DefaultStock } from '../../../shared/services/constantFile';
+import { CLOSE_EOD_LABEL } from '../../../shared/utils/price-labels';
 import { MAX_RANGE_MESSAGE, clearedMessage, exceedsOneYear, fromConflict, fromPickerBounds, isIsoDate, localTodayIso, tillConflict, tillPickerBounds } from '../../../shared/utils/date-range';
 import { EMPTY, Subject, of } from 'rxjs';
 import { catchError, finalize, map, switchMap, takeUntil, tap } from 'rxjs/operators';
@@ -100,7 +101,7 @@ export class EodComponent implements OnInit, OnDestroy {
     { key: 'low', label: 'Low', type: 'number', align: 'right' },
     {
       key: 'close',
-      label: 'Close',
+      label: CLOSE_EOD_LABEL,
       type: 'change',
       align: 'right',
       value: (row) => row.close - row.open,
@@ -381,7 +382,7 @@ export class EodComponent implements OnInit, OnDestroy {
 
   chartTooltipRows(): ChartTooltipRow[] {
     const row = this.chartTooltipRow;
-    return row ? [{ label: 'Close', value: this.formatPrice(row.close), tone: 'neutral' }] : [];
+    return row ? [{ label: CLOSE_EOD_LABEL, value: this.formatPrice(row.close), tone: 'neutral' }] : [];
   }
   get chartTooltipRow(): EodChartPoint | undefined {
     if (!this.chart || !this.chartTooltip) return undefined;

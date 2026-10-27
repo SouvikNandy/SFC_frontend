@@ -279,7 +279,7 @@ describe('MultiLegEodComponent', () => {
     await click('.legchips button', '22600 CE · 29 Oct');
     expect(component.activeLegIndex()).toBe(0);
     const heads = Array.from(host.querySelectorAll('table th')).map(th => th.textContent?.trim());
-    expect(heads).toEqual(['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'OI']);
+    expect(heads).toEqual(['Date', 'Open', 'High', 'Low', 'Close (EOD)', 'Volume', 'OI']);
     const cells = Array.from(host.querySelectorAll('tbody tr:first-child td')).map(td => td.textContent?.trim());
     expect(cells[0]).toBe(isoDaysAgo(1));
     expect(cells[1]).toBe('104.00');

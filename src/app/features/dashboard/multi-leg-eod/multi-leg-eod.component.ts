@@ -7,6 +7,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { CLOSE_EOD_LABEL } from '../../../shared/utils/price-labels';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Observable, Subject, catchError, finalize, forkJoin, map, of, shareReplay, switchMap, tap } from 'rxjs';
 import { ToastService } from '../../../core/services/toast.service';
@@ -180,7 +181,7 @@ export class MultiLegEodComponent implements OnInit {
     { key: 'high', label: 'High', align: 'right', formatter: (_v, row) => this.price(row.bar?.high) },
     { key: 'low', label: 'Low', align: 'right', formatter: (_v, row) => this.price(row.bar?.low) },
     {
-      key: 'close', label: 'Close', type: 'change', align: 'right',
+      key: 'close', label: CLOSE_EOD_LABEL, type: 'change', align: 'right',
       value: row => row.change ?? 0,
       formatter: (_v, row) => this.price(row.bar?.close),
     },

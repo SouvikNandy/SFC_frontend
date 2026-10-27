@@ -35,8 +35,8 @@ describe('TickerService', () => {
     request.flush(PAYLOAD);
 
     expect(items).toEqual([
-      { symbol: 'NIFTY', price: '22600.50', change: '+12.25', positive: true, priceValue: 22600.5, changeValue: 12.25 },
-      { symbol: 'BANKNIFTY', price: '48000.00', change: '-30.00', positive: false, priceValue: 48000, changeValue: -30 },
+      { symbol: 'NIFTY', price: '22600.50', change: '+12.25', positive: true, direction: 'up', priceValue: 22600.5, changeValue: 12.25 },
+      { symbol: 'BANKNIFTY', price: '48000.00', change: '-30.00', positive: false, direction: 'down', priceValue: 48000, changeValue: -30 },
     ]);
   });
 
@@ -50,6 +50,39 @@ describe('TickerService', () => {
     http.expectNone(URL);
     expect(results.length).toBe(3);
     expect(results.every((list) => list.length === 2)).toBe(true);
+  });
+
+  it('derives direction from the numeric change, ignoring a contradictory API positive flag', () => {
+    let items: TickerItem[] = [];
+    service.getTicker().subscribe((list) => (items = list));
+    http.expectOne(URL).flush({
+      success: true,
+      data: [
+        { symbol: 'A', price: 100, change: -5.5, positive: true }, // flag says up, change says down
+        { symbol: 'B', price: 100, change: 5.5, positive: false }, // flag says down, change says up
+        { symbol: 'C', price: 100, change: 0, positive: true },
+      ],
+    });
+    expect(items.map((item) => [item.direction, item.positive, item.change])).toEqual([
+      ['down', false, '-5.50'],
+      ['up', true, '+5.50'],
+      ['flat', false, '0.00'],
+    ]);
+  });
+
+  it('carries the API latest_date through as the session of the figures, and omits it when absent', () => {
+    let items: TickerItem[] = [];
+    service.getTicker().subscribe((list) => (items = list));
+    http.expectOne(URL).flush({
+      success: true,
+      data: [
+        { symbol: 'NIFTY', price: 22753.2, change: 153.2, positive: true, latest_date: '2026-10-26' },
+        { symbol: 'BANKNIFTY', price: 54366.7, change: 79.35, positive: true },
+      ],
+    });
+    expect(items[0].latestDate).toBe('2026-10-26');
+    expect(items[1].latestDate).toBeUndefined();
+    expect(items[0]).toMatchObject({ price: '22753.20', change: '+153.20', direction: 'up' });
   });
 
   it('emits an empty list on failure instead of erroring', () => {

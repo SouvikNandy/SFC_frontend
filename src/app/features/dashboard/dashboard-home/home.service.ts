@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable, map, of } from 'rxjs';
-import { TickerItem, TickerService } from '../../../shared/services/ticker.service';
+import { TickerItem, TickerService, changeDirection } from '../../../shared/services/ticker.service';
+import { formatDisplayDate } from '../../../shared/utils/date-format';
 import { MarketCard, QuickLink } from './models/home.model';
 
 /** The design shows four market summary cards. */
@@ -20,11 +21,10 @@ export class HomeService {
     getQuickLinks(): Observable<QuickLink[]> {
         const links: QuickLink[] = [
             { key: 'portfolio', title: 'Portfolio Analysis', desc: 'Paper positions, P&L and performance on EOD prices' },
-            { key: 'chain', title: 'Options Chain', desc: 'Full NIFTY / BANKNIFTY chain with OI & IV' },
+            { key: 'chain', title: 'Options Chain', desc: 'Full NIFTY / BANKNIFTY chain with OI and estimated IV' },
             { key: 'greeks', title: 'Greeks Calculator', desc: 'Delta, Gamma, Theta & Vega for any contract' },
             { key: 'payoff', title: 'Payoff Simulator', desc: 'Visualise P&L at expiry for any strategy' },
-            { key: 'eod', title: 'F&O EOD Data', desc: '5-year searchable historical database' },
-            { key: 'alerts', title: 'Price Alerts', desc: 'Get notified when a target price is hit' }
+            { key: 'eod', title: 'F&O EOD Data', desc: '5-year searchable historical database' }
         ];
 
         return of(links);
@@ -34,14 +34,17 @@ export class HomeService {
     private toCard(item: TickerItem): MarketCard {
         const { priceValue: price, changeValue: change } = item;
         const previous = price - change;
-        const sign = change > 0 ? '+' : change < 0 ? '-' : '';
+        const direction = changeDirection(change);
+        const sign = direction === 'up' ? '+' : direction === 'down' ? '-' : '';
         const points = Math.abs(change).toFixed(2);
         const percent = previous > 0 ? ` (${sign}${(Math.abs(change) / previous * 100).toFixed(2)}%)` : '';
         return {
             symbol: item.symbol,
             value: Number.isFinite(price) ? price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : item.price,
             change: Number.isFinite(change) ? `${sign}${points}${percent}` : item.change,
-            up: change >= 0,
+            up: direction === 'up',
+            direction,
+            asOf: item.latestDate ? formatDisplayDate(item.latestDate) : '',
         };
     }
 }

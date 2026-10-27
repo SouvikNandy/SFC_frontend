@@ -1,8 +1,8 @@
 <section class="sfc-page-pad greeks-page">
   <div class="head">
     <p class="sub">
-      Price a call and put and see how each Greek reacts, using live inputs or a prefilled index /
-      stock.
+      Price a call and put and see how each Greek reacts, using end-of-day data for a listed contract or
+      your own custom inputs.
     </p>
   </div>
 
@@ -125,9 +125,10 @@
         <label for="spotSelect">Price of the underlying</label>
         <div class="row2">
           <div class="unit-wrap">
-            <input type="number" formControlName="spot" /><span class="unit">₹</span>
+            <input type="number" formControlName="spot" [readOnly]="form.value.sourceMode === 'eod'" /><span class="unit">₹</span>
           </div>
         </div>
+        <span class="expiry-note" *ngIf="underlyingNote">{{ underlyingNote }}</span>
       </div>
 
       <div class="field-block strike-pair">
@@ -150,28 +151,47 @@
         </div>
       </div>
 
-      <div class="field-block">
-        <label for="rate">Risk-free interest rate</label>
+      <div class="field-block" *ngIf="form.value.sourceMode === 'custom'">
+        <label>Instrument</label>
         <div class="unit-wrap">
-          <input type="number" formControlName="rate" /><span class="unit">%</span>
+          <select (change)="selectCustomKind($any($event.target).value)">
+            <option value="index" [selected]="customKind === 'index'">Index</option>
+            <option value="stock" [selected]="customKind === 'stock'">Stock</option>
+          </select>
         </div>
       </div>
       <div class="field-block">
+        <label for="rate">Risk-free interest rate</label>
+        <div class="unit-wrap">
+          <input type="number" formControlName="rate" [readOnly]="form.value.sourceMode === 'eod'" /><span class="unit">%</span>
+        </div>
+        <span class="expiry-note" *ngIf="ratesNote">{{ ratesNote }}</span>
+      </div>
+      <div class="field-block" *ngIf="form.value.sourceMode === 'eod'">
+        <label>Implied volatility</label>
+        <div class="iv-pair" id="ivPair">Call {{ fmtIv(results.callIvPct) }} · Put {{ fmtIv(results.putIvPct) }}</div>
+        <span class="expiry-note">Solved from each contract's own {{ closeLabel }}</span>
+        <span class="expiry-note" *ngIf="ivSideNotes.call">Call: {{ ivSideNotes.call }}</span>
+        <span class="expiry-note" *ngIf="ivSideNotes.put">Put: {{ ivSideNotes.put }}</span>
+      </div>
+      <div class="field-block" *ngIf="form.value.sourceMode !== 'eod'">
         <label for="vol">Annual volatility</label>
         <div class="unit-wrap">
           <input type="number" formControlName="vol" /><span class="unit">%</span>
         </div>
+        <span class="expiry-note" *ngIf="volSourceNote">{{ volSourceNote }}</span>
       </div>
       <div class="field-block">
         <label for="expiry">Time to expiration</label>
         <div class="unit-wrap">
           <input type="number" formControlName="expiry" /><span class="unit">days</span>
         </div>
+        <span class="expiry-note" *ngIf="expiryDate">{{ expiryDisplayNote }}</span>
       </div>
       <div class="field-block">
         <label for="dividend">Dividend yield</label>
         <div class="unit-wrap">
-          <input type="number" formControlName="dividend" /><span class="unit">%</span>
+          <input type="number" formControlName="dividend" [readOnly]="form.value.sourceMode === 'eod'" /><span class="unit">%</span>
         </div>
       </div>
     </div>
@@ -226,7 +246,7 @@
           <span class="iv-source-hint">{{
             form.value.ivSource === 'auto'
               ? form.value.sourceMode === 'eod'
-                ? 'Auto-filled from BhavCopy EOD'
+                ? closePriceHint
                 : 'Auto-fill uses EOD data, so enter the price manually'
               : 'Custom price (auto-fill paused)'
           }}</span>
@@ -235,7 +255,7 @@
       </div>
       <div class="iv-result" *ngIf="ivResultVisible">
         <span id="ivResultText">{{ ivResultText }}</span>
-        <button class="link-btn" type="button" (click)="applyIv()">Use this volatility</button>
+        <button class="link-btn" type="button" *ngIf="form.value.sourceMode !== 'eod'" (click)="applyIv()">Use this volatility</button>
       </div>
     </div>
 
@@ -266,19 +286,19 @@
     <div class="results-head">
       <div>
         <p class="panel-title">Results</p>
-        <p class="panel-hint">Theoretical price and Greeks, calculated with Black-Scholes.</p>
+        <p class="panel-hint">Model prices and Greeks calculated with Black-Scholes from the inputs above. These are not observed market prices.</p>
       </div>
     </div>
 
     <div class="price-cards">
       <div class="price-card call">
-        <div class="tag">Call premium</div>
+        <div class="tag">Call price (model)</div>
         <div class="val" id="callPrice">
           {{ results.callPrice ? '₹' + svc.fmt(results.callPrice, 2) : '₹0.00' }}
         </div>
       </div>
       <div class="price-card put">
-        <div class="tag">Put premium</div>
+        <div class="tag">Put price (model)</div>
         <div class="val" id="putPrice">
           {{ results.putPrice ? '₹' + svc.fmt(results.putPrice, 2) : '₹0.00' }}
         </div>
@@ -308,7 +328,7 @@
         <tr>
           <td class="label">Gamma<span class="greek-desc">Rate of change of delta</span></td>
           <td class="num" id="gammaCall">{{ results.gamma ? svc.fmt(results.gamma) : '–' }}</td>
-          <td class="num" id="gammaPut">{{ results.gamma ? svc.fmt(results.gamma) : '–' }}</td>
+          <td class="num" id="gammaPut">{{ (results.gammaPut ?? (form.value.sourceMode === 'eod' ? undefined : results.gamma)) ? svc.fmt(results.gammaPut ?? results.gamma!) : '–' }}</td>
         </tr>
         <tr>
           <td class="label">Theta<span class="greek-desc">Price decay per calendar day</span></td>
@@ -324,7 +344,7 @@
             Vega<span class="greek-desc">Price change per 1pt move in volatility</span>
           </td>
           <td class="num" id="vegaCall">{{ results.vega ? svc.fmt(results.vega) : '–' }}</td>
-          <td class="num" id="vegaPut">{{ results.vega ? svc.fmt(results.vega) : '–' }}</td>
+          <td class="num" id="vegaPut">{{ (results.vegaPut ?? (form.value.sourceMode === 'eod' ? undefined : results.vega)) ? svc.fmt(results.vegaPut ?? results.vega!) : '–' }}</td>
         </tr>
         <tr>
           <td class="label">

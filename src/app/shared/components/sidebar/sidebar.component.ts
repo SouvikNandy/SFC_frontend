@@ -10,7 +10,6 @@ const NAV_GROUPS = [
     label: 'Tools',
     keys: ['greeks', 'probability', 'historical-volatility', 'implied-volatility', 'payoff'],
   },
-  { label: 'More', keys: ['blog-reports', 'price-alerts'] },
 ];
 
 const NAV_LABELS: Record<string, string> = {
@@ -24,8 +23,6 @@ const NAV_LABELS: Record<string, string> = {
   'historical-volatility': 'Historical Volatility',
   'implied-volatility': 'Implied Volatility',
   payoff: 'Payoff Simulator',
-  'blog-reports': 'Blog & Reports',
-  'price-alerts': 'Price Alerts',
 };
 
 @Component({
@@ -47,7 +44,7 @@ const NAV_LABELS: Record<string, string> = {
               <div class="sfc-nav__heading">{{ group.label }}</div>
               <div *ngFor="let key of group.keys">
                 <a
-                  [routerLink]="['/dashboard', key]"
+                  [routerLink]="key === 'home' ? ['/'] : ['/dashboard', key]"
                   routerLinkActive="active"
                   [routerLinkActiveOptions]="{ exact: true }"
                   (click)="sidebar.close()"
@@ -111,16 +108,6 @@ const NAV_LABELS: Record<string, string> = {
                       @case ('payoff') {
                         <polyline points="3,17 9,11 13,15 21,6"></polyline>
                         <polyline points="15,6 21,6 21,12"></polyline>
-                      }
-                      @case ('blog-reports') {
-                        <rect x="4" y="3" width="16" height="18" rx="1.5"></rect>
-                        <line x1="7.5" y1="8" x2="16.5" y2="8"></line>
-                        <line x1="7.5" y1="12" x2="16.5" y2="12"></line>
-                        <line x1="7.5" y1="16" x2="13" y2="16"></line>
-                      }
-                      @case ('price-alerts') {
-                        <path d="M6 10a6 6 0 0 1 12 0c0 4.5 1.5 6 1.5 6h-15S6 14.5 6 10z"></path>
-                        <path d="M10.5 19a1.5 1.5 0 0 0 3 0"></path>
                       }
                     }
                   </svg>

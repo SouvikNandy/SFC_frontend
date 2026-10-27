@@ -174,7 +174,7 @@
                 <span class="ctl-val">±{{ rangePct() }}%</span>
             </div>
             <div class="ctl-row">
-                <label for="ivSlider">Implied vol</label>
+                <label for="ivSlider">Vol multiplier</label>
                 <input id="ivSlider" type="range" min="50" max="300" step="5" [value]="ivMultiplier()"
                     (input)="onIvInput($any($event.target).value)">
                 <span class="ctl-val">{{ ivLabel() }}</span>
@@ -204,8 +204,16 @@
                 (click)="selectMode('live')">Live data <em>Premium</em></button>
         </div>
         @if (mode() === 'custom') {
-        <div class="mode-note">Enter the underlying price and premiums by hand. Leg implied vols use the HV-20 of the
-            last instrument loaded in EOD data.</div>
+        <div class="mode-note">Enter the underlying price and premiums by hand. A model premium (Black-Scholes at the model
+            volatility below) is filled for legs without one; it is not a market price, so type a price to use an observed
+            one. Each leg's implied volatility is solved from its premium with the approved index or stock rate and dividend.</div>
+        <div class="custom-row">
+            <span class="custom-row__label">Instrument</span>
+            <span class="seg"><button type="button" [class.active]="customKind() === 'index'" (click)="setCustomKind('index')">Index</button><button type="button" [class.active]="customKind() === 'stock'" (click)="setCustomKind('stock')">Stock</button></span>
+            <label class="custom-row__label" for="payoff-model-vol">Model volatility %</label>
+            <input id="payoff-model-vol" class="cell-input narrow" type="number" step="0.1" min="0" aria-label="Model volatility"
+                [value]="customModelVol() ?? ''" (input)="onModelVol($any($event.target).value)">
+        </div>
         }
         @if (mode() === 'live') {
         <app-live-data-access description="underlying prices and implied volatility"></app-live-data-access>
@@ -252,7 +260,7 @@
                 <label for="payoff-spot">Underlying price</label>
                 <input id="payoff-spot" type="number" step="1" [value]="displayNumber(spot())"
                     [readonly]="mode() !== 'custom'" (input)="onSpotInput($any($event.target).value)">
-                <span class="field-hint">{{ mode() === 'custom' ? 'Entered manually' : 'BhavCopy EOD close' }}</span>
+                <span class="field-hint">{{ spotHint }}</span>
             </div>
             <div class="field-block">
                 <label for="payoff-lot">Lot size</label>
@@ -273,7 +281,7 @@
                 leg</button>
             @if (mode() === 'custom') {
             <button type="button" class="ghost" [disabled]="!legs().length" (click)="reprice()">Reprice at model
-                IV</button>
+                price</button>
             }
             @if (expiryPill(); as pill) { <span class="pill" [class.calendar]="pill.calendar">{{ pill.text }}</span> }
         </div>
@@ -319,7 +327,7 @@
 </ng-template>
 <ng-template #expiryCell let-leg>
     @if (mode() === 'custom') {
-    <input class="cell-input narrow" type="number" step="1" min="1" aria-label="Days to expiry"
+    <input class="cell-input narrow" type="number" step="1" min="0" aria-label="Days to expiry"
         [value]="displayNumber(leg.expiryDays)" (input)="onLegExpiry(leg.id, $any($event.target).value)">
     } @else {
     <select class="cell-input" aria-label="Expiry" (change)="onLegExpiry(leg.id, $any($event.target).value)">

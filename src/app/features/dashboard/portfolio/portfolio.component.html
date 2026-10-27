@@ -3,7 +3,7 @@
         <div class="titlebar">
             <h2 class="page-title">Portfolio Analysis</h2>
             <span class="badge">Paper trading</span>
-            <span class="source-note">{{ source() === 'live' ? 'Live feed · not connected' : 'BhavCopy EOD close' + (catalog()?.tradeDate ? ' · ' + dateLabel(catalog()!.tradeDate!) : '') }}</span>
+            <span class="source-note">{{ source() === 'live' ? 'Live feed · not connected' : 'Close (EOD)' + (catalog()?.tradeDate ? ' · ' + dateLabel(catalog()!.tradeDate!) : '') }}</span>
         </div>
         <p class="sub">Track hypothetical positions, monitor performance and review closed trades.</p>
     </div>

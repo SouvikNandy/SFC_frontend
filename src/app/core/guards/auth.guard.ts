@@ -20,7 +20,7 @@ export const authGuard: CanActivateFn = (_route, state) => {
 export const guestGuard: CanActivateFn = () => {
   const authService = inject(AuthService);
   const router = inject(Router);
-  return authService.isAuthenticated() ? router.createUrlTree(['/dashboard']) : true;
+  return authService.isAuthenticated() ? router.createUrlTree(['/']) : true;
 };
 
 export const registrationGuard: CanActivateFn = () => {

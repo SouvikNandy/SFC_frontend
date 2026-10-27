@@ -126,7 +126,7 @@ describe('PortfolioComponent (live Portfolio API)', () => {
       expect(host.textContent).toContain('Read, sync and analytics only');
       expect(api.openList).toHaveBeenCalledWith({ segment: 'all', sort_by: 'notional', sort_dir: 'desc' });
       expect(api.baskets).toHaveBeenCalledWith({ closed_limit: 50 });
-      expect(host.textContent).toContain('BhavCopy EOD close · 16 Oct 2026');
+      expect(host.textContent).toContain('Close (EOD) · 16 Oct 2026');
     });
 
     it('KPI strip uses the backend summary (no frontend recalculation)', () => {
@@ -164,7 +164,7 @@ describe('PortfolioComponent (live Portfolio API)', () => {
         await settle();
         expect(eodPrices.contractQuote).toHaveBeenLastCalledWith({ segment: 'FUT', symbol: 'NIFTY', expiry_date: '2026-12-31', type: '', strike: null });
         expect(priceInput().value).toBe('24310.50');
-        expect(hint()).toContain('EOD close · 16 Oct');
+        expect(hint()).toContain('Close (EOD) · 16 Oct');
         priceInput().value = '24300';
         priceInput().dispatchEvent(new Event('input', { bubbles: true }));
         expect(component.fillPrice()).toBe('24300');             // the user's fill wins until the contract changes
@@ -205,7 +205,7 @@ describe('PortfolioComponent (live Portfolio API)', () => {
         await reload(new Map([[contractKey(unpriced), { close: 3900, date: '2026-10-16' }]]));
         const row = host.querySelectorAll('.tbl tbody tr')[1].textContent ?? '';
         expect(row).toContain('3,900.00');
-        expect(row).toContain('EOD close · 16 Oct');
+        expect(row).toContain('Close (EOD) · 16 Oct');
         expect(row).not.toContain('not priced');
         expect(row).toContain('+₹7,500');                       // (3900 − 3850) × 2 lots × 75
         expect(host.querySelectorAll('.stat-value')[1].textContent?.trim()).toBe('+₹9,075');   // 1,575 from the API + 7,500
@@ -216,7 +216,7 @@ describe('PortfolioComponent (live Portfolio API)', () => {
         await reload(new Map([[contractKey({ ...unpriced, expiry_date: '2026-12-31' }), { close: 3900, date: '2026-10-16' }]]));
         const row = host.querySelectorAll('.tbl tbody tr')[1].textContent ?? '';
         expect(row).toContain('not priced');
-        expect(row).not.toContain('EOD close');
+        expect(row).not.toContain('Close (EOD)');
         expect(host.querySelectorAll('.stat-value')[1].textContent?.trim()).toBe('+₹1,575');
       });
 
@@ -224,7 +224,7 @@ describe('PortfolioComponent (live Portfolio API)', () => {
         await reload(new Map([[contractKey(position()), { close: 999, date: '2026-10-16' }]]));
         const row = host.querySelectorAll('.tbl tbody tr')[0].textContent ?? '';
         expect(row).toContain('131.00');
-        expect(row).not.toContain('EOD close');
+        expect(row).not.toContain('Close (EOD)');
         expect(row).toContain('+₹1,575');
       });
 
@@ -233,7 +233,7 @@ describe('PortfolioComponent (live Portfolio API)', () => {
         await click('.tabbar button', 'Baskets');
         const unassigned = host.querySelectorAll('.basket-card')[1].textContent ?? '';
         expect(unassigned).toContain('+₹7,500 unrealised');
-        expect(unassigned).toContain('EOD close · 16 Oct');
+        expect(unassigned).toContain('Close (EOD) · 16 Oct');
       });
     });
 

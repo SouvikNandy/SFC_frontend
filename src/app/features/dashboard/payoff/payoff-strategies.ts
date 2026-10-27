@@ -34,7 +34,7 @@ export interface StrategyContext {
     /** Available expiries in days; empty in Custom mode, where preset days are used directly. */
     expiries: number[];
     existing: PayoffLeg[];
-    /** Premium source: API settlement in EOD, Black-Scholes theoretical in Custom. */
+    /** Premium source: EOD close in EOD, Black-Scholes theoretical in Custom. */
     premium: (type: OptionType, strike: number, days: number) => number | null;
     /** Maps a target strike onto a strike quoted for that expiry (identity in Custom). */
     strike: (target: number, type: OptionType, days: number) => number;
@@ -46,7 +46,7 @@ export interface StrategyContext {
  * two-expiry strategies. Without listed expiries (Custom, no symbol) the prototype's 16d / 23d are used.
  */
 export function nearAndNextExpiry(expiries: number[]): { near: number; next: number } {
-    const listed = [...new Set(expiries.filter(days => days > 0))].sort((a, b) => a - b);
+    const listed = [...new Set(expiries.filter(days => days >= 0))].sort((a, b) => a - b);
     if (!listed.length) return { near: 16, next: 23 };
     return { near: listed[0], next: listed[1] ?? listed[0] };
 }

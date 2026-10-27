@@ -19,7 +19,7 @@ import {
 import { DAYS_YEAR, ValuedLeg, legMark, nearestExpiryAverageIv, normCdf, valueLegs } from './payoff-pricing';
 
 // Pricing primitives live in payoff-pricing.ts; re-exported so existing imports keep working.
-export { DAYS_YEAR, bsValue, erf, intrinsic, normCdf, theoreticalPremium } from './payoff-pricing';
+export { DAYS_YEAR, bsValue, erf, intrinsic, modelPremium, normCdf } from './payoff-pricing';
 
 const BREAKEVEN_SAMPLES = 1401;
 const BISECTION_STEPS = 60;
@@ -113,6 +113,8 @@ function density(S: number, spot: number, sigma: number, days: number): number {
 
 function probBelow(K: number, spot: number, sigma: number, days: number): number {
     if (K <= 0) return 0;
+    // No volatility or no time left (expiry day): the price is certain, so the probability is a step.
+    if (!(sigma > 0) || !(days > 0)) return K > spot ? 1 : 0;
     const { centre, sd } = lognormParams(spot, sigma, days);
     return normCdf((Math.log(K) - centre) / sd);
 }
@@ -192,16 +194,19 @@ function buildHeatmap(legs: ValuedLeg[], inputs: PayoffInputs, lo: number, hi: n
 export function computePayoff(inputs: PayoffInputs): PayoffResult | null {
     const { spot } = inputs;
     const ivMult = inputs.ivMultiplier / 100;
-    const legs = valueLegs(inputs.legs, spot, inputs.referenceVol, inputs.live);
-    const averageIv = nearestExpiryAverageIv(legs);
-    if (!legs.length || !(ivMult > 0) || !(averageIv > 0) || legs.some(leg => !Number.isFinite(leg.iv) || !(leg.expiryDays > 0))) return null;
+    const legs = valueLegs(inputs.legs, inputs.legIvs, inputs.rate, inputs.dividend);
+    // A leg with time left needs its solved IV; a leg expiring today is worth its intrinsic value and needs none.
+    if (!legs.length || !(ivMult > 0) || legs.some(leg => !(leg.expiryDays >= 0) || (leg.expiryDays > 0 && !(leg.iv > 0)))) return null;
+    const nearDays = Math.min(...legs.map(leg => leg.expiryDays));
+    const averageIv = nearDays > 0 ? nearestExpiryAverageIv(legs) : 0;
+    if (nearDays > 0 && !(averageIv > 0)) return null;
     // Probability distribution: nearest-expiry average leg IV × multiplier. Leg valuation uses each leg's own IV.
     const probIv = averageIv * ivMult;
     const effVol = probIv * 100;
     const usedExpiries = Array.from(new Set(legs.map(leg => leg.expiryDays))).sort((a, b) => a - b);
     const near = usedExpiries[0];
     const far = usedExpiries[usedExpiries.length - 1];
-    const evalDay = Math.min(Math.max(inputs.evalDay, 0), Math.max(near, 1));
+    const evalDay = Math.min(Math.max(inputs.evalDay, 0), near);
     const [lo, hi] = priceRange(spot, inputs.rangePct, legs);
     const points = inputs.narrow ? 161 : 281;
 
@@ -229,7 +234,8 @@ export function computePayoff(inputs: PayoffInputs): PayoffResult | null {
         curveExpiry,
         curveEval,
         breakevens,
-        densities: curveExpiry.map(point => density(point.price, spot, probIv, near)),
+        // On expiry day (near = 0) the distribution is a point mass at spot, so there is no density curve to draw.
+        densities: curveExpiry.map(point => (near > 0 ? density(point.price, spot, probIv, near) : 0)),
         metrics: {
             netPremium: netPremium(legs),
             maxProfit: Math.max(...pnlSamples),

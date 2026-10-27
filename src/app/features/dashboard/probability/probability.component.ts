@@ -12,8 +12,10 @@ import {
   EMPTY,
   Subject,
   catchError,
+  combineLatest,
   debounceTime,
   finalize,
+  map,
   of,
   switchMap,
   takeUntil,
@@ -23,6 +25,11 @@ import { DataTableComponent } from '../../../shared/components/data-table/data-t
 import { DataTableColumn } from '../../../shared/components/data-table/data-table.types';
 import { ToastService } from '../../../core/services/toast.service';
 import { DefaultStock } from '../../../shared/services/constantFile';
+import { daysToExpiry, expiryNote } from '../../../shared/utils/expiry';
+import { atmImpliedVolatility, AtmIv } from '../../../shared/pricing/atm-iv';
+import { PricingContextService, describePricingFailure } from '../../../shared/pricing/pricing-context.service';
+import { OptionsChainService } from '../options-chain/options-chain.service';
+import { formatDisplayDate } from '../../../shared/utils/date-format';
 import { GreeksSymbolDetails } from '../greeks/greeks.model';
 import { ProbabilityService } from './probability.service';
 import { ChartTooltipComponent, ChartTooltipRow } from '../../../shared/components/chart-tooltip/chart-tooltip.component';
@@ -48,6 +55,10 @@ import {
 })
 export class ProbabilityComponent implements OnInit, OnDestroy {
   private readonly probability = inject(ProbabilityService);
+  private readonly chains = inject(OptionsChainService);
+  private readonly pricing = inject(PricingContextService);
+  /** Request for the at-the-money implied volatility of one expiry; null cancels and clears. */
+  private readonly atmRequest$ = new Subject<{ symbol: string; expiry: string } | null>();
   private readonly toast = inject(ToastService);
   private readonly changeDetector = inject(ChangeDetectorRef);
   private readonly route = inject(ActivatedRoute);
@@ -97,19 +108,39 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
   suggestionsOpen = false;
   highlightedSymbolIndex = -1;
   sourceNote = '';
+  /** Expiry date the day count was derived from; empty in Custom mode or once the days are typed by hand. */
+  expiryDate = '';
   error = '';
   data: ProbabilityApiData | null = null;
   chart: ProbabilityChart | null = null;
   detailRows: ProbabilityDetailRow[] = [];
   chartTooltip: { index: number; left: number; top: number } | null = null;
+  /**
+   * EOD mode volatility: the at-the-money implied volatility of the selected expiry, solved from the Close (EOD) of the
+   * call and put at the strike nearest the pricing underlying (average of the sides that solve). Never HV-20.
+   */
+  atmIv: AtmIv | null = null;
+  atmStatus: 'idle' | 'loading' | 'ready' | 'unavailable' = 'idle';
+  atmNote = '';
+  get volHint(): string {
+    if (this.modeControl.value === 'custom') return 'Entered manually';
+    if (this.atmStatus === 'loading') return 'Solving the at-the-money implied volatility…';
+    if (this.atmStatus === 'unavailable') return this.atmNote;
+    const atm = this.atmIv;
+    if (!atm) return '';
+    const part = (label: string, value: number | null) => (value === null ? null : `${label} ${value.toFixed(2)}%`);
+    return `ATM implied volatility, strike ${atm.strike}: ${[part('call', atm.callPct), part('put', atm.putPct)].filter(Boolean).join(' · ')} (from Close (EOD))`;
+  }
   private symbolsRequested = false;
 
   ngOnInit(): void {
     if (this.liveAccess.requestedLive(this.route.snapshot)) this.modeControl.setValue('live', { emitEvent: false });
+    // Subscribe before loading: the cached symbol list emits synchronously and would otherwise be lost.
+    this.setupSymbolDetails();
+    this.setupAtmIv();
+    this.setupCalculation();
     // Live Data is a separate view: symbol/EOD APIs load only when EOD or Custom is opened.
     if (this.modeControl.value !== 'live') this.loadSymbols();
-    this.setupSymbolDetails();
-    this.setupCalculation();
   }
 
   ngOnDestroy(): void {
@@ -147,12 +178,15 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
     if (mode === 'live') {
       // Cancel any in-flight EOD request; EOD reloads when its tab is reopened.
       this.symbolSelection$.next('');
+      this.atmRequest$.next(null);
       return;
     }
     if (!this.symbolsRequested) this.loadSymbols();
     if (mode === 'custom') {
       this.sourceNote = 'Manual entry';
       this.symbolDetails = null;
+      this.expiryDate = '';
+      this.atmRequest$.next(null);
       this.calculate();
     } else if (mode === 'eod') {
       const selected = this.symbolControl.value || this.symbols[0];
@@ -189,6 +223,8 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
     this.highlightedSymbolIndex = -1;
     this.detailsLoading = false;
     this.symbolDetails = null;
+    this.expiryDate = '';
+    this.atmRequest$.next(null);
     this.sourceNote = '';
     this.data = null;
     this.chart = null;
@@ -283,6 +319,7 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
           this.chart = null;
           this.detailRows = [];
           this.symbolDetails = null;
+          this.expiryDate = '';
         }),
         switchMap((symbol) =>
           symbol
@@ -310,6 +347,16 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
         takeUntil(this.destroy$),
         debounceTime(250),
         switchMap(() => {
+          if (this.modeControl.value === 'eod' && this.atmStatus !== 'ready') {
+            // No volatility yet (loading) or none available: say why, never substitute HV-20.
+            this.calculating = false;
+            this.data = null;
+            this.chart = null;
+            this.detailRows = [];
+            this.error = ''; // the reason is shown under the volatility field (volHint)
+            this.changeDetector.markForCheck();
+            return EMPTY;
+          }
           const request = this.buildRequest();
           if (!request) {
             this.calculating = false;
@@ -319,11 +366,9 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
             return EMPTY;
           }
           this.calculating = true;
-          const calculation$ =
-            this.modeControl.value === 'custom'
-              ? of(this.probability.calculateCustom(request))
-              : this.probability.calculate(request);
-          return calculation$.pipe(
+          // Every mode uses the shared frontend calculation; the backend result ignores the supplied volatility.
+          return of(null).pipe(
+            map(() => this.probability.calculate(request)),
             catchError(() => {
               this.error = 'Unable to calculate probability. Please try again.';
               this.toast.error(this.error);
@@ -348,22 +393,83 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
 
   private applyDetails(details: GreeksSymbolDetails): void {
     this.symbolDetails = details;
+    this.expiryDate = this.firstExpiryDate(details);
     this.sourceNote = `Values below refresh from your selection · ${details.trade_date}`;
     const target =  Math.round(details.underlying);
     const expiry = this.resolveExpiryDays(details);
     this.form.patchValue(
-      { spot: Math.round(details.underlying), target, expiry, vol: details.hv20 ?? 0 },
+      { spot: Math.round(details.underlying), target, expiry, vol: 0 }, // volatility is filled once the ATM implied volatility is solved
       { emitEvent: false },
     );
+    this.loadAtmIv();
     this.calculate();
   }
 
+  /** Calendar days from today (IST) to the first listed expiry date (0 on expiry day). */
   private resolveExpiryDays(details: GreeksSymbolDetails): number {
-    if (typeof details.expiry_days === 'number' && Number.isFinite(details.expiry_days)) return Math.max(1, details.expiry_days);
-    if (typeof details.expiry === 'number' && Number.isFinite(details.expiry)) return Math.max(1, details.expiry);
-    const expiry = Array.isArray(details.expiry_date) ? details.expiry_date[0] : details.expiry_date;
-    if (typeof expiry === 'number' && Number.isFinite(expiry)) return Math.max(1, expiry);
-    return typeof expiry === 'string' ? this.daysBetween(details.trade_date, expiry) : 0;
+    const expiry = this.firstExpiryDate(details);
+    const days = expiry ? daysToExpiry(expiry) : Number.NaN;
+    return Number.isFinite(days) ? days : 0;
+  }
+
+  private loadAtmIv(): void {
+    const symbol = this.symbolControl.value;
+    this.atmRequest$.next(this.modeControl.value === 'eod' && symbol && this.expiryDate ? { symbol, expiry: this.expiryDate } : null);
+  }
+
+  private setupAtmIv(): void {
+    this.atmRequest$
+      .pipe(
+        takeUntil(this.destroy$),
+        tap((request) => {
+          this.atmIv = null;
+          this.atmNote = '';
+          this.atmStatus = request ? 'loading' : 'idle';
+          if (request) this.volControl.setValue(0, { emitEvent: false });
+          this.changeDetector.markForCheck();
+        }),
+        switchMap((request) =>
+          request
+            ? combineLatest({
+                view: this.chains.getOptionChain(request),
+                context: this.pricing.resolve(request.symbol, request.expiry, this.symbolDetails?.underlying),
+              }).pipe(
+                catchError(() => {
+                  this.atmStatus = 'unavailable';
+                  this.atmNote = 'The option chain is unavailable, so the at-the-money implied volatility cannot be solved. Switch to Custom to enter a volatility.';
+                  this.changeDetector.markForCheck();
+                  this.calculate();
+                  return EMPTY;
+                }),
+                map((result) => ({ ...result, expiry: request.expiry })),
+              )
+            : EMPTY,
+        ),
+      )
+      .subscribe(({ view, context, expiry }) => {
+        if (!context.ok) {
+          this.atmStatus = 'unavailable';
+          this.atmNote = describePricingFailure(context.reason);
+        } else {
+          const days = daysToExpiry(expiry);
+          const found = atmImpliedVolatility(context, view.rows.map((row) => ({ strike: row.strike, callClose: row.call.ltp, putClose: row.put.ltp })), days);
+          if (found) {
+            this.atmIv = found;
+            this.atmStatus = 'ready';
+            this.volControl.setValue(Math.round(found.averagePct * 100) / 100, { emitEvent: false });
+          } else {
+            this.atmStatus = 'unavailable';
+            this.atmNote = days > 0 ? 'No at-the-money contract has a Close (EOD) that yields an implied volatility.' : describePricingFailure('no-time-to-expiry');
+          }
+        }
+        this.changeDetector.markForCheck();
+        this.calculate();
+      });
+  }
+
+  private firstExpiryDate(details: GreeksSymbolDetails): string {
+    const raw = Array.isArray(details.expiry_date) ? details.expiry_date[0] : details.expiry_date;
+    return typeof raw === 'string' && Number.isFinite(daysToExpiry(raw)) ? raw : '';
   }
 
   private calculate(): void {
@@ -520,11 +626,12 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
     return point ? `Price ${Math.round(point.price).toLocaleString('en-IN')}` : 'Price distribution';
   }
 
-  private daysBetween(from: string, to: string): number {
-    const parse = (value: string) => {
-      const [year, month, day] = value.split('-').map(Number);
-      return Date.UTC(year, month - 1, day);
-    };
-    return Math.max(1, Math.round((parse(to) - parse(from)) / 86400000));
+  onExpiryInput(): void {
+    this.expiryDate = ''; // a hand-edited day count no longer belongs to the loaded expiry date
+    this.onFieldChange();
+  }
+
+  get expiryDisplayNote(): string {
+    return expiryNote(this.expiryDate);
   }
 }

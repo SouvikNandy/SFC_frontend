@@ -11,10 +11,10 @@ import { signal } from '@angular/core';
     <div class="ticker-wrap">
       <div class="ticker-track" [style.animation-duration]="animationDuration">
         <ng-container *ngFor="let item of trackItems">
-          <div class="tick">
+          <div class="tick" [attr.title]="item.latestDate ? 'As of ' + item.latestDate : null">
             <b>{{ item.symbol }}</b>
             <span class="num">{{ item.price }}</span>
-            <span class="num" [style.color]="item.positive ? 'var(--teal)' : 'var(--red)'">{{
+            <span class="num" [style.color]="item.direction === 'up' ? 'var(--teal)' : item.direction === 'down' ? 'var(--red)' : 'var(--muted)'">{{
               item.change
             }}</span>
           </div>

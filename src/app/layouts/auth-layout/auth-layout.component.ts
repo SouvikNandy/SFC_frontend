@@ -1,10 +1,12 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 
+import { FooterComponent } from '../../shared/components/footer/footer.component';
+
 @Component({
   selector: 'app-auth-layout',
   standalone: true,
-  imports: [RouterOutlet],
+  imports: [RouterOutlet, FooterComponent],
   template: `
     <div class="auth-layout">
       <aside class="auth-hero" aria-label="Authentication highlights">
@@ -14,9 +16,9 @@ import { RouterOutlet } from '@angular/router';
             <span class="auth-hero__logo">Q</span>
             <span class="auth-hero__brand-text">QuantSFC</span>
           </div>
-          <p class="auth-hero__eyebrow">NSE F&amp;O · Live Terminal</p>
+          <p class="auth-hero__eyebrow">NSE F&amp;O · Daily EOD Analytics</p>
           <h1>Derivatives analytics, without the noise.</h1>
-          <p class="auth-hero__copy">5 years of NSE F&amp;O history, live Greeks, and options chains. Built for traders who read the tape, not the headlines.</p>
+          <p class="auth-hero__copy">5 years of NSE F&amp;O history, daily EOD Greeks, and options chains. Built for traders who read the tape, not the headlines.</p>
           <div class="auth-hero__points">
             <div class="auth-hero__point">
               <span></span>
@@ -28,7 +30,7 @@ import { RouterOutlet } from '@angular/router';
             </div>
             <div class="auth-hero__point">
               <span></span>
-              <p>Live options chain with OI &amp; IV analytics</p>
+              <p>Daily options chain with OI and estimated IV</p>
             </div>
           </div>
         </div>
@@ -50,6 +52,7 @@ import { RouterOutlet } from '@angular/router';
       <main class="auth-main">
         <div class="auth-main__inner">
           <router-outlet />
+          <app-footer></app-footer>
         </div>
       </main>
     </div>

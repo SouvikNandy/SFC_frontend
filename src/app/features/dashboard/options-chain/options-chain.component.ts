@@ -8,11 +8,17 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { EMPTY, Subject, Subscription, catchError, finalize, of, switchMap, takeUntil, tap } from 'rxjs';
+import { EMPTY, Subject, Subscription, catchError, combineLatest, finalize, of, switchMap, takeUntil, tap } from 'rxjs';
 import { ToastService } from '../../../core/services/toast.service';
 import { GreeksCalculatorService } from '../greeks/greeks-calculator.service';
 import { GreeksSymbolDetails } from '../greeks/greeks.model';
 import { DefaultStock } from '../../../shared/services/constantFile';
+import { formatDisplayDate } from '../../../shared/utils/date-format';
+import { CLOSE_EOD_LABEL } from '../../../shared/utils/price-labels';
+import { daysToExpiry, expiryNote } from '../../../shared/utils/expiry';
+import { contractGreeks } from '../../../shared/pricing/contract-greeks';
+import { PricingContext, PricingContextService, describePricingFailure } from '../../../shared/pricing/pricing-context.service';
+import { computeMaxPain } from './max-pain.util';
 import { OptionsChainService } from './options-chain.service';
 import { ActivatedRoute } from '@angular/router';
 import { LiveDataAccessComponent } from '../live-data/live-data-access.component';
@@ -71,7 +77,8 @@ interface ChartTooltipState {
       }
     </div>
     <p class="sub">
-      Full call and put ladder with open interest, volume, implied volatility and Greeks.
+      Full call and put ladder with open interest, volume and Close (EOD) prices. IV and Greeks are solved from each
+      contract's own Close (EOD), call and put separately.
     </p>
     <div class="panel">
       <p class="sect-label">Data source</p>
@@ -152,12 +159,16 @@ interface ChartTooltipState {
               <option [ngValue]="option">{{ formatExpiry(option) }}</option>
             }
           </select>
+          @if (expiry) {
+            <span class="expiry-note">{{ expiryDisplayNote }}</span>
+          }
         </div>
         <div class="field-block">
           <label>Underlying price</label><input type="number" [ngModel]="spot" readonly />
         </div>
         <div class="field-block">
-          <label>Base volatility %</label><input type="number" [ngModel]="volatility" readonly />
+          <label>IV underlying</label><input type="number" [ngModel]="ivUnderlying" readonly />
+          <span class="expiry-note">{{ ivBasisNote }}</span>
         </div>
         <div class="field-block">
           <label for="strike-search">Search strike</label
@@ -272,15 +283,15 @@ interface ChartTooltipState {
       </div>
       <div class="sitem">
         <div class="lab">Max pain</div>
-        <div class="num">{{ integer(view?.maxPain ?? null) }}</div>
+        <div class="num">{{ integer(maxPain) }}</div>
       </div>
-      <div class="sitem">
-        <div class="lab">Support</div>
-        <div class="num call-value">{{ integer(summary.support) }}</div>
+      <div class="sitem" [attr.title]="highestPutOiTooltip">
+        <div class="lab">Highest Put OI</div>
+        <div class="num call-value">{{ integer(highestOiStrikes.put) }}</div>
       </div>
-      <div class="sitem">
-        <div class="lab">Resistance</div>
-        <div class="num put-value">{{ integer(summary.resistance) }}</div>
+      <div class="sitem" [attr.title]="highestCallOiTooltip">
+        <div class="lab">Highest Call OI</div>
+        <div class="num put-value">{{ integer(highestOiStrikes.call) }}</div>
       </div>
     </div>
     <div class="panel chain-panel">
@@ -468,6 +479,7 @@ interface ChartTooltipState {
 })
 export class OptionsChainComponent implements OnInit, OnDestroy {
   private readonly api = inject(GreeksCalculatorService);
+  private readonly pricing = inject(PricingContextService);
   private readonly chainApi = inject(OptionsChainService);
   private readonly toast = inject(ToastService);
   private readonly cd = inject(ChangeDetectorRef);
@@ -491,7 +503,7 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
     { key: 'oiChange', label: 'Chg OI' },
     { key: 'volume', label: 'Volume' },
     { key: 'iv', label: 'IV' },
-    { key: 'ltp', label: 'LTP' },
+    { key: 'ltp', label: CLOSE_EOD_LABEL },
     { key: 'delta', label: 'Delta' },
     { key: 'gamma', label: 'Gamma' },
     { key: 'theta', label: 'Theta' },
@@ -559,12 +571,24 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
   get spot(): number | null {
     return this.view?.spot ?? this.details?.underlying ?? null;
   }
-  get volatility(): number | null {
-    return this.details?.hv20 ?? 12.5;
+  /** Approved pricing inputs for the selected expiry (instrument type, underlying, rate, dividend), once resolved. */
+  pricingContext: PricingContext | null = null;
+  get ivUnderlying(): number | null {
+    return this.pricingContext?.ok ? this.pricingContext.underlying : null;
+  }
+  /** Where the IV underlying and rates come from, or why implied volatility is unavailable. */
+  get ivBasisNote(): string {
+    const context = this.pricingContext;
+    if (!context) return this.loading ? 'Loading…' : '';
+    if (!context.ok) return describePricingFailure(context.reason);
+    const rates = `rate ${(context.riskFreeRate * 100).toFixed(2)}% · dividend ${(context.dividendYield * 100).toFixed(2)}%`;
+    return context.kind === 'index'
+      ? `Spot index value · ${rates}`
+      : `Futures close, ${formatDisplayDate(this.expiry)} expiry${context.futures?.tradeDate ? ` (${formatDisplayDate(context.futures.tradeDate)})` : ''} · ${rates}`;
   }
   get sourceNote(): string {
     return this.symbol
-      ? `BhavCopy EOD close${this.details?.trade_date ? ` · ${this.details.trade_date}` : ''}`
+      ? `Close (EOD)${this.details?.trade_date ? ` · ${this.details.trade_date}` : ''}`
       : '';
   }
   get atmStrike(): number | null {
@@ -610,11 +634,27 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
       call,
       put,
       pcr: call && put !== null ? put / call : null,
-      support: rows.length ? rows.reduce((a, b) => (a.put.oi > b.put.oi ? a : b)).strike : null,
-      resistance: rows.length
-        ? rows.reduce((a, b) => (a.call.oi > b.call.oi ? a : b)).strike
-        : null,
     };
+  }
+  readonly highestPutOiTooltip = 'Strike with the highest put open interest for this expiry.';
+  readonly highestCallOiTooltip = 'Strike with the highest call open interest for this expiry.';
+  /** Strikes with the highest put/call OI across every strike of the selected expiry (not the filtered view). */
+  /** Computed from every strike of the selected expiry; the single source for the tile (the API's max_pain is not used). */
+  get maxPain(): number | null {
+    return this.loading ? null : computeMaxPain(this.rows);
+  }
+  get expiryDisplayNote(): string {
+    return expiryNote(this.expiry);
+  }
+  get highestOiStrikes(): { put: number | null; call: number | null } {
+    // While a new expiry loads, `rows` still holds the previous expiry; do not present it as this expiry's value.
+    const rows = this.loading ? [] : this.rows;
+    const highest = (oiOf: (row: OptionsChainRow) => number): number | null => {
+      // Only strikes with real, positive OI qualify; all-zero or missing OI means there is no answer.
+      const usable = rows.filter((row) => Number.isFinite(oiOf(row)) && oiOf(row) > 0);
+      return usable.length ? usable.reduce((a, b) => (oiOf(a) > oiOf(b) ? a : b)).strike : null;
+    };
+    return { put: highest((row) => row.put.oi), call: highest((row) => row.call.oi) };
   }
   selectSymbol(value: string): void {
     if (!this.symbols.includes(value)) return;
@@ -629,6 +669,7 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
     this.details = null;
     this.view = null;
     this.rows = [];
+    this.pricingContext = null;
     this.selection$.next('');
   }
   filterSymbols(): void {
@@ -664,19 +705,26 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
     this.chainRequest?.unsubscribe();
     this.error = '';
     this.loading = true;
-    this.chainRequest = this.chainApi
-      .getOptionChain({ symbol: this.symbol, expiry: this.expiry })
+    this.pricingContext = null;
+    const symbol = this.symbol;
+    const expiry = this.expiry;
+    this.chainRequest = combineLatest({
+      view: this.chainApi.getOptionChain({ symbol, expiry }),
+      context: this.pricing.resolve(symbol, expiry, this.details?.underlying),
+    })
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (view) => {
+        next: ({ view, context }) => {
           this.view = view;
-          this.rows = view.rows.map((row) => this.calculateRowGreeks(row));
+          this.pricingContext = context;
+          this.rows = view.rows.map((row) => this.calculateRowGreeks(row, context));
           this.loading = false;
           this.cd.markForCheck();
         },
         error: () => {
           this.view = null;
           this.rows = [];
+          this.pricingContext = null;
           this.loading = false;
           this.error = 'Unable to load the option chain. Please try again.';
           this.toast.error(this.error);
@@ -685,10 +733,7 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
       });
   }
   formatExpiry(value: string): string {
-    const date = new Date(`${value}T00:00:00`);
-    return Number.isNaN(date.getTime())
-      ? value
-      : date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    return formatDisplayDate(value);
   }
   toggleColumn(key: ColumnKey): void {
     if (this.columns[key] && this.visibleColumnCount === 1) return;
@@ -962,6 +1007,7 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
           this.loading = Boolean(symbol);
           this.rows = [];
           this.view = null;
+          this.pricingContext = null;
           this.expiryOptions = [];
         }),
         switchMap((symbol) =>
@@ -992,59 +1038,22 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
         this.cd.markForCheck();
       });
   }
-  private calculateRowGreeks(row: OptionsChainRow): OptionsChainRow {
-    const spot = this.spot;
-    const expiryDays = this.resolveExpiryDays(this.expiry);
-    const baseVolPct = this.volatility;
-    if (spot === null || spot <= 0 || expiryDays <= 0 || baseVolPct === null) return row;
-
-    const iv = this.chainIV(spot, row.strike, baseVolPct) * 100;
-    const callGreeks = this.calculateSideGreeks('call', row.strike, iv, spot, expiryDays);
-    const putGreeks = this.calculateSideGreeks('put', row.strike, iv, spot, expiryDays);
-    return {
-      ...row,
-      call: { ...row.call, iv, ...callGreeks },
-      put: { ...row.put, iv, ...putGreeks },
+  /**
+   * IV and Greeks of each side from that contract's own Close (EOD), with the approved underlying, rate and dividend.
+   * Without a resolved context, or on expiry day, a side has no IV and shows "–"; nothing is estimated.
+   */
+  private calculateRowGreeks(row: OptionsChainRow, context: PricingContext): OptionsChainRow {
+    if (!context.ok) return this.withoutGreeks(row);
+    const days = daysToExpiry(this.expiry);
+    const side = (kind: Side, option: OptionsChainSide): OptionsChainSide => {
+      const solved = contractGreeks(context, { side: kind, strike: row.strike, days, close: option.ltp });
+      return { ...option, iv: solved.ivPct ?? 0, delta: solved.delta, gamma: solved.gamma, theta: solved.theta, vega: solved.vega };
     };
+    return { ...row, call: side('call', row.call), put: side('put', row.put) };
   }
-  // No live feed exists yet, so IV is always derived from the EOD base volatility.
-  private chainIV(spot: number, strike: number, baseVolPct: number): number {
-    const base = baseVolPct / 100;
-    const moneyness = Math.log(strike / spot);
-    const adjustment = Math.max(-0.45, Math.min(1.2, -2 * moneyness + 25 * moneyness * moneyness));
-    return base * (1 + adjustment);
-  }
-  private calculateSideGreeks(
-    side: Side,
-    strike: number,
-    volatility: number,
-    spot: number,
-    expiryDays: number,
-  ): Partial<OptionsChainRow['call']> | null {
-    if (!Number.isFinite(volatility) || volatility <= 0) return null;
-    const result = this.api.calculateAll({
-      spot,
-      strike,
-      rate: 0,
-      vol: volatility,
-      expiryDays,
-      dividend: 0,
-      minimumExpiryDays: 0.5,
-    });
-    return side === 'call'
-      ? { delta: result.deltaCall, gamma: result.gamma, theta: result.thetaCall, vega: result.vega }
-      : { delta: result.deltaPut, gamma: result.gamma, theta: result.thetaPut, vega: result.vega };
-  }
-  private resolveExpiryDays(value: string): number {
-    if (!value) return 0;
-    const expiryTime = Date.parse(`${value}T00:00:00Z`);
-    const tradeDate = this.details?.trade_date;
-    const startTime = tradeDate ? Date.parse(`${tradeDate}T00:00:00Z`) : Date.now();
-    if (Number.isFinite(expiryTime) && Number.isFinite(startTime)) {
-      return Math.max(1, Math.round((expiryTime - startTime) / 86400000));
-    }
-    const numericExpiry = Number(value);
-    return Number.isFinite(numericExpiry) ? Math.max(1, numericExpiry) : 0;
+  private withoutGreeks(row: OptionsChainRow): OptionsChainRow {
+    const clear = (option: OptionsChainSide): OptionsChainSide => ({ ...option, iv: 0, delta: null, gamma: null, theta: null, vega: null });
+    return { ...row, call: clear(row.call), put: clear(row.put) };
   }
   private loadSymbols(): void {
     this.symbolsRequested = true;

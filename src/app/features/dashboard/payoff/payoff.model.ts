@@ -50,7 +50,7 @@ export interface PayoffLeg {
     type: OptionType;
     direction: LegDirection;
     strike: number;
-    /** null when the data feed has no settlement price for this contract. */
+    /** null when the data feed has no EOD close for this contract. */
     premium: number | null;
     quantity: number;
     expiryDays: number;
@@ -64,10 +64,11 @@ export interface PricedLeg extends PayoffLeg {
 export interface PayoffInputs {
     legs: PricedLeg[];
     spot: number;
-    /** Underlying reference volatility in percent (feed HV-20); it seeds each leg's chain IV and is not user-editable. */
-    referenceVol: number;
-    /** Live data applies the chain formula's live-IV uplift. */
-    live: boolean;
+    /** Risk-free rate and dividend yield (decimals) the leg IVs were solved with, and the scenarios are priced with. */
+    rate: number;
+    dividend: number;
+    /** Each leg's implied volatility (decimal), keyed by leg id; absent / NaN for a leg that expires today. */
+    legIvs: Readonly<Record<number, number>>;
     /** IV-multiplier slider value applied to every leg's IV; 100 = ×1.00. */
     ivMultiplier: number;
     /** Price-range slider value in percent either side of spot. */

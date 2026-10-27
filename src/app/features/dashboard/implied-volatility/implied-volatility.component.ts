@@ -1,9 +1,15 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { EMPTY, Subject, catchError, finalize, of, switchMap, takeUntil, tap } from 'rxjs';
+import { EMPTY, Subject, catchError, combineLatest, finalize, of, switchMap, takeUntil, tap } from 'rxjs';
 import { ToastService } from '../../../core/services/toast.service';
 import { DefaultStock } from '../../../shared/services/constantFile';
+import { formatDisplayDate } from '../../../shared/utils/date-format';
+import { daysToExpiry, expiryNote } from '../../../shared/utils/expiry';
+import { CLOSE_EOD_LABEL } from '../../../shared/utils/price-labels';
+import { OptionsChainService } from '../options-chain/options-chain.service';
+import { InstrumentKind, marketParams } from '../../../shared/pricing/option-pricing';
+import { PricingContext, PricingContextService, describePricingFailure } from '../../../shared/pricing/pricing-context.service';
 import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
 import { DataTableColumn } from '../../../shared/components/data-table/data-table.types';
 import { GreeksSymbolDetails } from '../greeks/greeks.model';
@@ -28,7 +34,11 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
     private readonly changeDetector = inject(ChangeDetectorRef);
     private readonly route = inject(ActivatedRoute);
     private readonly liveAccess = inject(LiveDataAccessService);
+    private readonly chains = inject(OptionsChainService);
+    private readonly pricing = inject(PricingContextService);
     private readonly symbolSelection$ = new Subject<string>();
+    /** Request for the EOD close of every strike of one expiry; null cancels and clears. */
+    private readonly closeRequest$ = new Subject<{ symbol: string; expiry: string } | null>();
     private readonly destroy$ = new Subject<void>();
 
     readonly form = new FormGroup({
@@ -38,7 +48,9 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
         strike: new FormControl(0, { nonNullable: true, validators: Validators.required }),
         expiry: new FormControl(0, { nonNullable: true, validators: Validators.required }),
         marketPrice: new FormControl(0, { nonNullable: true, validators: Validators.required }),
-        rate: new FormControl(10, { nonNullable: true, validators: Validators.required }),
+        // Approved index parameters as the starting point for Custom mode; EOD mode takes them from the instrument type.
+        rate: new FormControl(marketParams('index').riskFreeRate * 100, { nonNullable: true, validators: Validators.required }),
+        dividend: new FormControl(marketParams('index').dividendYield * 100, { nonNullable: true, validators: Validators.required }),
     });
 
     symbols: string[] = [];
@@ -71,10 +83,12 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
 
     ngOnInit(): void {
         if (this.liveAccess.requestedLive(this.route.snapshot)) this.modeControl.setValue('live', { emitEvent: false });
+        // Subscribe before loading: the cached symbol list emits synchronously and would otherwise be lost.
+        this.setupDetailsLoading();
+        this.setupCloseLoading();
+        this.setupCalculationInputs();
         // Live Data is a separate view: symbol/EOD APIs load only when EOD or Custom is opened.
         if (this.modeControl.value !== 'live') this.loadSymbols();
-        this.setupDetailsLoading();
-        this.setupCalculationInputs();
     }
 
     ngOnDestroy(): void {
@@ -90,6 +104,33 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
     get expiryControl(): FormControl<number> { return this.form.controls.expiry; }
     get marketPriceControl(): FormControl<number> { return this.form.controls.marketPrice; }
     get rateControl(): FormControl<number> { return this.form.controls.rate; }
+    get dividendControl(): FormControl<number> { return this.form.controls.dividend; }
+
+    /** Custom mode: which approved market parameters (index or stock) the rate and dividend start from. */
+    customKind: InstrumentKind = 'index';
+    /** EOD mode: the instrument type, underlying, rate and dividend resolved for the selected expiry. */
+    pricingContext: PricingContext | null = null;
+    get underlyingHint(): string {
+        if (this.modeControl.value === 'custom') return 'Entered manually';
+        const context = this.pricingContext;
+        if (!context) return this.closeStatus === 'loading' ? 'Loading…' : 'Select a symbol';
+        if (!context.ok) return describePricingFailure(context.reason);
+        return context.kind === 'index'
+            ? 'Spot index value'
+            : `Futures close, ${formatDisplayDate(this.expiryDate)} expiry${context.futures?.tradeDate ? ` (${formatDisplayDate(context.futures.tradeDate)})` : ''}`;
+    }
+    get ratesHint(): string {
+        if (this.modeControl.value === 'custom') return 'Approved ' + this.customKind + ' parameters; editable';
+        const context = this.pricingContext;
+        return context?.ok ? `Approved ${context.kind} parameters` : '';
+    }
+
+    selectCustomKind(kind: InstrumentKind): void {
+        this.customKind = kind;
+        const params = marketParams(kind);
+        this.form.patchValue({ rate: params.riskFreeRate * 100, dividend: params.dividendYield * 100 }, { emitEvent: false });
+        this.calculate();
+    }
 
     selectMode(mode: ImpliedVolatilityMode): void {
         this.modeControl.setValue(mode, { emitEvent: false });
@@ -100,6 +141,7 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
         if (mode === 'live') {
             // Cancel any in-flight EOD request; EOD reloads when its tab is reopened.
             this.symbolSelection$.next('');
+            this.closeRequest$.next(null);
             return;
         }
         if (!this.symbolsRequested) this.loadSymbols();
@@ -110,6 +152,7 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
             this.expiryDate = '';
             this.expiryOptions = [];
             this.symbolDetails = null;
+            this.closeRequest$.next(null);
             this.calculate();
         } else if (mode === 'eod') {
             this.priceSource = 'auto';
@@ -152,6 +195,7 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
         this.result = null;
         this.chart = null;
         this.traceRows = [];
+        this.closeRequest$.next(null);
         this.symbolSelection$.next('');
     }
 
@@ -193,10 +237,14 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
         else this.calculate();
     }
 
-    onStrikeChange(): void { this.calculate(); }
+    onStrikeChange(): void {
+        if (this.priceSource === 'auto') this.patchAutomaticMarketPrice();
+        else this.calculate();
+    }
     onExpiryChange(): void {
         if (this.modeControl.value === 'custom' || !this.expiryDate) return;
-        this.expiryControl.setValue(this.daysBetween(this.tradeDate, this.expiryDate));
+        this.expiryControl.setValue(this.expiryDays(this.expiryDate));
+        this.loadClosePrices();
     }
     onFieldChange(): void { this.calculate(); }
 
@@ -274,7 +322,7 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
     }
 
     private setupCalculationInputs(): void {
-        [this.underlyingControl, this.strikeControl, this.expiryControl, this.marketPriceControl, this.rateControl].forEach(control => {
+        [this.underlyingControl, this.strikeControl, this.expiryControl, this.marketPriceControl, this.rateControl, this.dividendControl].forEach(control => {
             control.valueChanges.pipe(takeUntil(this.destroy$)).subscribe(() => {
                 if (!this.detailsLoading) this.calculate();
             });
@@ -289,22 +337,80 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
         this.expiryOptions = rawExpiries.map(String);
         this.expiryDate = this.expiryOptions[0] ?? '';
         this.tradeDate = details.trade_date;
-        this.sourceNote = `BhavCopy EOD close · ${details.trade_date}`;
+        this.sourceNote = `Close (EOD) · ${details.trade_date}`;
         const atmStrike = this.strikes.includes(details.atm_strike) ? details.atm_strike : this.strikes[0] ?? 0;
-        this.form.patchValue({ underlying: details.underlying, strike: atmStrike, expiry: this.expiryDate ? this.daysBetween(details.trade_date, this.expiryDate) : 0 }, { emitEvent: false });
-        this.patchAutomaticMarketPrice();
+        this.form.patchValue({ underlying: 0, strike: atmStrike, expiry: this.expiryDate ? this.expiryDays(this.expiryDate) : 0 }, { emitEvent: false });
+        this.loadClosePrices();
+    }
+
+    /** The IV input is the EOD close of the selected strike and side, never the LTP and never a substitute. */
+    private closePrice(): number | null {
+        const quote = this.closeQuotes?.get(Number(this.strikeControl.value));
+        const price = quote ? (this.optionType === 'put' ? quote.put : quote.call) : null;
+        return price !== null && Number.isFinite(price) && price > 0 ? price : null;
+    }
+
+    private loadClosePrices(): void {
+        const symbol = this.symbolControl.value;
+        this.closeRequest$.next(this.modeControl.value === 'eod' && symbol && this.expiryDate ? { symbol, expiry: this.expiryDate } : null);
+    }
+
+    private setupCloseLoading(): void {
+        this.closeRequest$.pipe(
+            takeUntil(this.destroy$),
+            tap(request => {
+                this.closeQuotes = null;
+                this.pricingContext = null;
+                this.closeStatus = request ? 'loading' : 'idle';
+                if (request) {
+                    this.marketPriceControl.setValue(0, { emitEvent: false });
+                    this.underlyingControl.setValue(0, { emitEvent: false });
+                    this.result = null;
+                    this.chart = null;
+                    this.traceRows = [];
+                }
+                this.changeDetector.markForCheck();
+            }),
+            switchMap(request => request ? combineLatest({
+                view: this.chains.getOptionChain(request),
+                context: this.pricing.resolve(request.symbol, request.expiry, this.symbolDetails?.underlying),
+            }).pipe(
+                catchError(() => {
+                    this.closeStatus = 'error';
+                    this.changeDetector.markForCheck();
+                    return EMPTY;
+                })
+            ) : EMPTY)
+        ).subscribe(({ view, context }) => {
+            this.closeQuotes = new Map(view.rows.map(row => [row.strike, { call: row.call.ltp, put: row.put.ltp }] as const));
+            this.pricingContext = context;
+            this.closeStatus = 'ready';
+            // The underlying, rate and dividend come from the instrument type; nothing is carried over from other symbols.
+            if (context.ok) this.form.patchValue({ underlying: context.underlying, rate: context.riskFreeRate * 100, dividend: context.dividendYield * 100 }, { emitEvent: false });
+            this.patchAutomaticMarketPrice();
+        });
     }
 
     private patchAutomaticMarketPrice(): void {
         if (this.priceSource !== 'auto') return;
-        const price = this.optionType === 'put' ? this.symbolDetails?.market_price?.PE : this.symbolDetails?.market_price?.CE;
-        this.marketPriceControl.setValue(price ?? 0, { emitEvent: false });
+        if (this.closeStatus === 'loading' || this.closeStatus === 'error') return;
+        this.marketPriceControl.setValue(this.closePrice() ?? 0, { emitEvent: false });
         this.calculate();
     }
 
     private calculate(): void {
         if (this.modeControl.value === 'live' || this.detailsLoading) return;
-        const result = this.volatility.solve(this.optionType, Number(this.marketPriceControl.value), Number(this.underlyingControl.value), Number(this.strikeControl.value), Number(this.expiryControl.value), Number(this.rateControl.value));
+        if (this.modeControl.value === 'eod' && !this.pricingContext?.ok) {
+            // No underlying or instrument parameters yet (loading) or available (missing): no volatility, and the reason is shown.
+            this.result = null;
+            this.chart = null;
+            this.traceRows = [];
+            const context = this.pricingContext;
+            this.error = context && !context.ok ? describePricingFailure(context.reason) : '';
+            this.changeDetector.markForCheck();
+            return;
+        }
+        const result = this.volatility.solve(this.optionType, Number(this.marketPriceControl.value), Number(this.underlyingControl.value), Number(this.strikeControl.value), Number(this.expiryControl.value), Number(this.rateControl.value), Number(this.dividendControl.value));
         this.result = result;
         this.traceRows = result.trace.map(step => ({
             step: step.iteration,
@@ -322,10 +428,10 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
         const width = 900, height = 300, paddingLeft = 58, paddingRight = 24, paddingTop = 18, paddingBottom = 32;
         const plotWidth = width - paddingLeft - paddingRight, plotHeight = height - paddingTop - paddingBottom;
         const maxVol = Math.max(result.ivPct * 2.2, 40);
-        const underlying = Number(this.underlyingControl.value), strike = Number(this.strikeControl.value), days = Number(this.expiryControl.value), rate = Number(this.rateControl.value) / 100;
+        const underlying = Number(this.underlyingControl.value), strike = Number(this.strikeControl.value), days = Number(this.expiryControl.value), rate = Number(this.rateControl.value) / 100, dividend = Number(this.dividendControl.value) / 100;
         const points = Array.from({ length: 141 }, (_, index) => {
             const volatility = maxVol * index / 140;
-            return { volatility, price: this.volatility.bsPrice(this.optionType, underlying, strike, rate, days / 365, Math.max(volatility / 100, 1e-9)) };
+            return { volatility, price: this.volatility.bsPrice(this.optionType, underlying, strike, rate, dividend, days / 365, Math.max(volatility / 100, 1e-9)) };
         });
         const marketPrice = Number(this.marketPriceControl.value);
         let yMax = Math.max(...points.map(point => point.price), marketPrice), yMin = Math.min(...points.map(point => point.price), marketPrice);
@@ -359,8 +465,21 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
         return point ? [{ label: 'Volatility', value: `${point.volatility.toFixed(2)}%`, tone: 'neutral' }, { label: 'Model price', value: this.formatPrice(point.price), tone: 'neutral' }] : [];
     }
 
-    private daysBetween(from: string, to: string): number {
-        const parse = (value: string) => { const [year, month, day] = value.split('-').map(Number); return Date.UTC(year, month - 1, day); };
-        return Math.max(1, Math.round((parse(to) - parse(from)) / 86400000));
+    /** Calendar days from today (IST) to the expiry date: 0 on expiry day (no IV can be solved), never a made-up minimum. */
+    private expiryDays(expiry: string): number {
+        const days = daysToExpiry(expiry);
+        return Number.isFinite(days) ? days : 0;
     }
+
+    readonly closeLabel = CLOSE_EOD_LABEL;
+    /** EOD close per strike for the selected expiry (the chain's c_ltp / p_ltp fields carry the EOD close). */
+    private closeQuotes: Map<number, { call: number; put: number }> | null = null;
+    closeStatus: 'idle' | 'loading' | 'ready' | 'error' = 'idle';
+    get closePriceHint(): string {
+        if (this.closeStatus === 'loading') return `Loading ${this.closeLabel}…`;
+        if (this.closeStatus === 'error') return `${this.closeLabel} is unavailable. Switch to Manual to enter a price.`;
+        if (this.closeStatus === 'ready' && this.closePrice() === null) return `No ${this.closeLabel} for this strike`;
+        return `${this.closeLabel} · ${this.optionType}, BhavCopy`;
+    }
+    get expiryDisplayNote(): string { return expiryNote(this.expiryDate); }
 }

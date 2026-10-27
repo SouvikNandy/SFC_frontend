@@ -36,8 +36,7 @@ export class TopbarComponent {
     );
     private readonly labels: Record<string, string> = {
         home: 'Home', portfolio: 'Portfolio Analysis', 'options-chain': 'Options Chain', eod: 'F&O EOD Data', 'multi-leg-eod': 'Multi-Leg EOD Data',
-        greeks: 'Greeks Calculator', probability: 'Probability Calculator', 'historical-volatility': 'Historical Volatility', 'implied-volatility': 'Implied Volatility', payoff: 'Payoff Simulator',
-        'blog-reports': 'Blog & Reports', 'price-alerts': 'Price Alerts'
+        greeks: 'Greeks Calculator', probability: 'Probability Calculator', 'historical-volatility': 'Historical Volatility', 'implied-volatility': 'Implied Volatility', payoff: 'Payoff Simulator'
     };
 
     get title(): string {

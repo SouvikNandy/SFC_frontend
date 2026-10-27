@@ -382,3 +382,11 @@ select:focus {
     grid-template-columns: 1fr;
   }
 }
+
+.expiry-note {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}

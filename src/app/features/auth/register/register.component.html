@@ -59,6 +59,18 @@
             }
         </div>
 
+        <div class="auth-form__field auth-form__consent" [class.is-invalid]="acceptDisclaimerControl.touched && acceptDisclaimerControl.invalid">
+            <label class="auth-form__consent-label" for="register-disclaimer">
+                <input id="register-disclaimer" type="checkbox" formControlName="acceptDisclaimer"
+                    [attr.aria-invalid]="acceptDisclaimerControl.touched && acceptDisclaimerControl.invalid"
+                    [attr.aria-describedby]="acceptDisclaimerControl.touched && acceptDisclaimerControl.invalid ? 'register-disclaimer-error' : null" />
+                <span>I have read and accept the <a routerLink="/disclaimer" target="_blank" rel="noopener">Disclaimer</a></span>
+            </label>
+            @if (acceptDisclaimerControl.touched && acceptDisclaimerControl.invalid) {
+            <div id="register-disclaimer-error" class="auth-form__message" role="alert">Accept the Disclaimer to create your account.</div>
+            }
+        </div>
+
         <button class="auth-form__submit" type="submit" [disabled]="form.invalid || isSubmitting()">
             @if (isSubmitting()) {
             <span class="auth-form__spinner" aria-hidden="true"></span>

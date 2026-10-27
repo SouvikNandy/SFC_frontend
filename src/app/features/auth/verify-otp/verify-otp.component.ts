@@ -62,7 +62,7 @@ export class VerifyOtpComponent {
     this.otpError.set(null);
 
     this.authService.verifyOtp({ phone: this.registeredPhone, otp }).subscribe({
-      next: () => { this.isSubmitting.set(false); this.isSuccess.set(true); void this.router.navigateByUrl(this.authService.isAuthenticated() ? '/dashboard' : '/login'); },
+      next: () => { this.isSubmitting.set(false); this.isSuccess.set(true); void this.router.navigateByUrl(this.authService.isAuthenticated() ? '/' : '/login'); },
       error: () => { this.isSubmitting.set(false); this.otpError.set('Unable to verify the OTP. Please try again.'); this.toast.error('Unable to verify the OTP. Please try again.'); }
     });
   }

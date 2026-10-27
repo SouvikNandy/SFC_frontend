@@ -22,7 +22,9 @@ export class RegisterComponent {
         fullName: new FormControl('', [Validators.required, Validators.minLength(2)]),
         email: new FormControl('', [Validators.required, Validators.email]),
         phone: new FormControl('', [Validators.required, Validators.minLength(6), Validators.maxLength(10)]),
-        password: new FormControl('', [Validators.required, Validators.minLength(8), Validators.maxLength(32)])
+        password: new FormControl('', [Validators.required, Validators.minLength(8), Validators.maxLength(32)]),
+        // Account creation is blocked until the disclaimer is accepted.
+        acceptDisclaimer: new FormControl(false, { nonNullable: true, validators: [Validators.requiredTrue] })
     });
 
     readonly isSubmitting = signal(false);
@@ -40,12 +42,16 @@ export class RegisterComponent {
         return this.form.controls.phone;
     }
 
+    get acceptDisclaimerControl(): AbstractControl {
+        return this.form.controls.acceptDisclaimer;
+    }
+
     get passwordControl(): AbstractControl {
         return this.form.controls.password;
     }
 
     onSubmit(): void {
-        if (this.form.invalid) {
+        if (this.form.invalid || !this.form.controls.acceptDisclaimer.value) {
             this.form.markAllAsTouched();
             return;
         }

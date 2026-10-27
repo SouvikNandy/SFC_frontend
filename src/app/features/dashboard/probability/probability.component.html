@@ -48,8 +48,7 @@
             <div class="field-block"><label for="spot">Underlying price</label>
                 <div class="unit-wrap"><input id="spot" type="number" formControlName="spot" step="1"
                         [readonly]="modeControl.value === 'eod'" (input)="onFieldChange()"><span class="unit">₹</span>
-                </div><span class="field-hint">{{ modeControl.value === 'custom' ? 'Entered manually' : 'API EOD
-                    underlying' }}</span>
+                </div><span class="field-hint">{{ modeControl.value === 'custom' ? 'Entered manually' : 'Spot price (EOD)' }}</span>
             </div>
             <div class="field-block"><label for="target">Target price</label>
                 <div class="unit-wrap"><input id="target" type="number" formControlName="target" step="1"
@@ -57,13 +56,13 @@
             </div>
             <div class="field-block"><label for="expiry">Days to expiry</label>
                 <div class="unit-wrap"><input id="expiry" type="number" formControlName="expiry" step="1" min="1"
-                        max="3650" (input)="onFieldChange()"><span class="unit">days</span></div>
+                        max="3650" (input)="onExpiryInput()"><span class="unit">days</span></div>
+                @if (expiryDate) { <span class="expiry-note">{{ expiryDisplayNote }}</span> }
             </div>
             <div class="field-block"><label for="vol">Annual volatility</label>
                 <div class="unit-wrap"><input id="vol" type="number" formControlName="vol" step="0.1" min="0.01"
                         max="1000" [readonly]="modeControl.value === 'eod'" (input)="onFieldChange()"><span
-                        class="unit">%</span></div><span class="field-hint">{{ modeControl.value === 'custom' ? 'Entered
-                    manually' : 'HV20 from symbol details' }}</span>
+                        class="unit">%</span></div><span class="field-hint">{{ volHint }}</span>
             </div>
         </div>
         @if (error) { <p class="input-error" role="alert">{{ error }}</p> }

@@ -3,11 +3,21 @@ import { Observable, of } from 'rxjs';
 import { map, catchError, shareReplay } from 'rxjs/operators';
 import { ApiService } from '../../core/services/api.service';
 
+/** Direction of a move. Always derived from the numeric change; the API's own `positive` flag is ignored. */
+export type ChangeDirection = 'up' | 'down' | 'flat';
+
+export function changeDirection(change: number): ChangeDirection {
+  return Number.isFinite(change) ? (change > 0 ? 'up' : change < 0 ? 'down' : 'flat') : 'flat';
+}
+
 export interface TickerItem {
   symbol: string;
   price: string;
   change: string;
   positive: boolean;
+  direction: ChangeDirection;
+  /** Session the price and change belong to (`latest_date`, YYYY-MM-DD), when the API sends it. */
+  latestDate?: string;
   /** Raw values from the API, for consumers that format or derive their own figures. */
   priceValue: number;
   changeValue: number;
@@ -19,6 +29,7 @@ export interface TickerApiItem {
   price: number;
   change: number;
   positive: boolean;
+  latest_date?: string;
 }
 
 export interface TickerApiResponse {
@@ -63,6 +74,8 @@ export class TickerService {
           (numericChange > 0 ? '+' : '') +
           (typeof item.change === 'number' ? item.change.toFixed(2) : String(item.change)),
         positive: numericChange > 0,
+        direction: changeDirection(numericChange),
+        ...(typeof item.latest_date === 'string' && item.latest_date ? { latestDate: item.latest_date } : {}),
         priceValue: Number(item.price),
         changeValue: numericChange,
       };

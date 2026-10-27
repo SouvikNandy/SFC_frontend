@@ -34,7 +34,7 @@ export class LoginComponent {
   private returnUrl(): string {
     const requested = this.route.snapshot.queryParamMap.get('returnUrl');
     const isSafe = !!requested && requested.startsWith('/') && !requested.startsWith('//') && !requested.startsWith('/login');
-    return isSafe ? requested : '/dashboard';
+    return isSafe ? requested : '/';
   }
 
   get emailControl(): AbstractControl {

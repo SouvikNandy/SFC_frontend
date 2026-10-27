@@ -1,5 +1,6 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { formatDisplayDate } from '../../utils/date-format';
 import {
     DataTableAction,
     DataTableActionEvent,
@@ -126,8 +127,7 @@ export class DataTableComponent<T extends object> {
     }
 
     private formatDate(value: unknown): string {
-        const date = new Date(String(value));
-        return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
+        return formatDisplayDate(value);
     }
 
     private formatChange(value: unknown): string {

@@ -1,12 +1,12 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 
 @Component({
   selector: 'app-not-found',
   standalone: true,
-  imports: [CommonModule, ButtonComponent],
+  imports: [CommonModule, ButtonComponent, RouterLink],
   template: `
     <section class="not-found">
       <div class="not-found__content">
@@ -16,7 +16,7 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
         
         <div class="not-found__actions">
           <app-button variant="primary" size="lg" (click)="goHome()">
-            Back to Home
+            Back to Dashboard
           </app-button>
           <app-button variant="secondary" size="lg" (click)="goBack()">
             Go Back
@@ -26,11 +26,11 @@ import { ButtonComponent } from '../../../shared/components/button/button.compon
         <div class="not-found__links">
           <p class="not-found__links-title">Popular pages:</p>
           <ul class="not-found__links-list">
-            <li><a href="/about" class="not-found__link">About</a></li>
-            <li><a href="/services" class="not-found__link">Services</a></li>
-            <li><a href="/data" class="not-found__link">Data</a></li>
-            <li><a href="/blog" class="not-found__link">Blog</a></li>
-            <li><a href="/contact" class="not-found__link">Contact</a></li>
+            <li><a routerLink="/dashboard/options-chain" class="not-found__link">Options Chain</a></li>
+            <li><a routerLink="/dashboard/greeks" class="not-found__link">Greeks Calculator</a></li>
+            <li><a routerLink="/dashboard/implied-volatility" class="not-found__link">Implied Volatility</a></li>
+            <li><a routerLink="/dashboard/payoff" class="not-found__link">Payoff Simulator</a></li>
+            <li><a routerLink="/dashboard/eod" class="not-found__link">F&amp;O EOD Data</a></li>
           </ul>
         </div>
       </div>

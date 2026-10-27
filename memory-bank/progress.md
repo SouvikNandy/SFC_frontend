@@ -85,3 +85,15 @@ _Keep bullets factual and small; link issues or PRs when useful._
 - `dist1810.zip` (zipped `ng build` output) untracked and ignored via `/dist*.zip`; the local file is kept.
 - New specs: auth.service, options-chain.component, ticker.service, greeks-calculator.service (symbol list), eod.component.table.
 - Deferred (post live-data): shared autocomplete extraction, erf/normCdf + chainIV + resolveExpiryDays de-duplication, Options Chain template/getter restructuring, `as any` in auth.service (add tests first), signal/`inject` migration of older screens, ESLint, auth design points (interceptor redirect on public pages, localStorage JWT, hard-coded OTP).
+
+## Client change list 2026-10-24 (items 5, 6, 7)
+- `/` renders the dashboard Home directly (one dashboard layout serves `/` and `/dashboard/*`; `/dashboard` and `/dashboard/home` redirect to `/`); public Home/About/Services/Blog/Contact/FAQ/Data pages deleted and their paths (plus `/home`) redirect to `/`; orphaned assets/svg removed; `/termsconditions` redirects to `/terms-conditions`; unknown URLs render NotFound in place (links now point to tools).
+- HTTP 301/404 are NOT done: no hosting config in the repo; see docs/deployment-routing.md for the server rules.
+- Disclaimer: client wording in `shared/legal/disclaimer.ts`; `app-footer` in the public, dashboard and auth layouts; `/disclaimer` page; required checkbox on Register (frontend only, nothing sent to the backend).
+- Price Alerts and Blog & Reports removed from sidebar, topbar labels and Home quick links; their URLs redirect to `/`.
+- "Live" wording removed from the auth shell, Home overview and index.html meta. Tool "Live data - Premium" tabs remain (scope question).
+
+## Shared pricing migration (2026-10-27)
+- `shared/pricing/`: option-pricing (BSM, Greeks, IV solver, MARKET_PARAMS), contract-iv, contract-greeks, atm-iv, instrument-kind.service (GET /fo/dd_list_v2), futures-close.service (POST /fo/xx_close), pricing-context.service. Chain, Greeks, IV, Probability (ATM IV, zero drift kept) and Payoff (chainIV removed; leg IV solved from its own premium) all use it; index underlying = dd_symbol_details.underlying, stock = same-expiry futures close; no fallbacks.
+- Option price for IV = EOD close (chain c_ltp/p_ltp). Labels: Close (EOD) / LTP; no Settle Price label (no verified field). Ticker shows latest_date.
+- Browser-checked in headless Chrome against the live API (CDP scripts, not committed). 301/404 still need server config (docs/deployment-routing.md).
