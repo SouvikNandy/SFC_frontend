@@ -65,8 +65,13 @@
         </div>
         @if (symbolsLoading() || metaLoading()) {
         <p class="hint-line" role="status">{{ symbolsLoading() ? 'Loading symbol list…' : 'Loading strikes and expiries…' }}</p>
+        } @else if (expiryLoading()) {
+        <p class="hint-line" role="status">Loading expiries for these dates…</p>
         }
         @if (rangeError()) { <p class="input-error" role="alert">{{ clearedNote() || rangeError() }}</p> }
+        @if (expiriesEmpty()) { <p class="input-error" role="status">No expiries are listed for these dates.</p> }
+        @if (expiryError()) { <p class="input-error" role="alert">{{ expiryError() }}</p> }
+        @if (unlistedExpiries().length) { <p class="input-error" role="status">{{ unlistedExpiries().length === 1 ? 'Expiry' : 'Expiries' }} {{ unlistedExpiriesLabel() }} not listed for these dates. The selection is kept; choose a listed expiry to change it.</p> }
         @if (metaError()) { <p class="input-error" role="alert">{{ metaError() }}</p> }
     </div>
 
@@ -74,7 +79,7 @@
     <div class="panel">
         <div class="legs-head">
             <p class="sect-label">Option legs</p>
-            <button type="button" class="ghost" [disabled]="legs().length >= maxLegs || !expiries().length" (click)="addLeg()">+ Add leg</button>
+            <button type="button" class="ghost" [disabled]="legs().length >= maxLegs || !expiries().length || expiryLoading()" (click)="addLeg()">+ Add leg</button>
         </div>
         @if (!legs().length) {
         <div class="empty">{{ metaLoading() ? 'Loading…' : 'No legs yet. Add a leg.' }}</div>
@@ -97,7 +102,10 @@
             </div>
             <div class="inline-field">
                 <label [for]="'ml-expiry-' + leg.id">Expiry</label>
-                <select [id]="'ml-expiry-' + leg.id" (change)="setLegExpiry(leg.id, $any($event.target).value)">
+                <select [id]="'ml-expiry-' + leg.id" [disabled]="expiryLoading()" (change)="setLegExpiry(leg.id, $any($event.target).value)">
+                    @if (!expiries().includes(leg.expiry)) {
+                    <option [value]="leg.expiry" selected>{{ longDate(leg.expiry) }} (not in the current expiry list)</option>
+                    }
                     @for (e of expiries(); track e) {
                     <option [value]="e" [selected]="e === leg.expiry">{{ longDate(e) }}</option>
                     }

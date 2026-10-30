@@ -1,18 +1,20 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 import { Observable, Subject, of, throwError } from 'rxjs';
 import { MultiLegEodComponent } from './multi-leg-eod.component';
 import { minusOneYear, plusOneYear } from '../../../shared/utils/date-range';
+import { resolveRange } from './multi-leg-eod.util';
 import { EodDataRow, EodRequest } from '../eod/eod.model';
 import { EodService } from '../eod/eod.service';
 
 type RowsRequest = Omit<EodRequest, 'page' | 'page_size'>;
+type ExpiryRequest = { symbol: string; trade_from: string; trade_till: string };
 
 const strikes = [22400, 22500, 22600, 22700];
 const details = (symbol: string) => ({ data: { symbol, trade_date: '2026-10-15', expiry_date: ['2026-10-29', '2026-11-26'], underlying: 22630, strike: strikes, atm_strike: 22600, market_price: { CE: 1, PE: 1 } } });
 
-/** YYYY-MM-DD, `n` days before today (the component also treats the local calendar day as "today"). */
+/** YYYY-MM-DD, `n` days before today. "Today" is pinned to 2026-10-30 in beforeEach, so every date below is deterministic. */
 const isoDaysAgo = (n: number): string => {
   const now = new Date();
   return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() - n)).toISOString().slice(0, 10);
@@ -24,6 +26,12 @@ const makeRows = (count: number, base: number, lastDaysAgo = 1): EodDataRow[] =>
     return { date: isoDaysAgo(lastDaysAgo + count - 1 - i), symbol: 'NIFTY', open: base + i, high: base + i + 3, low: base + i - 3, close: base + i + 1, volume: 1000 * (i + 1), oi: 5000 * (i + 1) };
   });
 
+/** Expiries inside every Custom range used below (From 20 days ago .. To 2 days ago, or From 30 days ago). */
+const E1 = isoDaysAgo(15), E2 = isoDaysAgo(10), E3 = isoDaysAgo(12);
+
+const reply = (req: { symbol: string; trade_from: string; trade_till: string }, dates: string[]) =>
+  of({ data: { symbol: req.symbol, trade_from: req.trade_from, trade_till: req.trade_till, expiry_date: dates } });
+
 describe('MultiLegEodComponent', () => {
   let fixture: ReturnType<typeof TestBed.createComponent<MultiLegEodComponent>>;
   let component: MultiLegEodComponent;
@@ -31,6 +39,8 @@ describe('MultiLegEodComponent', () => {
   let requests: RowsRequest[];
   let rowsFor: (req: RowsRequest) => Observable<EodDataRow[]>;
   let metaFor: (symbol: string) => Observable<ReturnType<typeof details>>;
+  let expiryCalls: ExpiryRequest[];
+  let expiryFor: (req: ExpiryRequest) => Observable<{ data: { symbol: string; trade_from: string; trade_till: string; expiry_date: string[] } }>;
 
   const settle = async () => { await fixture.whenStable(); fixture.detectChanges(); await fixture.whenStable(); fixture.detectChanges(); };
   const click = async (selector: string, text?: string) => {
@@ -56,7 +66,11 @@ describe('MultiLegEodComponent', () => {
   };
 
   beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-30T12:00:00Z') });
     requests = [];
+    expiryCalls = [];
+    // The real backend also lists dates outside the requested range; 2026-11-26 is after "today" and is dropped for the presets.
+    expiryFor = req => reply(req, ['2026-10-29', '2026-11-26', '2026-10-22']);
     rowsFor = req => of(makeRows(5, req.option_type === 'CE' ? 100 : 50));
     metaFor = symbol => of(details(symbol));
     vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: () => undefined, removeEventListener: () => undefined }));
@@ -68,6 +82,7 @@ describe('MultiLegEodComponent', () => {
         { provide: EodService, useValue: {
           getSymbols: () => of(['NIFTY', 'BANKNIFTY', 'RELIANCE']),
           getDdGreeks: ({ symbol }: { symbol: string }) => metaFor(symbol),
+          getDdExpiry: (req: ExpiryRequest) => { expiryCalls.push(req); return expiryFor(req); },
           getAllRows: (req: RowsRequest) => { requests.push(req); return rowsFor(req); },
         } },
       ],
@@ -79,7 +94,10 @@ describe('MultiLegEodComponent', () => {
     await settle();
   });
 
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
 
   it('is the Multi-Leg EOD Data screen with the EOD badge and reference-data notice', () => {
     expect(host.querySelector('h2')?.textContent).toContain('Multi-Leg EOD Data');
@@ -155,9 +173,9 @@ describe('MultiLegEodComponent', () => {
     await click('.legrow .seg button', 'PE');
     expect(requests.some(r => r.option_type === 'PE' && r.strike === 22700)).toBe(true);
     requests.length = 0;
-    await select('#ml-expiry-1', '2026-11-26');
-    expect(requests.some(r => r.expiry === '2026-11-26')).toBe(true);
-    expect(component.series()[0].label).toBe('22700 PE · 26 Nov');
+    await select('#ml-expiry-1', '2026-10-22');
+    expect(requests.some(r => r.expiry === '2026-10-22')).toBe(true);
+    expect(component.series()[0].label).toBe('22700 PE · 22 Oct');
   });
 
   it('date range presets change the window; Custom validates From/To and does not call the API when invalid', async () => {
@@ -194,6 +212,7 @@ describe('MultiLegEodComponent', () => {
     const ago = (days: number) => new Date(Date.parse(`${component.today}T00:00:00Z`) - days * 86400000).toISOString().slice(0, 10);
 
     beforeEach(async () => {
+      expiryFor = req => reply(req, [req.trade_from]);   // these cases are about the date messages: always return an expiry
       await click('.field .seg button', 'Custom');
       requests.length = 0;
     });
@@ -441,6 +460,268 @@ describe('MultiLegEodComponent', () => {
     expect(component.symbol()).toBe('RELIANCE');
     expect(requests.at(-1)?.symbol).toBe('RELIANCE');
     expect(requests.some(r => r.symbol === 'BANKNIFTY')).toBe(false);
+  });
+
+  describe('expiry list for every range mode (POST /fo/dd_expiry)', () => {
+    const from = isoDaysAgo(20), till = isoDaysAgo(2);
+    /** The backend also lists dates outside any requested range. */
+    const ALL = [isoDaysAgo(25), E1, E2, isoDaysAgo(1), '2099-12-31'];
+    const listed = (call: ExpiryRequest, dates = ALL) => dates.filter(d => d >= call.trade_from && d <= call.trade_till);
+    /** dd_symbol_details lists 2026-10-29 and 2026-11-26; with "today" pinned to 2026-10-30 only the latter is upcoming. */
+    const UP = '2026-11-26';
+    /** The dropdown: the range's historical expiries plus the upcoming ones, de-duplicated, earliest first. */
+    const combined = (historical: string[]) => [...new Set([...historical, UP])].sort();
+    const expiryOptions = () => Array.from(host.querySelectorAll<HTMLOptionElement>('select[id^="ml-expiry-"] option')).map(o => o.value);
+    const asRequest = (preset: Parameters<typeof resolveRange>[0], customFrom = '', customTill = '') => {
+      const resolved = resolveRange(preset, component.today, customFrom, customTill) as { range: { from: string; till: string } };
+      return { symbol: 'NIFTY', trade_from: resolved.range.from, trade_till: resolved.range.till };
+    };
+    const customRange = async () => {
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom(from);
+      component.onCustomTill(till);
+      await settle();
+    };
+    beforeEach(() => { expiryFor = req => reply(req, ALL); });
+
+    it('the initial 3M load asks dd_expiry for the resolved dates; the list is its dates inside them plus the upcoming expiry, earliest first', () => {
+      expect(expiryCalls).toEqual([asRequest('3M')]);
+      expect(component.expiries()).toEqual(['2026-10-22', '2026-10-29', '2026-11-26']);      // 2026-11-26 comes from dd_symbol_details, not from the range
+    });
+
+    it('1W, 1M, 3M and Custom each send the symbol and the dates the existing range logic resolved', async () => {
+      for (const preset of ['1W', '1M', '3M'] as const) {
+        await click('.field .seg button', preset);
+        expect(expiryCalls.at(-1), preset).toEqual(asRequest(preset));
+      }
+      await customRange();
+      expect(expiryCalls.at(-1)).toEqual({ symbol: 'NIFTY', trade_from: from, trade_till: till });
+    });
+
+    it('switching between modes replaces the list with that mode\'s dates only', async () => {
+      for (const preset of ['1W', '1M', '3M'] as const) {
+        await click('.field .seg button', preset);
+        expect(component.expiries(), preset).toEqual(combined(listed(expiryCalls.at(-1)!)));
+        expect(expiryOptions(), preset).toEqual(expect.arrayContaining(combined(listed(expiryCalls.at(-1)!))));
+      }
+      await customRange();
+      expect(component.expiries()).toEqual(combined([E1, E2]));
+      await click('.field .seg button', '1W');
+      expect(component.expiries()).toEqual(combined(listed(expiryCalls.at(-1)!)));
+      expect(component.expiries()).not.toContain('2099-12-31');
+    });
+
+    it('keeps only expiries from From to To inclusive: earlier and later dates are dropped, the boundaries stay', async () => {
+      const before = isoDaysAgo(25), after = isoDaysAgo(1);
+      expiryFor = req => reply(req, [before, from, E1, till, after, '2099-12-31']);
+      await customRange();
+      expect(component.expiries()).toEqual(combined([from, E1, till]));
+      expect(expiryOptions()).toEqual(expect.arrayContaining([from, E1, till]));
+      for (const outside of [before, after, '2099-12-31']) expect(expiryOptions()).not.toContain(outside);
+    });
+
+    it('untouched default legs select the most recent expiry in the range, whatever order the list arrives in; the dropdown is sorted earliest first', async () => {
+      expiryFor = req => reply(req, [E2, E1, E3]);
+      await customRange();
+      expect(component.expiries()).toEqual(combined([E1, E3, E2]));
+      expect(component.legs().map(l => l.expiry)).toEqual([E2, E2]);
+      expiryFor = req => reply(req, [E1, E3, E2]);
+      component.onCustomFrom(isoDaysAgo(19));
+      await settle();
+      expect(component.expiries()).toEqual(combined([E1, E3, E2]));
+      expect(component.legs().map(l => l.expiry)).toEqual([E2, E2]);
+    });
+
+    it('a default leg is never put on a date outside the range returned by dd_expiry; the To date itself is allowed; with none in range the nearest upcoming expiry is the safe default', async () => {
+      expiryFor = req => reply(req, [from, E1, till, isoDaysAgo(1), '2099-12-31']);
+      await customRange();
+      expect(component.legs().map(l => l.expiry)).toEqual([till, till]);
+      expiryFor = req => reply(req, [isoDaysAgo(25), isoDaysAgo(1)]);
+      component.onCustomTill(isoDaysAgo(3));
+      await settle();
+      expect(component.expiries()).toEqual([UP]);                          // nothing in range: only the upcoming expiry is listed
+      expect(component.legs().map(l => l.expiry)).toEqual([UP, UP]);       // untouched default legs take it; they are never left on, or sent to, an unlisted date
+    });
+
+    it('manually chosen expiries stay as chosen when the range or the list changes', async () => {
+      await customRange();
+      component.setLegExpiry(component.legs()[0].id, E1);
+      await settle();
+      expiryFor = req => reply(req, [E3, E2]);
+      component.onCustomFrom(isoDaysAgo(19));
+      await settle();
+      expect(component.legs().map(l => l.expiry)).toEqual([E1, E2]);       // the edited leg keeps E1 (now unlisted); the other stays where it was
+      expect(component.unlistedExpiries()).toEqual([E1]);
+      await click('.field .seg button', '1W');
+      expect(component.legs()[0].expiry).toBe(E1);
+    });
+
+    it('future expiries survive: dates after To come from dd_symbol_details, are not duplicated, and expired standard dates do not leak in', async () => {
+      expiryFor = req => reply(req, [E1, UP, '2099-12-31']);       // the backend echoes an upcoming date and an unrelated far one
+      await customRange();
+      expect(component.expiries()).toEqual([E1, UP]);               // UP once; 2099-12-31 is outside the range and not in the standard list
+      expect(component.expiries()).not.toContain('2026-10-29');     // standard-list date already expired: it only appears if the range returns it
+      expiryFor = req => reply(req, ['2026-10-29', E1]);
+      component.onCustomFrom('2026-10-15');
+      component.onCustomTill('2026-10-29');
+      await settle();
+      expect(component.expiries()).toEqual([E1, '2026-10-29', UP]);   // 10-29 is back because the range returned it
+    });
+
+    it('the preset windows are inclusive too: a date on the resolved From or To stays', async () => {
+      const window = asRequest('1M');
+      expiryFor = req => reply(req, ['2000-01-01', window.trade_from, window.trade_till, '2099-12-31']);
+      await click('.field .seg button', '1M');
+      expect(component.expiries()).toEqual(combined([window.trade_from, window.trade_till]));
+    });
+
+    it('when every returned date is outside the range the empty-range message shows and only the upcoming expiry is listed; edited legs are kept', async () => {
+      expiryFor = req => reply(req, [isoDaysAgo(25), isoDaysAgo(1)]);
+      component.setLegExpiry(component.legs()[0].id, '2026-09-01');
+      await settle();
+      const legsBefore = component.legs().map(l => l.expiry);
+      await customRange();
+      expect(component.expiries()).toEqual([UP]);
+      expect(host.textContent).toContain('No expiries are listed for these dates.');
+      expect(component.legs().map(l => l.expiry)).toEqual(legsBefore);
+    });
+
+    it('makes no call while the dates are incomplete or invalid, and none twice for the same dates', async () => {
+      await click('.field .seg button', 'Custom');
+      const afterDefaults = expiryCalls.length;
+      component.onCustomFrom('');                    // incomplete
+      component.onCustomTill('2999-01-01');          // in the future: invalid
+      await settle();
+      expect(expiryCalls.length).toBe(afterDefaults);
+      component.onCustomFrom(from);
+      component.onCustomTill(till);
+      component.onCustomTill(till);
+      await settle();
+      expect(expiryCalls.filter(c => c.trade_from === from && c.trade_till === till)).toHaveLength(1);
+    });
+
+    it('legs keep their selections; an expiry missing from the list stays selected and is flagged', async () => {
+      await customRange();
+      expect(component.legs().map(l => l.expiry)).toEqual([E2, E2]);       // untouched default legs take the most recent expiry in the range
+      component.setLegExpiry(component.legs()[0].id, '2026-09-01');
+      await settle();
+      expect(component.legs()[0].expiry).toBe('2026-09-01');
+      expect(component.unlistedExpiries()).toEqual(['2026-09-01']);
+      expect(host.textContent).toContain('not listed for these dates');
+      // a manual choice survives a change of dates and of mode
+      await click('.field .seg button', '1W');
+      expect(component.legs()[0].expiry).toBe('2026-09-01');
+      expect(component.unlistedExpiries()).toEqual(['2026-09-01']);
+    });
+
+    it('a failed dd_expiry keeps the standard list, says so, and does not touch the legs', async () => {
+      expiryFor = () => throwError(() => new Error('boom'));
+      await customRange();
+      expect(component.expiries()).toEqual(['2026-10-29', '2026-11-26']);
+      expect(component.expiryError()).toContain('Unable to load expiries');
+      expect(host.textContent).toContain('Showing the standard expiry list');
+      expect(component.legs()).toHaveLength(2);
+    });
+
+    it('a preset whose dd_expiry fails also reports it and keeps the standard list', async () => {
+      expiryFor = () => throwError(() => new Error('boom'));
+      await click('.field .seg button', '1M');
+      expect(component.expiries()).toEqual(['2026-10-29', '2026-11-26']);
+      expect(component.expiryError()).toContain('Unable to load expiries');
+    });
+
+    it('the backend\'s 422 "No data available." is an empty result: message shown, no fallback to the standard list, edited legs kept', async () => {
+      component.setLegExpiry(component.legs()[0].id, '2026-09-01');
+      await settle();
+      const before = component.legs().map(l => l.expiry);
+      expiryFor = () => throwError(() => new HttpErrorResponse({ status: 422, error: { success: false, message: 'VALIDATION_FAILED', errors: { expiry_date: ['No data available.'] } } }));
+      await customRange();
+      expect(component.expiries()).toEqual([UP]);                          // not the standard list, which still holds the expired 2026-10-29
+      expect(component.expiriesEmpty()).toBe(true);
+      expect(component.expiryError()).toBe('');
+      expect(host.textContent).toContain('No expiries are listed for these dates.');
+      expect(host.textContent).not.toContain('Showing the standard expiry list');
+      expect(component.legs().map(l => l.expiry)).toEqual(before);
+    });
+
+    it('any other 422 is still a failure: error message and the standard list', async () => {
+      await click('.field .seg button', 'Custom');
+      const cases = [{ trade_from: ['Invalid date.'] }, { expiry_date: ['Something else.'] }, { expiry_date: ['No data available.', 'Other.'] }];
+      for (const [index, errors] of cases.entries()) {
+        expiryFor = () => throwError(() => new HttpErrorResponse({ status: 422, error: { success: false, errors } }));
+        component.onCustomFrom(isoDaysAgo(30));
+        component.onCustomTill(isoDaysAgo(1 + index));
+        await settle();
+        expect(component.expiriesEmpty()).toBe(false);
+        expect(component.expiryError()).toContain('Unable to load expiries');
+        expect(component.expiries()).toEqual(['2026-10-29', '2026-11-26']);
+      }
+    });
+
+    it('while the expiry request is pending the dropdowns and Add leg are disabled and a loading hint shows', async () => {
+      const pending = new Subject<ReturnType<typeof expiryFor> extends Observable<infer R> ? R : never>();
+      expiryFor = () => pending;
+      await customRange();
+      expect(component.expiryLoading()).toBe(true);
+      expect(Array.from(host.querySelectorAll<HTMLSelectElement>('select[id^="ml-expiry-"]')).every(s => s.disabled)).toBe(true);
+      expect(host.textContent).toContain('Loading expiries for these dates');
+      pending.next({ data: { symbol: 'NIFTY', trade_from: from, trade_till: till, expiry_date: [E1] } });
+      await settle();
+      expect(component.expiryLoading()).toBe(false);
+      expect(Array.from(host.querySelectorAll<HTMLSelectElement>('select[id^="ml-expiry-"]')).some(s => s.disabled)).toBe(false);
+    });
+
+    it('an out-of-order response for earlier dates is ignored', async () => {
+      const slow = new Subject<ReturnType<typeof expiryFor> extends Observable<infer R> ? R : never>();
+      expiryFor = req => (req.trade_from === from ? slow : reply(req, [E3]));
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom(from);
+      component.onCustomTill(till);
+      component.onCustomFrom(isoDaysAgo(30));
+      component.onCustomTill(till);
+      await settle();
+      slow.next({ data: { symbol: 'NIFTY', trade_from: from, trade_till: till, expiry_date: [E1] } });
+      await settle();
+      expect(component.expiries()).toEqual(combined([E3]));
+    });
+
+    it('a late response for the previous mode or symbol never overwrites the latest one', async () => {
+      const slow = new Subject<ReturnType<typeof expiryFor> extends Observable<infer R> ? R : never>();
+      const oneMonth = asRequest('1M');
+      expiryFor = req => (req.trade_from === oneMonth.trade_from ? slow : reply(req, [E2]));
+      await click('.field .seg button', '1M');         // pending
+      await click('.field .seg button', '1W');         // newer request answers first
+      slow.next({ data: { symbol: 'NIFTY', trade_from: oneMonth.trade_from, trade_till: oneMonth.trade_till, expiry_date: [E1] } });
+      await settle();
+      expect(component.expiries()).toEqual(combined([E2]));
+      expiryFor = req => (req.symbol === 'BANKNIFTY' ? reply(req, [E3]) : slow);
+      component.selectSymbol('BANKNIFTY');
+      await settle();
+      expect(component.expiries()).toEqual(combined([E3]));
+    });
+
+    it('changing the symbol asks dd_expiry for the new symbol with the current dates', async () => {
+      await customRange();
+      expiryCalls.length = 0;
+      component.selectSymbol('BANKNIFTY');
+      await settle();
+      expect(expiryCalls).toEqual([{ symbol: 'BANKNIFTY', trade_from: from, trade_till: till }]);
+    });
+
+    it('dd_symbol_details still supplies spot, ATM, strikes and the starting expiry list', async () => {
+      expect(component.underlying()).toBe(22630);
+      expect(component.atmStrike()).toBe(22600);
+      expect(component.strikes()).toEqual(strikes);
+      expect(component.tradeDate()).toBe('2026-10-15');
+      await customRange();
+      expect(component.underlying()).toBe(22630);
+      expect(component.strikes()).toEqual(strikes);
+    });
+
+    it('the default legs are requested once, on an expiry from the range\'s list', () => {
+      expect(requests).toHaveLength(2);
+      expect(requests.every(r => r.expiry === '2026-10-29')).toBe(true);
+    });
   });
 
   it('stale leg data is dropped when the range changes quickly', async () => {

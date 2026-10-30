@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
 import { GreeksCalculatorService } from '../greeks/greeks-calculator.service';
-import { DdGreeksRequest, DdGreeksResponse, EodChartRequest, EodChartResponse, EodDataRow, EodRequest, EodResponse } from './eod.model';
+import { DdExpiryRequest, DdExpiryResponse, DdGreeksRequest, DdGreeksResponse, EodChartRequest, EodChartResponse, EodDataRow, EodRequest, EodResponse } from './eod.model';
 import { readEodPage } from './eod-rows.util';
 import { Observable, map, of, switchMap } from 'rxjs';
 
@@ -48,6 +48,10 @@ export class EodService {
                 }),
             );
         return fetchPage(1, []).pipe(map(rows => rows.sort((a, b) => a.date.localeCompare(b.date))));
+    }
+
+    getDdExpiry(request: DdExpiryRequest): Observable<DdExpiryResponse> {
+        return this.api.post<DdExpiryResponse, DdExpiryRequest>('/fo/dd_expiry', request);
     }
 
     getDdGreeks(request: DdGreeksRequest): Observable<DdGreeksResponse> {

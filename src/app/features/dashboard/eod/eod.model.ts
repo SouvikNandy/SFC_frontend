@@ -16,6 +16,24 @@ export interface DdGreeksRequest {
     symbol: EodSymbol;
 }
 
+/** `POST /fo/dd_expiry`: the expiries listed for a symbol between two trade dates (YYYY-MM-DD). */
+export interface DdExpiryRequest {
+    symbol: EodSymbol;
+    trade_from: string;
+    trade_till: string;
+}
+
+export interface DdExpiryResponse {
+    success: boolean;
+    message?: string;
+    data: {
+        symbol: string;
+        trade_from: string;
+        trade_till: string;
+        expiry_date: string[];
+    };
+}
+
 export interface DdGreeksMarketPrice {
     CE: number;
     PE: number;
