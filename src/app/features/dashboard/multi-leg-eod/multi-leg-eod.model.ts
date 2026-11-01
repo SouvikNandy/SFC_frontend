@@ -11,6 +11,8 @@ export interface LegSelection {
     strike: number | null;
     /** YYYY-MM-DD, one of the instrument's listed expiries. */
     expiry: string;
+    /** Fields the user chose by hand. The rest follow the defaults: the latest expiry in range and the historical ATM. */
+    picked?: { strike?: boolean; expiry?: boolean };
 }
 
 /** A leg together with the EOD bars the backend returned for it. */

@@ -7,6 +7,7 @@ import { minusOneYear, plusOneYear } from '../../../shared/utils/date-range';
 import { resolveRange } from './multi-leg-eod.util';
 import { EodDataRow, EodRequest } from '../eod/eod.model';
 import { EodService } from '../eod/eod.service';
+import { HistoricalUnderlyingResult, HistoricalUnderlyingService } from '../eod/historical-underlying.service';
 
 type RowsRequest = Omit<EodRequest, 'page' | 'page_size'>;
 type ExpiryRequest = { symbol: string; trade_from: string; trade_till: string };
@@ -14,9 +15,12 @@ type ExpiryRequest = { symbol: string; trade_from: string; trade_till: string };
 const strikes = [22400, 22500, 22600, 22700];
 const details = (symbol: string) => ({ data: { symbol, trade_date: '2026-10-15', expiry_date: ['2026-10-29', '2026-11-26'], underlying: 22630, strike: strikes, atm_strike: 22600, market_price: { CE: 1, PE: 1 } } });
 
-/** YYYY-MM-DD, `n` days before today. "Today" is pinned to 2026-10-30 in beforeEach, so every date below is deterministic. */
+/** "Today" for every test: the system clock is pinned to it in beforeEach, and the date helpers below use it too (never the real date, which module-level constants would otherwise read at import time). */
+const PINNED_NOW = new Date('2026-10-30T12:00:00Z');
+
+/** YYYY-MM-DD, `n` days before the pinned today. */
 const isoDaysAgo = (n: number): string => {
-  const now = new Date();
+  const now = PINNED_NOW;
   return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() - n)).toISOString().slice(0, 10);
 };
 
@@ -40,6 +44,8 @@ describe('MultiLegEodComponent', () => {
   let rowsFor: (req: RowsRequest) => Observable<EodDataRow[]>;
   let metaFor: (symbol: string) => Observable<ReturnType<typeof details>>;
   let expiryCalls: ExpiryRequest[];
+  let atmCalls: Array<{ symbol: string; till: string }>;
+  let atmFor: (symbol: string, till: string) => Observable<HistoricalUnderlyingResult>;
   let expiryFor: (req: ExpiryRequest) => Observable<{ data: { symbol: string; trade_from: string; trade_till: string; expiry_date: string[] } }>;
 
   const settle = async () => { await fixture.whenStable(); fixture.detectChanges(); await fixture.whenStable(); fixture.detectChanges(); };
@@ -66,9 +72,12 @@ describe('MultiLegEodComponent', () => {
   };
 
   beforeEach(async () => {
-    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-30T12:00:00Z') });
+    vi.useFakeTimers({ toFake: ['Date'], now: PINNED_NOW });
     requests = [];
     expiryCalls = [];
+    atmCalls = [];
+    // The historical ATM: the underlying closed at 22630 on the session, so 22600 is the nearest listed strike.
+    atmFor = () => of({ ok: true, session: '2026-10-29', underlying: 22630, strikes, atm: 22600 });
     // The real backend also lists dates outside the requested range; 2026-11-26 is after "today" and is dropped for the presets.
     expiryFor = req => reply(req, ['2026-10-29', '2026-11-26', '2026-10-22']);
     rowsFor = req => of(makeRows(5, req.option_type === 'CE' ? 100 : 50));
@@ -79,6 +88,7 @@ describe('MultiLegEodComponent', () => {
       providers: [
         provideHttpClient(),
         provideRouter([]),
+        { provide: HistoricalUnderlyingService, useValue: { resolve: (symbol: string, till: string) => { atmCalls.push({ symbol, till }); return atmFor(symbol, till); } } },
         { provide: EodService, useValue: {
           getSymbols: () => of(['NIFTY', 'BANKNIFTY', 'RELIANCE']),
           getDdGreeks: ({ symbol }: { symbol: string }) => metaFor(symbol),
@@ -575,15 +585,14 @@ describe('MultiLegEodComponent', () => {
       expect(component.expiries()).toEqual(combined([window.trade_from, window.trade_till]));
     });
 
-    it('when every returned date is outside the range the empty-range message shows and only the upcoming expiry is listed; edited legs are kept', async () => {
+    it('when every returned date is outside the range the empty-range message shows and only the upcoming expiry is listed; an edited leg is kept, an untouched one takes the nearest upcoming expiry', async () => {
       expiryFor = req => reply(req, [isoDaysAgo(25), isoDaysAgo(1)]);
       component.setLegExpiry(component.legs()[0].id, '2026-09-01');
       await settle();
-      const legsBefore = component.legs().map(l => l.expiry);
       await customRange();
       expect(component.expiries()).toEqual([UP]);
       expect(host.textContent).toContain('No expiries are listed for these dates.');
-      expect(component.legs().map(l => l.expiry)).toEqual(legsBefore);
+      expect(component.legs().map(l => l.expiry)).toEqual(['2026-09-01', UP]);
     });
 
     it('makes no call while the dates are incomplete or invalid, and none twice for the same dates', async () => {
@@ -630,10 +639,9 @@ describe('MultiLegEodComponent', () => {
       expect(component.expiryError()).toContain('Unable to load expiries');
     });
 
-    it('the backend\'s 422 "No data available." is an empty result: message shown, no fallback to the standard list, edited legs kept', async () => {
+    it('the backend\'s 422 "No data available." is an empty result: message shown, no fallback to the standard list, an edited leg is kept', async () => {
       component.setLegExpiry(component.legs()[0].id, '2026-09-01');
       await settle();
-      const before = component.legs().map(l => l.expiry);
       expiryFor = () => throwError(() => new HttpErrorResponse({ status: 422, error: { success: false, message: 'VALIDATION_FAILED', errors: { expiry_date: ['No data available.'] } } }));
       await customRange();
       expect(component.expiries()).toEqual([UP]);                          // not the standard list, which still holds the expired 2026-10-29
@@ -641,7 +649,7 @@ describe('MultiLegEodComponent', () => {
       expect(component.expiryError()).toBe('');
       expect(host.textContent).toContain('No expiries are listed for these dates.');
       expect(host.textContent).not.toContain('Showing the standard expiry list');
-      expect(component.legs().map(l => l.expiry)).toEqual(before);
+      expect(component.legs().map(l => l.expiry)).toEqual(['2026-09-01', UP]);   // edited leg kept; the untouched one is not left on an unlisted date
     });
 
     it('any other 422 is still a failure: error message and the standard list', async () => {
@@ -708,11 +716,12 @@ describe('MultiLegEodComponent', () => {
       expect(expiryCalls).toEqual([{ symbol: 'BANKNIFTY', trade_from: from, trade_till: till }]);
     });
 
-    it('dd_symbol_details still supplies spot, ATM, strikes and the starting expiry list', async () => {
+    it('dd_symbol_details still supplies the starting metadata; the historical close of To then sets spot, ATM and strikes', async () => {
       expect(component.underlying()).toBe(22630);
       expect(component.atmStrike()).toBe(22600);
       expect(component.strikes()).toEqual(strikes);
-      expect(component.tradeDate()).toBe('2026-10-15');
+      expect(component.tradeDate()).toBe('2026-10-29');           // the session the close belongs to
+      expect(component.expiries()).toContain('2026-10-29');       // expiries still start from the dd_symbol_details list
       await customRange();
       expect(component.underlying()).toBe(22630);
       expect(component.strikes()).toEqual(strikes);
@@ -721,6 +730,164 @@ describe('MultiLegEodComponent', () => {
     it('the default legs are requested once, on an expiry from the range\'s list', () => {
       expect(requests).toHaveLength(2);
       expect(requests.every(r => r.expiry === '2026-10-29')).toBe(true);
+    });
+  });
+
+  describe('default ATM strike from the historical underlying close (To date)', () => {
+    const ATM_STRIKES = [24800, 24900, 25000, 25100, 25200, 25300, 25400, 25500, 25600];
+    const found = (session: string, underlying: number, atm: number, list = ATM_STRIKES): Observable<HistoricalUnderlyingResult> =>
+      of({ ok: true, session, underlying, strikes: list, atm });
+    const legStrikes = () => component.legs().map(l => l.strike);
+    const pickStrike = async (index: number, value: number) => {
+      const el = host.querySelectorAll<HTMLSelectElement>('select[id^="ml-strike-"]')[index - 1]!;
+      el.value = String(value);
+      el.dispatchEvent(new Event('change'));
+      await settle();
+    };
+
+    it('the first load asks for the To date of the default range (today for a preset) and builds the legs on that ATM', () => {
+      expect(atmCalls).toEqual([{ symbol: 'NIFTY', till: '2026-10-30' }]);
+      expect(legStrikes()).toEqual([22600, 22600]);
+      expect(component.atmStrike()).toBe(22600);
+      expect(component.tradeDate()).toBe('2026-10-29');
+    });
+
+    it('the default legs are requested once, already on the historical ATM, never on the current one first', () => {
+      expect(requests).toHaveLength(2);
+      expect(requests.every(r => r.strike === 22600)).toBe(true);
+    });
+
+    it('a Custom range uses its own To date: the close of that day sets the ATM and the strike list is that day\'s', async () => {
+      atmFor = (_s, till) => (till === '2026-01-31' ? found('2026-01-30', 25320.65, 25300) : found('2026-10-29', 22630, 22600));
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom('2026-01-01');
+      component.onCustomTill('2026-01-31');
+      await settle();
+      expect(atmCalls.at(-1)).toEqual({ symbol: 'NIFTY', till: '2026-01-31' });
+      expect(component.atmStrike()).toBe(25300);
+      expect(component.strikes()).toEqual(ATM_STRIKES);
+      expect(component.tradeDate()).toBe('2026-01-30');
+      expect(legStrikes()).toEqual([25300, 25300]);
+    });
+
+    it('a To date that is a weekend or holiday gets the previous session\'s close (the service maps the date; the screen shows the session used)', async () => {
+      atmFor = () => found('2026-01-30', 25320.65, 25300);
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom('2026-01-20');
+      component.onCustomTill('2026-01-31');   // a Saturday
+      await settle();
+      expect(component.tradeDate()).toBe('2026-01-30');
+      expect(host.textContent).toContain('underlying close on 30 Jan 2026');
+    });
+
+    it('changing the To date or the symbol recalculates strikes the user did not pick', async () => {
+      atmFor = (symbol, till) => (symbol === 'BANKNIFTY' ? found('2026-10-29', 59610.45, 59600, [59400, 59500, 59600, 59700]) : till === '2026-01-31' ? found('2026-01-30', 25320.65, 25300) : found('2026-10-29', 22630, 22600));
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom('2026-01-01');
+      component.onCustomTill('2026-01-31');
+      await settle();
+      expect(legStrikes()).toEqual([25300, 25300]);
+      component.selectSymbol('BANKNIFTY');
+      await settle();
+      expect(atmCalls.at(-1)).toEqual({ symbol: 'BANKNIFTY', till: '2026-01-31' });
+      expect(legStrikes()).toEqual([59600, 59600]);
+    });
+
+    it('a strike the user picked is kept when the To date changes, the other leg follows the new ATM, and the strike list follows the date', async () => {
+      await pickStrike(1, 22700);
+      expect(legStrikes()).toEqual([22700, 22600]);
+      atmFor = () => found('2026-01-30', 25320.65, 25300);
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom('2026-01-01');
+      component.onCustomTill('2026-01-31');
+      await settle();
+      expect(legStrikes()).toEqual([22700, 25300]);                      // the picked strike stays; the untouched leg follows the new ATM
+      expect(component.atmStrike()).toBe(25300);
+      expect(component.strikes()).toEqual(ATM_STRIKES);
+      const option = host.querySelectorAll<HTMLSelectElement>('select[id^="ml-strike-"]')[0].selectedOptions[0];
+      expect(option.textContent).toContain('not in the current strike list');
+    });
+
+    it('an unchanged To date asks nothing new (switching presets that end today reuses the answer)', async () => {
+      await click('.field .seg button', '1M');
+      await click('.field .seg button', '1W');
+      expect(atmCalls).toHaveLength(1);
+    });
+
+    it('invalid or incomplete Custom dates make no ATM request', async () => {
+      await click('.field .seg button', 'Custom');
+      const before = atmCalls.length;
+      component.onCustomFrom('');
+      component.onCustomTill('2999-01-01');
+      await settle();
+      expect(atmCalls).toHaveLength(before);
+    });
+
+    it('a failed lookup shows why, keeps the strike list, and never falls back to the current price', async () => {
+      atmFor = () => of({ ok: false, reason: 'unavailable' });
+      component.selectSymbol('BANKNIFTY');
+      await settle();
+      expect(host.textContent).toContain('Unable to load the closing price for');
+      expect(legStrikes()).toEqual([null, null]);                          // not the current ATM from dd_symbol_details
+      expect(component.strikes()).toEqual(strikes);
+      // nothing on screen presents today's ATM or spot as the answer
+      expect(component.atmStrike()).toBeNull();
+      expect(component.underlying()).toBeNull();
+      expect(host.querySelector('.legnote')).toBeNull();
+      expect(Array.from(host.querySelectorAll('select[id^="ml-strike-"] option')).some(o => /ATM/.test(o.textContent ?? ''))).toBe(false);
+      expect(host.querySelector('.source-note')?.textContent).not.toMatch(/d{4}-d{2}-d{2}/);
+      await click('.legs-head .ghost', '+ Add leg');                       // a new leg does not get a guessed strike either
+      expect(legStrikes()).toEqual([null, null, null]);
+      expect(requests.filter(r => r.symbol === 'BANKNIFTY')).toHaveLength(0);
+    });
+
+    it('no trading session on or before the date is reported as such', async () => {
+      atmFor = () => of({ ok: false, reason: 'no-session' });
+      component.selectSymbol('BANKNIFTY');
+      await settle();
+      expect(component.atmError()).toContain('No trading session was found');
+    });
+
+    it('after a failure choosing a strike works and loads the data', async () => {
+      atmFor = () => of({ ok: false, reason: 'unavailable' });
+      component.selectSymbol('BANKNIFTY');
+      await settle();
+      requests.length = 0;
+      await pickStrike(1, 22600);
+      expect(component.legs()[0].strike).toBe(22600);
+      expect(requests.some(r => r.strike === 22600)).toBe(true);
+    });
+
+    it('the strike dropdowns are disabled and a hint shows while the closing price loads', async () => {
+      const pending = new Subject<HistoricalUnderlyingResult>();
+      atmFor = () => pending;
+      component.selectSymbol('BANKNIFTY');
+      await settle();
+      expect(component.atmLoading()).toBe(true);
+      expect(Array.from(host.querySelectorAll<HTMLSelectElement>('select[id^="ml-strike-"]')).every(el => el.disabled)).toBe(true);
+      expect(host.textContent).toContain('Loading the closing price');
+      pending.next({ ok: true, session: '2026-10-29', underlying: 59610.45, strikes: [59500, 59600, 59700], atm: 59600 });
+      await settle();
+      expect(component.atmLoading()).toBe(false);
+      expect(legStrikes()).toEqual([59600, 59600]);
+    });
+
+    it('a late answer for an earlier date or symbol never overwrites the latest one', async () => {
+      const slow = new Subject<HistoricalUnderlyingResult>();
+      atmFor = (_s, till) => (till === '2026-01-31' ? slow : found('2026-02-27', 25100, 25100));
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom('2026-01-01');
+      component.onCustomTill('2026-01-31');
+      component.onCustomTill('2026-02-27');
+      await settle();
+      slow.next({ ok: true, session: '2026-01-30', underlying: 25320.65, strikes: ATM_STRIKES, atm: 25300 });
+      await settle();
+      expect(component.atmStrike()).toBe(25100);
+      expect(legStrikes()).toEqual([25100, 25100]);
+    });
+
+    it('does not depend on the real system date', async () => {
+      expect(atmCalls[0].till).toBe('2026-10-30');                         // the pinned test clock, not the machine\'s
     });
   });
 

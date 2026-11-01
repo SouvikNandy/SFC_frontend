@@ -23,6 +23,7 @@ describe('EodComponent custom date range', () => {
                 provide: EodService,
                 useValue: {
                     getSymbols: () => of(['NIFTY']),
+                    getDdExpiry: () => of({ success: true, data: { symbol: 'NIFTY', trade_from: '', trade_till: '', expiry_date: ['2026-10-29'] } }),
                     getDdGreeks: () => of({ success: true, data: { symbol: 'NIFTY', trade_date: '2026-10-16', expiry_date: ['2026-10-29'], underlying: 22630, strike: [22600], atm_strike: 22600, market_price: { CE: 1, PE: 1 } } }),
                     getEod,
                     getEodChart: () => of({ success: true, data: [] }),

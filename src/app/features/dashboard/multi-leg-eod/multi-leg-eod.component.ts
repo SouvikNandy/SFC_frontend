@@ -8,6 +8,7 @@ import {
   signal,
 } from '@angular/core';
 import { CLOSE_EOD_LABEL } from '../../../shared/utils/price-labels';
+import { isNoExpiriesResponse } from '../../../shared/utils/expiry-selection';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Observable, Subject, catchError, finalize, forkJoin, map, of, shareReplay, switchMap, tap } from 'rxjs';
 import { ToastService } from '../../../core/services/toast.service';
@@ -18,6 +19,7 @@ import { DefaultStock } from '../../../shared/services/constantFile';
 import { clearedMessage, fromConflict, fromPickerBounds, tillConflict, tillPickerBounds } from '../../../shared/utils/date-range';
 import { EodDataRow } from '../eod/eod.model';
 import { EodService } from '../eod/eod.service';
+import { HistoricalUnderlyingService } from '../eod/historical-underlying.service';
 import { isNoTradeBar } from '../eod/eod-rows.util';
 import { deriveStrikeStep } from '../payoff/payoff-strategies';
 import {
@@ -58,13 +60,6 @@ const todayUtc = (): string => {
   return ymd(new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())));
 };
 
-/** The backend answers HTTP 422 `errors.expiry_date: ["No data available."]` for a range with no expiries: an empty result, not a failure. Any other 422 stays an error. */
-const isNoExpiriesResponse = (error: unknown): boolean => {
-  const { status, error: body } = (error ?? {}) as { status?: number; error?: { errors?: { expiry_date?: unknown } } };
-  const messages = body?.errors?.expiry_date;
-  return status === 422 && Array.isArray(messages) && messages.length === 1 && messages[0] === 'No data available.';
-};
-
 const expiryKey = (request: { symbol: string; from: string; till: string }): string => `${request.symbol}|${request.from}|${request.till}`;
 
 @Component({
@@ -77,6 +72,7 @@ const expiryKey = (request: { symbol: string; from: string; till: string }): str
 })
 export class MultiLegEodComponent implements OnInit {
   private readonly eod = inject(EodService);
+  private readonly historicalUnderlying = inject(HistoricalUnderlyingService);
   private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -109,6 +105,10 @@ export class MultiLegEodComponent implements OnInit {
   readonly expiryError = signal('');
   /** True from the moment an expiry request is sent until its answer (or a newer decision) arrives. */
   readonly expiryLoading = signal(false);
+  /** The historical ATM (underlying close on To, or the previous session) is being fetched. */
+  readonly atmLoading = signal(false);
+  /** Why the ATM could not be determined for the selected To date; empty when it could. */
+  readonly atmError = signal('');
   /** The range itself has no historical expiries (the dropdown then holds only upcoming ones); the legs keep their selections. */
   readonly expiriesEmpty = computed(() => this.rangeExpiries()?.length === 0);
   /** Listed expiries that have not passed (today's included), from `dd_symbol_details`. */
@@ -244,10 +244,11 @@ export class MultiLegEodComponent implements OnInit {
   private readonly expiryRequest$ = new Subject<{ symbol: string; from: string; till: string } | null>();
   /** Key of the expiry request currently wanted; a response for any other key is stale. */
   private wantedExpiryKey = '';
-  /** True while the legs are the untouched defaults chosen on symbol load. */
-  private legsAreDefault = false;
-  /** The first load after a symbol change waits for the range's expiries, so the default legs are requested once, on a listed expiry. */
-  private deferredLoad = false;
+  /** The first load after a symbol change waits for the range's expiries and the historical ATM, so the default legs are requested once, complete. */
+  private readonly initPending = new Set<'expiry' | 'atm'>();
+  private readonly atmRequest$ = new Subject<{ symbol: string; till: string } | null>();
+  /** Symbol and To date the ATM currently wanted was asked for; an answer for any other key is stale. */
+  private wantedAtmKey = '';
   private readonly dataRequest$ = new Subject<{ symbol: string; legs: LegSelection[]; range: DateRange }>();
 
   ngOnInit(): void {
@@ -334,6 +335,7 @@ export class MultiLegEodComponent implements OnInit {
     }
     this.page.set(0);
     this.syncRangeExpiries();
+    this.syncHistoricalAtm();
     this.reload();
   }
 
@@ -348,6 +350,7 @@ export class MultiLegEodComponent implements OnInit {
     }
     this.page.set(0);
     this.syncRangeExpiries();
+    this.syncHistoricalAtm();
     this.reload();
   }
 
@@ -362,6 +365,7 @@ export class MultiLegEodComponent implements OnInit {
     }
     this.page.set(0);
     this.syncRangeExpiries();
+    this.syncHistoricalAtm();
     this.reload();
   }
 
@@ -369,14 +373,12 @@ export class MultiLegEodComponent implements OnInit {
 
   addLeg(): void {
     if (this.legs().length >= MAX_LEGS || !this.expiries().length) return;
-    this.legsAreDefault = false;
     const last = this.legs()[this.legs().length - 1];
     this.legs.update(list => [...list, this.newLeg('CE', this.defaultStrike(), last?.expiry ?? this.expiries()[0])]);
     this.afterLegChange();
   }
 
   removeLeg(id: number): void {
-    this.legsAreDefault = false;
     this.legs.update(list => list.filter(leg => leg.id !== id));
     if (this.tableLeg() === id) this.tableLeg.set('all');
     this.afterLegChange();
@@ -489,14 +491,24 @@ export class MultiLegEodComponent implements OnInit {
     return { id: ++this.legId, optionType, strike, expiry };
   }
 
+  /** The ATM for a new leg. With a date range selected and no ATM known for it, no strike: it is never guessed from today's list. */
   private defaultStrike(): number | null {
     const strikes = this.strikes(), atm = this.atmStrike();
-    return atm !== null && strikes.includes(atm) ? atm : (strikes[Math.floor(strikes.length / 2)] ?? null);
+    if (atm !== null && strikes.includes(atm)) return atm;
+    return 'range' in this.rangeResolution() ? null : (strikes[Math.floor(strikes.length / 2)] ?? null);
+  }
+
+  /** No ATM is known: drop the underlying, ATM and session so nothing implies one. */
+  private clearAtm(): void {
+    this.atmStrike.set(null);
+    this.underlying.set(null);
+    this.tradeDate.set('');
   }
 
   private patchLeg(id: number, patch: Partial<LegSelection>): void {
-    this.legsAreDefault = false;
-    this.legs.update(list => list.map(leg => (leg.id === id ? { ...leg, ...patch } : leg)));
+    // A strike or expiry chosen here is the user's: later defaults (ATM, latest expiry) leave it alone.
+    const picked = { ...('strike' in patch ? { strike: true } : {}), ...('expiry' in patch ? { expiry: true } : {}) };
+    this.legs.update(list => list.map(leg => (leg.id === id ? { ...leg, ...patch, picked: { ...leg.picked, ...picked } } : leg)));
     this.afterLegChange();
   }
 
@@ -521,14 +533,14 @@ export class MultiLegEodComponent implements OnInit {
   }
 
   /** Every range mode: ask `dd_expiry` for the resolved From..To once the dates are complete and valid; anything else drops the list. */
-  private syncRangeExpiries(deferLoad = false): boolean {
+  private syncRangeExpiries(): boolean {
     const resolved = this.rangeResolution();
     if (!('range' in resolved) || !this.symbol()) {
       this.wantedExpiryKey = '';
       this.rangeExpiries.set(null);
       this.expiryError.set('');
       this.expiryLoading.set(false);
-      this.deferredLoad = false;
+      this.initPending.delete('expiry');
       this.expiryRequest$.next(null);
       return false;
     }
@@ -538,9 +550,39 @@ export class MultiLegEodComponent implements OnInit {
     this.wantedExpiryKey = key;
     this.expiryError.set('');
     this.expiryLoading.set(true);
-    this.deferredLoad = deferLoad;   // before the request is sent: a synchronous answer must already see it
     this.expiryRequest$.next(request);
     return true;
+  }
+
+  /**
+   * The ATM for the selected To date, from that day's underlying close (or the previous session's): asked once per symbol and To date.
+   * It never uses the current price. An invalid or incomplete range requests nothing.
+   */
+  private syncHistoricalAtm(): boolean {
+    const resolved = this.rangeResolution();
+    if (!('range' in resolved) || !this.symbol()) {
+      this.wantedAtmKey = '';
+      this.atmLoading.set(false);
+      this.atmError.set('');
+      this.initPending.delete('atm');
+      this.atmRequest$.next(null);
+      return false;
+    }
+    const request = { symbol: this.symbol(), till: resolved.range.till };
+    const key = `${request.symbol}|${request.till}`;
+    if (key === this.wantedAtmKey) return false;
+    this.wantedAtmKey = key;
+    this.atmError.set('');
+    this.atmLoading.set(true);
+    this.atmRequest$.next(request);
+    return true;
+  }
+
+  /** An answer needed for the first load arrived: reload once, when it was the last one outstanding or it changed the legs. */
+  private settleInit(kind: 'expiry' | 'atm', changed: boolean): void {
+    const wasPending = this.initPending.delete(kind);
+    if (this.initPending.size > 0) return;
+    if (changed || wasPending) this.reload();
   }
 
   private setupPipelines(): void {
@@ -555,9 +597,13 @@ export class MultiLegEodComponent implements OnInit {
         this.rangeExpiries.set(null);
         this.expiryError.set('');
         this.expiryLoading.set(false);
-        this.deferredLoad = false;
+        this.initPending.clear();
         this.wantedExpiryKey = '';
         this.expiryRequest$.next(null);
+        this.atmLoading.set(false);
+        this.atmError.set('');
+        this.wantedAtmKey = '';
+        this.atmRequest$.next(null);
         this.underlying.set(null);
         this.tradeDate.set('');
         this.legs.set([]);
@@ -589,10 +635,47 @@ export class MultiLegEodComponent implements OnInit {
         this.metaError.set(`No listed strikes or expiries are available for ${this.symbol()}.`);
         return;
       }
-      const strike = this.defaultStrike(), expiry = expiries[0];
+      // With a valid range the default legs wait for the historical ATM of its To date (strike unset until then) and for the range's expiries,
+      // and load once both are in. Without one there is no date to look up, so the listed strike list is all there is to choose from.
+      const rangeKnown = 'range' in this.rangeResolution();
+      if (rangeKnown) this.clearAtm();   // today's ATM, spot and date are not shown as the answer for a historical To date
+      const expiry = expiries[0];
+      const strike = rangeKnown ? null : this.defaultStrike();
       this.legs.set([this.newLeg('CE', strike, expiry), this.newLeg('PE', strike, expiry)]);
-      this.legsAreDefault = true;
-      if (!this.syncRangeExpiries(true)) this.reload();
+      if (rangeKnown) this.initPending.add('expiry').add('atm');
+      this.syncRangeExpiries();
+      this.syncHistoricalAtm();
+      if (!rangeKnown) this.reload();
+    });
+
+    this.atmRequest$.pipe(
+      switchMap(request => (request ? this.historicalUnderlying.resolve(request.symbol, request.till).pipe(
+        map(result => ({ key: `${request.symbol}|${request.till}`, till: request.till, result })),
+      ) : of(null))),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe(answer => {
+      if (!answer || answer.key !== this.wantedAtmKey) return;
+      this.atmLoading.set(false);
+      const { result, till } = answer;
+      if (!result.ok) {
+        // No fallback to today's price: the strikes the legs already have stay, and the reason is shown.
+        this.atmError.set(result.reason === 'no-session'
+          ? `No trading session was found on or before ${this.longDate(till)}, so the ATM strike could not be set. Select a strike.`
+          : `Unable to load the closing price for ${this.longDate(till)}, so the ATM strike could not be set. Select a strike.`);
+        this.toast.error(this.atmError());
+        this.clearAtm();
+        this.settleInit('atm', false);
+        return;
+      }
+      this.atmError.set('');
+      this.strikes.set(result.strikes);
+      this.atmStrike.set(result.atm);
+      this.underlying.set(result.underlying);
+      this.tradeDate.set(result.session);
+      // Legs whose strike the user never picked follow the new ATM; picked strikes are kept (and shown as unlisted if they dropped out).
+      const changed = this.legs().some(leg => !leg.picked?.strike && leg.strike !== result.atm);
+      if (changed) this.legs.update(list => list.map(leg => (leg.picked?.strike ? leg : { ...leg, strike: result.atm })));
+      this.settleInit('atm', changed);
     });
 
     this.expiryRequest$.pipe(
@@ -605,14 +688,12 @@ export class MultiLegEodComponent implements OnInit {
     ).subscribe(result => {
       if (!result || result.key !== this.wantedExpiryKey) return;
       this.expiryLoading.set(false);
-      const deferred = this.deferredLoad;
-      this.deferredLoad = false;
       if (!result.expiries) {
         // Keep the standard list and say so: the dropdown is never silently wrong.
         this.rangeExpiries.set(null);
         this.expiryError.set('Unable to load expiries for these dates. Showing the standard expiry list.');
         this.toast.error(this.expiryError());
-        if (deferred) this.reload();
+        this.settleInit('expiry', false);
         return;
       }
       this.expiryError.set('');
@@ -621,12 +702,9 @@ export class MultiLegEodComponent implements OnInit {
       // Legs the user chose are kept and flagged instead.
       const latest = result.expiries.reduce<string | null>((best, expiry) => (best === null || expiry > best ? expiry : best), null);
       const target = latest ?? this.upcomingExpiries()[0] ?? null;
-      if (this.legsAreDefault && target && this.legs().some(leg => leg.expiry !== target)) {
-        this.legs.update(list => list.map(leg => ({ ...leg, expiry: target })));
-        this.reload();
-      } else if (deferred) {
-        this.reload();
-      }
+      const changed = !!target && this.legs().some(leg => !leg.picked?.expiry && leg.expiry !== target);
+      if (changed) this.legs.update(list => list.map(leg => (leg.picked?.expiry ? leg : { ...leg, expiry: target! })));
+      this.settleInit('expiry', changed);
     });
 
     this.dataRequest$.pipe(

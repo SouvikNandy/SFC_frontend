@@ -78,7 +78,7 @@
 
       <div class="control" *ngIf="instrument !== 'FUT'">
         <div class="label">Expiry</div>
-        <select (change)="onExpiryChange($event)" [disabled]="isMetadataLoading">
+        <select (change)="onExpiryChange($event)" [disabled]="isMetadataLoading || expiryLoading">
           <option *ngFor="let e of expiryOptions" [value]="e" [selected]="expiry === e">
             {{
               e
@@ -88,6 +88,8 @@
             }}
           </option>
         </select>
+        <div class="field-hint" *ngIf="expiryLoading" role="status">Loading expiries for these dates…</div>
+        <div class="range-error" *ngIf="!expiryLoading && expiryNote" role="status">{{ expiryNote }}</div>
       </div>
 
       <div class="control">

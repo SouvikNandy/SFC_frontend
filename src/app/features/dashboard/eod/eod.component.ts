@@ -29,6 +29,7 @@ import {
 import { ToastService } from '../../../core/services/toast.service';
 import { DefaultStock } from '../../../shared/services/constantFile';
 import { CLOSE_EOD_LABEL } from '../../../shared/utils/price-labels';
+import { defaultExpiry, isNoExpiriesResponse, selectExpiries } from '../../../shared/utils/expiry-selection';
 import { MAX_RANGE_MESSAGE, clearedMessage, exceedsOneYear, fromConflict, fromPickerBounds, isIsoDate, localTodayIso, tillConflict, tillPickerBounds } from '../../../shared/utils/date-range';
 import { EMPTY, Subject, of } from 'rxjs';
 import { catchError, finalize, map, switchMap, takeUntil, tap } from 'rxjs/operators';
@@ -61,7 +62,13 @@ export class EodComponent implements OnInit, OnDestroy {
   strike?: number;
   expiry?: string;
   strikeOptions: number[] = [];
+  /** Every expiry the backend lists inside the selected dates, weekly and monthly (see selectExpiries); never derived from today's date. */
   expiryOptions: string[] = [];
+  expiryLoading = false;
+  /** Why the expiry list is empty or could not be loaded; shown under the Expiry control. */
+  expiryNote = '';
+  /** Symbol and dates the current expiry list was asked for; an answer for any other key is stale. */
+  private expiryKey = '';
   ddGreeksData: DdGreeksData | null = null;
   range: '1W' | '1M' | '3M' | 'Custom' = '1W';
   // custom date range values (YYYY-MM-DD)
@@ -124,6 +131,7 @@ export class EodComponent implements OnInit, OnDestroy {
   ];
 
   private refresh$ = new Subject<{ loadMetadata: boolean }>();
+  private expiryRequest$ = new Subject<{ symbol: string; from: string; till: string } | null>();
   private destroy$ = new Subject<void>();
 
   constructor(
@@ -145,6 +153,7 @@ export class EodComponent implements OnInit, OnDestroy {
     this.customTill = this.todayStr;
     this.setupReload();
     this.setupChart();
+    this.setupExpiries();
     this.loadSymbols();
     this.refresh$.next({ loadMetadata: true });
   }
@@ -185,6 +194,8 @@ export class EodComponent implements OnInit, OnDestroy {
             this.ddGreeksData = null;
             this.strikeOptions = [];
             this.expiryOptions = [];
+            this.expiryNote = '';
+            this.cancelExpiries();
             this.strike = undefined;
             this.expiry = undefined;
           }
@@ -206,11 +217,10 @@ export class EodComponent implements OnInit, OnDestroy {
                 tap((res) => {
                   this.ddGreeksData = res.data;
                   this.strikeOptions = res.data.strike ?? [];
-                  this.expiryOptions = this.parseExpiries(res.data.expiry_date);
                   this.strike = this.selectDefaultStrike(res.data.strike, res.data.atm_strike);
-                  this.expiry = this.expiryOptions[0];
                   this.isMetadataLoading = false;
                   this.isEodLoading = true;
+                  this.syncExpiries();
                   this.requestChart();
                 }),
               )
@@ -406,13 +416,65 @@ export class EodComponent implements OnInit, OnDestroy {
     return this.svc.getEod(req);
   }
 
-  /** `expiry_date` was a single string and is now an array; both become a sorted list of unique YYYY-MM-DD dates. */
-  private parseExpiries(raw: DdGreeksData['expiry_date'] | null | undefined): string[] {
-    const values = Array.isArray(raw) ? raw : raw ? [raw] : [];
-    const dates = values
-      .map((value) => String(value).slice(0, 10))
-      .filter((value) => /^\d{4}-\d{2}-\d{2}$/.test(value));
-    return [...new Set(dates)].sort();
+  /** Dates the expiry list is for, or null while the selection is incomplete or invalid (nothing is requested then). */
+  private expiryWindow(): { from: string; till: string } | null {
+    if (!this.symbol || !this.isChartRangeValid()) return null;
+    const { date_from, date_till } = this.calcDateRange(this.range);
+    return isIsoDate(date_from) && isIsoDate(date_till) ? { from: date_from, till: date_till } : null;
+  }
+
+  private cancelExpiries(): void {
+    this.expiryKey = '';
+    this.expiryLoading = false;
+    this.expiryRequest$.next(null);
+  }
+
+  /**
+   * Asks `/fo/dd_expiry` for the symbol's expiries in the selected dates, once per symbol and dates.
+   */
+  private syncExpiries(): void {
+    const window = this.expiryWindow();
+    if (!window) {
+      this.cancelExpiries();
+      return;
+    }
+    const key = `${this.symbol}|${window.from}|${window.till}`;
+    if (key === this.expiryKey) return;
+    this.expiryKey = key;
+    this.expiryLoading = true;
+    this.expiryNote = '';
+    this.expiryRequest$.next({ symbol: this.symbol, ...window });
+    this.changeDetector.markForCheck();
+  }
+
+  private setupExpiries(): void {
+    this.expiryRequest$
+      .pipe(
+        takeUntil(this.destroy$),
+        switchMap((request) => {
+          if (!request) return of(null);
+          const key = `${request.symbol}|${request.from}|${request.till}`;
+          return this.svc.getDdExpiry({ symbol: request.symbol, trade_from: request.from, trade_till: request.till }).pipe(
+            map((response) => ({ key, request, dates: response.data?.expiry_date as unknown, failed: false })),
+            catchError((error) => of({ key, request, dates: [] as unknown, failed: !isNoExpiriesResponse(error) })),
+          );
+        }),
+      )
+      .subscribe((result) => {
+        if (!result || result.key !== this.expiryKey) return;
+        this.expiryLoading = false;
+        const { from, till } = result.request;
+        const previous = this.expiry;
+        this.expiryOptions = result.failed ? [] : selectExpiries(Array.isArray(result.dates) ? result.dates : [], from, till);
+        this.expiryNote = result.failed
+          ? 'Unable to load expiries for these dates.'
+          : this.expiryOptions.length ? '' : 'No expiries are listed for these dates.';
+        if (result.failed) this.toast.error(this.expiryNote);
+        // Keep the user's expiry when it is still offered; otherwise the most recent one inside the dates.
+        this.expiry = previous && this.expiryOptions.includes(previous) ? previous : defaultExpiry(this.expiryOptions, from, till);
+        if (this.expiry !== previous && this.instrument !== 'FUT') this.resetPageAndRefresh();
+        this.changeDetector.markForCheck();
+      });
   }
 
   private selectDefaultStrike(strikes: number[], atmStrike: number): number | undefined {
@@ -604,6 +666,7 @@ export class EodComponent implements OnInit, OnDestroy {
 
   private resetPageAndRefresh(): void {
     this.currentPage = 1;
+    if (!this.isMetadataLoading) this.syncExpiries();   // the dates may have changed: the expiry list follows them
     this.refreshEod();
     if (!this.isMetadataLoading) this.requestChart();   // a filter changed; paging (below) never touches the chart
   }

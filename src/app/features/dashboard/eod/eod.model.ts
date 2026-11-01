@@ -14,6 +14,8 @@ export type EodSymbol = EodRequest['symbol'];
 
 export interface DdGreeksRequest {
     symbol: EodSymbol;
+    /** A past trading session (YYYY-MM-DD): the figures are those of that day. Omitted: the latest session. HTTP 422 for a day without data. */
+    trade_date?: string;
 }
 
 /** `POST /fo/dd_expiry`: the expiries listed for a symbol between two trade dates (YYYY-MM-DD). */

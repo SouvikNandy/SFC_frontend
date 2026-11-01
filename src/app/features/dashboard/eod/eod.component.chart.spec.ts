@@ -38,6 +38,7 @@ describe('EodComponent chart (/fo/eod/chart)', () => {
                 provide: EodService,
                 useValue: {
                     getSymbols: () => of(['NIFTY', 'BANKNIFTY']),
+                    getDdExpiry: () => of({ success: true, data: { symbol: 'NIFTY', trade_from: '', trade_till: '', expiry_date: ['2026-10-15'] } }),
                     getDdGreeks: () => of({ success: true, data: { symbol: 'NIFTY', trade_date: '2026-10-16', expiry_date: ['2026-10-29'], underlying: 22630, strike: [22600], atm_strike: 22600, market_price: { CE: 1, PE: 1 } } }),
                     getEod,
                     getEodChart,
@@ -94,9 +95,9 @@ describe('EodComponent chart (/fo/eod/chart)', () => {
         await click('Call');
         const table = getEod.mock.calls.at(-1)![0];
         const chart = getEodChart.mock.calls.at(-1)![0];
-        expect(chart).toEqual({ symbol: 'NIFTY', option_type: 'CE', strike: 22600, expiry: '2026-10-29', date_from: table.date_from, date_till: table.date_till });
+        expect(chart).toEqual({ symbol: 'NIFTY', option_type: 'CE', strike: 22600, expiry: '2026-10-15', date_from: table.date_from, date_till: table.date_till });
         await click('Put');
-        expect(getEodChart.mock.calls.at(-1)![0]).toMatchObject({ option_type: 'PE', strike: 22600, expiry: '2026-10-29' });
+        expect(getEodChart.mock.calls.at(-1)![0]).toMatchObject({ option_type: 'PE', strike: 22600, expiry: '2026-10-15' });
         await click('1M');
         expect(getEod.mock.calls.at(-1)![0].date_from).toBe('2026-09-19');
         expect(getEodChart.mock.calls.at(-1)![0]).toMatchObject({ option_type: 'PE', date_from: '2026-09-19', date_till: '2026-10-19' });
