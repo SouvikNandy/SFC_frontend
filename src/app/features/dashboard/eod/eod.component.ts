@@ -62,7 +62,7 @@ export class EodComponent implements OnInit, OnDestroy {
   strike?: number;
   expiry?: string;
   strikeOptions: number[] = [];
-  /** Every expiry the backend lists inside the selected dates, weekly and monthly (see selectExpiries); never derived from today's date. */
+  /** Every expiry `dd_expiry` returns for the selected dates, including those after To (see selectExpiries); never derived from today's date. */
   expiryOptions: string[] = [];
   expiryLoading = false;
   /** Why the expiry list is empty or could not be loaded; shown under the Expiry control. */
@@ -465,7 +465,7 @@ export class EodComponent implements OnInit, OnDestroy {
         this.expiryLoading = false;
         const { from, till } = result.request;
         const previous = this.expiry;
-        this.expiryOptions = result.failed ? [] : selectExpiries(Array.isArray(result.dates) ? result.dates : [], from, till);
+        this.expiryOptions = result.failed ? [] : selectExpiries(Array.isArray(result.dates) ? result.dates : []);
         this.expiryNote = result.failed
           ? 'Unable to load expiries for these dates.'
           : this.expiryOptions.length ? '' : 'No expiries are listed for these dates.';

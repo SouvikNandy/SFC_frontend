@@ -69,25 +69,26 @@ describe('EodComponent expiry list (selected dates, not today)', () => {
         expect(component.expiryOptions).not.toContain('2026-11-24');   // dd_symbol_details lists it; the range answer does not
     });
 
-    it('Jan 2026: sends the symbol, From and To as given; lists every expiry in the range, weekly and monthly, and nothing after To', async () => {
+    it('Jan 2026: sends the symbol, From and To as given; lists every expiry the API returns, historical and after To', async () => {
         await create();
         await setRange('2026-01-01', '2026-01-31');
         expect(calls.at(-1)).toEqual({ symbol: 'NIFTY', trade_from: '2026-01-01', trade_till: '2026-01-31' });
-        expect(component.expiryOptions).toEqual(['2026-01-06', '2026-01-13', '2026-01-20', '2026-01-27']);
+        expect(component.expiryOptions).toEqual(JAN_2026);
     });
 
-    it('no next-month or next-two-month expiry is added, even though the backend returns them', async () => {
+    it('dates after To are retained, not filtered out', async () => {
         await create();
         await setRange('2026-01-01', '2026-01-31');
-        expect(component.expiryOptions).not.toContain('2026-02-24');
-        expect(component.expiryOptions).not.toContain('2026-03-30');
+        expect(component.expiryOptions).toContain('2026-02-24');
+        expect(component.expiryOptions).toContain('2026-06-30');
+        expect(component.expiryOptions.at(-1)).toBe('2026-06-30');
     });
 
-    it('From and To are inclusive and expiries before From are not offered', async () => {
+    it('the request carries From and To; the answer is shown whole', async () => {
         await create();
         await setRange('2026-01-13', '2026-01-27');
         expect(calls.at(-1)).toEqual({ symbol: 'NIFTY', trade_from: '2026-01-13', trade_till: '2026-01-27' });
-        expect(component.expiryOptions).toEqual(['2026-01-13', '2026-01-20', '2026-01-27']);
+        expect(component.expiryOptions).toEqual(JAN_2026);
     });
 
     it('the list is unique and ascending', async () => {
@@ -101,7 +102,7 @@ describe('EodComponent expiry list (selected dates, not today)', () => {
         await create();
         component.onInstrument('CE');
         await setRange('2026-01-01', '2026-01-31');
-        expect(optionValues()).toEqual(['2026-01-06', '2026-01-13', '2026-01-20', '2026-01-27']);
+        expect(optionValues()).toEqual(JAN_2026);
     });
 
     it('changing From or To refreshes the list; the same dates are not requested twice', async () => {
@@ -116,7 +117,7 @@ describe('EodComponent expiry list (selected dates, not today)', () => {
         await settle();
         expect(calls.at(-1)).toEqual({ symbol: 'NIFTY', trade_from: '2026-01-01', trade_till: '2026-02-20' });
         expect(component.expiryOptions).toContain('2026-02-17');
-        expect(component.expiryOptions).not.toContain('2026-04-28');   // later expiries are not added
+        expect(component.expiryOptions).toContain('2026-04-28');       // beyond To, kept
     });
 
     it('presets use their own dates and the current day only because To is "today" for them', async () => {
@@ -146,33 +147,34 @@ describe('EodComponent expiry list (selected dates, not today)', () => {
         expect(calls).toHaveLength(0);
     });
 
-    it('keeps the user\'s expiry when it is still offered, otherwise picks the most recent one inside the dates', async () => {
+    it('keeps the selected expiry while it is still offered; once it is gone, picks the most recent one inside the dates', async () => {
         await create();
         component.onInstrument('CE');
         await setRange('2026-01-01', '2026-01-31');
-        expect(component.expiry).toBe('2026-01-27');                   // most recent expiry inside the range
         component.onExpiry('2026-01-13');
         component.onCustomFromChange('2026-01-05');
         await settle();
         expect(component.expiry).toBe('2026-01-13');                   // still offered: kept
+        expiryFor = reply(['2026-01-20', '2026-01-27', '2026-02-24']);
         component.onCustomFromChange('2026-01-14');
         await settle();
-        expect(component.expiry).toBe('2026-01-27');                   // 2026-01-13 dropped out: back to the default
+        expect(component.expiry).toBe('2026-01-27');                   // 2026-01-13 dropped out: most recent inside the range
     });
 
-    it('with no expiry inside the dates nothing is offered, however many later expiries the backend lists', async () => {
+    it('with no expiry inside the dates the dates after To are still offered and the earliest becomes the default', async () => {
         await create();
         component.onInstrument('CE');
         await setRange('2026-01-28', '2026-01-30');
-        expect(component.expiryOptions).toEqual([]);
-        expect(component.expiry).toBeUndefined();
-        expect(component.expiryNote).toBe('No expiries are listed for these dates.');
+        expect(component.expiryOptions).toEqual(JAN_2026);
+        expect(component.expiry).toBe('2026-01-06');
     });
 
     it('a changed option expiry reloads the table with it', async () => {
         await create();
         component.onInstrument('CE');
         await setRange('2026-01-01', '2026-01-31');
+        component.onExpiry('2026-01-27');
+        await settle();
         expect(getEod.mock.calls.at(-1)![0]).toMatchObject({ option_type: 'CE', expiry: '2026-01-27' });
     });
 
@@ -244,6 +246,6 @@ describe('EodComponent expiry list (selected dates, not today)', () => {
         slowSymbol.next({ success: true, data: { symbol: 'BANKNIFTY', trade_from: '', trade_till: '', expiry_date: ['2026-02-24'] } });
         await settle();
         expect(component.symbol).toBe('RELIANCE');
-        expect(component.expiryOptions).toEqual(['2026-02-10', '2026-02-24']);
+        expect(component.expiryOptions).toEqual(['2026-02-10', '2026-02-24', '2026-03-30']);
     });
 });

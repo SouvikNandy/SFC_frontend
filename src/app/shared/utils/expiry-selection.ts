@@ -7,13 +7,12 @@ export function cleanDates(values: readonly unknown[] | null | undefined): strin
 }
 
 /**
- * The expiries offered for a date range, from the dates the backend lists (`/fo/dd_expiry`): every listed expiry from `from`
- * to `till`, inclusive, weekly and monthly alike. Nothing outside the range is added and nothing is classified or inferred.
- * The result is unique and ascending. No system date is involved.
+ * The expiries offered for a date range: the complete `expiry_date` list `/fo/dd_expiry` returns, historical and future alike.
+ * The backend decides what is available, so nothing is filtered by From or To, classified or inferred. Only valid dates are kept,
+ * unique and ascending. No system date is involved.
  */
-export function selectExpiries(listed: readonly unknown[] | null | undefined, from: string, till: string): string[] {
-  if (!ISO_DATE.test(from) || !ISO_DATE.test(till)) return [];
-  return cleanDates(listed).filter(date => date >= from && date <= till);
+export function selectExpiries(listed: readonly unknown[] | null | undefined): string[] {
+  return cleanDates(listed);
 }
 
 /** The default pick: the most recent expiry inside the range; with none there, the earliest option. Undefined for an empty list. */
