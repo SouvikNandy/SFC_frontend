@@ -65,12 +65,6 @@
         </div>
         @if (symbolsLoading() || metaLoading()) {
         <p class="hint-line" role="status">{{ symbolsLoading() ? 'Loading symbol list…' : 'Loading strikes and expiries…' }}</p>
-        } @else if (expiryLoading()) {
-        <p class="hint-line" role="status">Loading expiries for these dates…</p>
-        } @else if (atmLoading()) {
-        <p class="hint-line" role="status">Loading the closing price for the ATM strike…</p>
-        } @else if (strikesLoading()) {
-        <p class="hint-line" role="status">Loading the strikes for the selected expiry…</p>
         }
         @if (rangeError()) { <p class="input-error" role="alert">{{ clearedNote() || rangeError() }}</p> }
         @if (expiriesEmpty()) { <p class="input-error" role="status">No expiries are listed for these dates.</p> }
@@ -100,9 +94,10 @@
             </div>
             <div class="inline-field">
                 <label [for]="'ml-strike-' + leg.id">Strike</label>
-                <select [id]="'ml-strike-' + leg.id" [disabled]="atmLoading() || strikesLoadingFor(leg.expiry)" (change)="setLegStrike(leg.id, $any($event.target).value)">
+                <div class="select-wrap">
+                <select [id]="'ml-strike-' + leg.id" [disabled]="strikeBusy(leg.expiry)" [attr.aria-busy]="strikeBusy(leg.expiry)" (change)="setLegStrike(leg.id, $any($event.target).value)">
                     @if (leg.strike === null) {
-                    <option value="" selected disabled>{{ strikesLoadingFor(leg.expiry) ? 'Loading strikes…' : 'Select strike' }}</option>
+                    <option value="" selected disabled>Select strike</option>
                     } @else if (!strikesFor(leg.expiry).includes(leg.strike)) {
                     <option [value]="leg.strike" selected>{{ leg.strike }}{{ strikeFlag(leg) }}</option>
                     }
@@ -110,10 +105,16 @@
                     <option [value]="s" [selected]="s === leg.strike">{{ s }}{{ s === atmFor(leg.expiry) ? ' (ATM)' : '' }}</option>
                     }
                 </select>
+                @if (strikeBusy(leg.expiry)) {
+                <span class="select-spinner" aria-hidden="true"></span>
+                <span class="visually-hidden" role="status">{{ atmLoading() ? 'Loading the closing price for the ATM strike…' : 'Loading the strikes for the selected expiry…' }}</span>
+                }
+                </div>
             </div>
             <div class="inline-field">
                 <label [for]="'ml-expiry-' + leg.id">Expiry</label>
-                <select [id]="'ml-expiry-' + leg.id" [disabled]="expiryLoading()" (change)="setLegExpiry(leg.id, $any($event.target).value)">
+                <div class="select-wrap">
+                <select [id]="'ml-expiry-' + leg.id" [disabled]="expiryLoading()" [attr.aria-busy]="expiryLoading()" (change)="setLegExpiry(leg.id, $any($event.target).value)">
                     @if (!expiries().includes(leg.expiry)) {
                     <option [value]="leg.expiry" selected>{{ longDate(leg.expiry) }} (not in the current expiry list)</option>
                     }
@@ -121,6 +122,11 @@
                     <option [value]="e" [selected]="e === leg.expiry">{{ longDate(e) }}</option>
                     }
                 </select>
+                @if (expiryLoading()) {
+                <span class="select-spinner" aria-hidden="true"></span>
+                <span class="visually-hidden" role="status">Loading expiries for these dates…</span>
+                }
+                </div>
             </div>
             <div class="leg-tools">
                 <span [class]="'leg-dot ' + legColorClass(index)" aria-hidden="true"></span>

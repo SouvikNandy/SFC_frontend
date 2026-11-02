@@ -69,31 +69,37 @@
 
       <div class="control" *ngIf="instrument !== 'FUT'">
         <div class="label">Strike</div>
-        <select (change)="onStrikeChange($event)" [disabled]="isMetadataLoading || strikesLoading || underlyingLoading">
-          <option *ngIf="strike == null" value="" disabled selected>{{ strikesLoading || underlyingLoading ? 'Loading strikes…' : 'Select strike' }}</option>
-          <option *ngIf="strike != null && strikesLoaded && !strikeOptions.includes(strike)" [value]="strike" selected>{{ strike }} (not listed for this expiry)</option>
-          <option *ngFor="let r of strikeOptions" [value]="r" [selected]="strike === r">
-            {{ r }}
-          </option>
-        </select>
-        <div class="field-hint" *ngIf="strikesLoading || underlyingLoading" role="status">Loading strikes for this expiry…</div>
+        <div class="select-wrap strike-wrap">
+          <select (change)="onStrikeChange($event)" [disabled]="strikeBusy" [attr.aria-busy]="strikeBusy">
+            <option *ngIf="strike == null" value="" disabled selected>Select strike</option>
+            <option *ngIf="strike != null && strikesLoaded && !strikeOptions.includes(strike)" [value]="strike" selected>{{ strike }} (not listed for this expiry)</option>
+            <option *ngFor="let r of strikeOptions" [value]="r" [selected]="strike === r">
+              {{ r }}{{ r === atmStrike ? ' (ATM)' : '' }}
+            </option>
+          </select>
+          <span class="select-spinner" *ngIf="strikeBusy" aria-hidden="true"></span>
+          <span class="visually-hidden" *ngIf="strikesLoading || underlyingLoading" role="status">Loading strikes for this expiry…</span>
+        </div>
         <div class="range-error" *ngIf="!strikesLoading && !underlyingLoading && underlyingNote" role="status">{{ underlyingNote }}</div>
         <div class="range-error" *ngIf="!strikesLoading && !underlyingLoading && strikeNote" role="status">{{ strikeNote }}</div>
       </div>
 
       <div class="control" *ngIf="instrument !== 'FUT'">
         <div class="label">Expiry</div>
-        <select (change)="onExpiryChange($event)" [disabled]="isMetadataLoading || expiryLoading">
-          <option *ngFor="let e of expiryOptions" [value]="e" [selected]="expiry === e">
-            {{
-              e
-                | date
-                  : 'dd MMM
-                        yyyy'
-            }}
-          </option>
-        </select>
-        <div class="field-hint" *ngIf="expiryLoading" role="status">Loading expiries for these dates…</div>
+        <div class="select-wrap">
+          <select (change)="onExpiryChange($event)" [disabled]="expiryBusy" [attr.aria-busy]="expiryBusy">
+            <option *ngFor="let e of expiryOptions" [value]="e" [selected]="expiry === e">
+              {{
+                e
+                  | date
+                    : 'dd MMM
+                          yyyy'
+              }}
+            </option>
+          </select>
+          <span class="select-spinner" *ngIf="expiryBusy" aria-hidden="true"></span>
+          <span class="visually-hidden" *ngIf="expiryLoading" role="status">Loading expiries for these dates…</span>
+        </div>
         <div class="range-error" *ngIf="!expiryLoading && expiryNote" role="status">{{ expiryNote }}</div>
       </div>
 

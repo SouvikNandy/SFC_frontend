@@ -88,7 +88,7 @@ describe('EodComponent strikes of the selected expiry (dd_strikes)', () => {
         expect(component.expiry).toBe('2026-01-27');
         expect(strikeCalls).toEqual([{ symbol: 'NIFTY', expiry: '2026-01-27' }]);
         expect(component.strikeOptions).toEqual(GRID);
-        expect(strikeTexts()).toEqual(['25100', '25200', '25300', '25400']);
+        expect(strikeTexts()).toEqual(['25100', '25200', '25300 (ATM)', '25400']);
     });
 
     it('the default strike is the listed strike nearest the underlying close of the To date, not the current ATM', async () => {
@@ -272,5 +272,108 @@ describe('EodComponent strikes of the selected expiry (dd_strikes)', () => {
         component.onInstrument('CE');
         await settle();
         expect(underlyingCalls.at(-1)).toEqual({ symbol: 'NIFTY', till: '2026-10-18' });
+    });
+
+    it('loading strikes shows a spinner inside the strike control, no text line below it, and the control stays disabled', async () => {
+        await create();
+        const pending = new Subject<ExpiryStrikesResult>();
+        strikesFor = () => pending;
+        await setRange('2026-01-01', '2026-01-31');
+        component.onExpiry('2026-01-27');
+        component.onInstrument('CE');
+        await settle();
+        const control = strikeSelect().closest('.control')!;
+        expect(control.querySelector('.select-wrap .select-spinner')).toBeTruthy();
+        expect(control.querySelector('.field-hint')).toBeNull();
+        expect(strikeSelect().disabled).toBe(true);
+        expect(strikeSelect().getAttribute('aria-busy')).toBe('true');
+        pending.next({ ok: true, strikes: GRID });
+        await settle();
+        expect(control.querySelector('.select-spinner')).toBeNull();
+        expect(strikeSelect().disabled).toBe(false);
+        expect(strikeSelect().getAttribute('aria-busy')).toBe('false');
+    });
+
+    it('a failed strike list removes the spinner and keeps the error note', async () => {
+        await create();
+        strikesFor = () => of({ ok: false, reason: 'unavailable' });
+        await setRange('2026-01-01', '2026-01-31');
+        component.onExpiry('2026-01-27');
+        component.onInstrument('CE');
+        await settle();
+        expect(host.querySelector('.select-spinner')).toBeNull();
+        expect(host.textContent).toContain('Unable to load the strikes for this expiry.');
+    });
+
+    describe('ATM marker', () => {
+        const texts = () => Array.from(strikeSelect().options).map(o => o.textContent?.trim());
+
+        it('marks the strike nearest the underlying close with (ATM), and only that one', async () => {
+            await callsOnJanuary();
+            expect(component.atmStrike).toBe(25300);
+            expect(texts()).toEqual(['25100', '25200', '25300 (ATM)', '25400']);
+        });
+
+        it('uses the strike list of the selected expiry', async () => {
+            await callsOnJanuary();
+            strikesFor = (_s, expiry) => (expiry === '2026-01-13' ? strikesOk([25000, 25325, 25600]) : strikesOk(GRID));
+            component.onExpiry('2026-01-13');
+            await settle();
+            expect(texts()).toEqual(['25000', '25325 (ATM)', '25600']);
+        });
+
+        it('stays on the ATM strike when the user picks a different one', async () => {
+            await callsOnJanuary();
+            component.onStrike(25400);
+            await settle();
+            expect(component.strike).toBe(25400);
+            expect(component.atmStrike).toBe(25300);
+            expect(texts()).toEqual(['25100', '25200', '25300 (ATM)', '25400']);
+            expect(strikeSelect().selectedOptions[0].textContent?.trim()).toBe('25400');
+        });
+
+        it('follows the underlying close, not the selection, when the To date changes', async () => {
+            await callsOnJanuary();
+            component.onStrike(25400);
+            underlyingFor = () => closeOn('2026-02-27', 25110);
+            component.onCustomTillChange('2026-02-27');
+            await settle();
+            expect(texts()).toEqual(['25100 (ATM)', '25200', '25300', '25400']);
+        });
+
+        it('shows no marker without a closing price, and the strikes can still be chosen', async () => {
+            await create();
+            underlyingFor = () => of({ ok: false, reason: 'unavailable' });
+            await setRange('2026-01-01', '2026-01-31');
+            component.onExpiry('2026-01-27');
+            component.onInstrument('CE');
+            await settle();
+            expect(component.atmStrike).toBeNull();
+            expect(texts().some(text => /ATM/.test(text ?? ''))).toBe(false);
+            expect(texts()).toContain('25200');
+        });
+
+        it('shows no marker while the closing price is still loading', async () => {
+            await create();
+            underlyingFor = () => new Subject<HistoricalUnderlyingResult>();
+            await setRange('2026-01-01', '2026-01-31');
+            component.onExpiry('2026-01-27');
+            component.onInstrument('CE');
+            await settle();
+            expect(component.strikeOptions).toEqual(GRID);
+            expect(component.atmStrike).toBeNull();
+            expect(texts().some(text => /ATM/.test(text ?? ''))).toBe(false);
+        });
+
+        it('shows no marker while the strikes are loading or when none are listed', async () => {
+            await create();
+            strikesFor = () => of({ ok: false, reason: 'none' });
+            await setRange('2026-01-01', '2026-01-31');
+            component.onExpiry('2026-01-27');
+            component.onInstrument('CE');
+            await settle();
+            expect(component.atmStrike).toBeNull();
+            expect(host.textContent).not.toContain('(ATM)');
+        });
     });
 });

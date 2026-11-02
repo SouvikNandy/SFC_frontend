@@ -818,6 +818,20 @@ export class EodComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** A control's options are being refreshed: it shows a spinner and stays disabled. */
+  get strikeBusy(): boolean {
+    return this.isMetadataLoading || this.strikesLoading || this.underlyingLoading;
+  }
+
+  /** The strike marked (ATM): the listed strike of the selected expiry nearest the underlying close. Null until both are known; it does not follow the user's choice. */
+  get atmStrike(): number | null {
+    return nearestStrike(this.strikeOptions, this.underlyingClose);
+  }
+
+  get expiryBusy(): boolean {
+    return this.isMetadataLoading || this.expiryLoading;
+  }
+
   private restorePageScroll(): void {
     if (this.restoreScrollTop === null) return;
     const scrollTop = this.restoreScrollTop;

@@ -233,6 +233,15 @@
   cursor: pointer;
 }
 
+/* Wide enough for the placeholder and the strike numbers alike, so the control does not resize when its options refresh. */
+.strike-wrap {
+  min-width: 9rem;
+}
+
+.select-wrap > select {
+  width: 100%;
+}
+
 .range-error {
   margin: $space-8 0 0;
   color: var(--red);

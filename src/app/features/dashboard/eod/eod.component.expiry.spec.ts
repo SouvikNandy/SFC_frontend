@@ -372,4 +372,37 @@ describe('EodComponent expiry list (selected dates, not today)', () => {
             expect(getEod.mock.calls.at(-1)![0]).toMatchObject({ expiry: '2026-01-13' });
         });
     });
+
+    describe('loading indicator in the Expiry control', () => {
+        it('a refreshing list shows a spinner inside the control and no text line below it; the control is disabled meanwhile', async () => {
+            await create();
+            component.onInstrument('CE');
+            await settle();
+            const slow = new Subject<DdExpiryResponse>();
+            expiryFor = () => slow;
+            component.onRange('Custom');
+            component.onCustomFromChange('2026-01-01');
+            component.onCustomTillChange('2026-02-27');
+            await settle();
+            const select = host.querySelectorAll<HTMLSelectElement>('.control select')[1];
+            const control = select.closest('.control')!;
+            expect(control.querySelector('.select-wrap .select-spinner')).toBeTruthy();
+            expect(control.querySelector('.field-hint')).toBeNull();
+            expect(select.disabled).toBe(true);
+            slow.next({ success: true, data: { symbol: 'NIFTY', trade_from: '', trade_till: '', expiry_date: ['2026-02-24'] } });
+            await settle();
+            expect(control.querySelector('.select-spinner')).toBeNull();
+            expect(select.disabled).toBe(false);
+        });
+
+        it('a failed list removes the spinner and keeps the note and toast', async () => {
+            await create();
+            component.onInstrument('CE');
+            expiryFor = () => throwError(() => new HttpErrorResponse({ status: 500 }));
+            await setRange('2026-01-01', '2026-01-31');
+            expect(host.querySelector('.select-spinner')).toBeNull();
+            expect(host.textContent).toContain('Unable to load expiries for these dates.');
+            expect(toastError).toHaveBeenCalled();
+        });
+    });
 });

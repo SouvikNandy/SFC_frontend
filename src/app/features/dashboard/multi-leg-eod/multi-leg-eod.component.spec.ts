@@ -972,7 +972,7 @@ describe('MultiLegEodComponent', () => {
       expect(component.strikesLoading()).toBe(true);
       expect(legStrikes()).toEqual([null, 22600]);
       expect(strikeSelects()[0].disabled).toBe(true);
-      expect(strikeSelects()[0].options[0].textContent).toContain('Loading strikes');
+      expect(strikeSelects()[0].options[0].textContent).toContain('Select strike');
       expect(host.textContent).toContain('Loading the strikes for the selected expiry');
       expect(requests.some(r => r.expiry === OTHER)).toBe(false);
       pending.next({ ok: true, strikes: [22550, 22650] });
@@ -1059,6 +1059,75 @@ describe('MultiLegEodComponent', () => {
       await click('.legs-head .ghost', '+ Add leg');
       expect(component.legs()[2].expiry).toBe(OTHER);
       expect(legStrikes()[2]).toBe(22650);
+    });
+  });
+
+  describe('loading indicator inside the expiry and strike dropdowns', () => {
+    const wrapOf = (selector: string) => host.querySelector(selector)!.closest('.select-wrap')!;
+    const spinnersIn = (selector: string) => wrapOf(selector).querySelectorAll('.select-spinner').length;
+    const hintText = () => host.querySelector('.hint-line')?.textContent ?? '';
+
+    it('no spinner and no loading line when nothing is loading', () => {
+      expect(host.querySelectorAll('.select-spinner')).toHaveLength(0);
+      expect(host.querySelector('.hint-line')).toBeNull();
+    });
+
+    it('a strike list that is loading shows a spinner inside that leg\'s strike control only, disabled, with no text line', async () => {
+      const pending = new Subject<ExpiryStrikesResult>();
+      strikesFor = (_s, expiry) => (expiry === '2026-11-26' ? pending : of({ ok: true, strikes: STRIKE_GRID }));
+      const select = host.querySelectorAll<HTMLSelectElement>('select[id^="ml-expiry-"]')[0];
+      select.value = '2026-11-26';
+      select.dispatchEvent(new Event('change'));
+      await settle();
+      expect(spinnersIn('select[id^="ml-strike-"]')).toBe(1);
+      const first = host.querySelectorAll<HTMLSelectElement>('select[id^="ml-strike-"]')[0];
+      expect(first.closest('.select-wrap')!.querySelector('.select-spinner')).toBeTruthy();
+      expect(first.disabled).toBe(true);
+      expect(first.getAttribute('aria-busy')).toBe('true');
+      expect(host.querySelectorAll<HTMLSelectElement>('select[id^="ml-strike-"]')[1].closest('.select-wrap')!.querySelector('.select-spinner')).toBeNull();
+      expect(hintText()).toBe('');
+      pending.next({ ok: true, strikes: [22550, 22650] });
+      await settle();
+      expect(host.querySelectorAll('.select-spinner')).toHaveLength(0);
+      expect(first.disabled).toBe(false);
+    });
+
+    it('expiry lists that are loading show a spinner in every expiry control, disabled, and no text line', async () => {
+      const slow = new Subject<{ data: { symbol: string; trade_from: string; trade_till: string; expiry_date: string[] } }>();
+      expiryFor = () => slow;
+      await click('.field .seg button', '1M');
+      expect(component.expiryLoading()).toBe(true);
+      const expiries = Array.from(host.querySelectorAll<HTMLSelectElement>('select[id^="ml-expiry-"]'));
+      expect(expiries.every(el => el.disabled && !!el.closest('.select-wrap')!.querySelector('.select-spinner'))).toBe(true);
+      expect(hintText()).toBe('');
+      slow.next({ data: { symbol: 'NIFTY', trade_from: '', trade_till: '', expiry_date: [] } });
+      await settle();
+      expect(host.querySelectorAll('select[id^="ml-expiry-"] ~ .select-spinner')).toHaveLength(0);
+    });
+
+    it('the closing price loading shows spinners in the strike controls', async () => {
+      const pending = new Subject<HistoricalUnderlyingResult>();
+      atmFor = () => pending;
+      component.selectSymbol('BANKNIFTY');
+      await settle();
+      expect(component.atmLoading()).toBe(true);
+      const strikes = Array.from(host.querySelectorAll<HTMLSelectElement>('select[id^="ml-strike-"]'));
+      expect(strikes.every(el => !!el.closest('.select-wrap')!.querySelector('.select-spinner'))).toBe(true);
+      expect(hintText()).not.toContain('closing price');
+      pending.next({ ok: true, session: '2026-10-29', underlying: 59610.45, strikes: [59600], atm: 59600 });
+      await settle();
+      expect(host.querySelectorAll('select[id^="ml-strike-"] ~ .select-spinner')).toHaveLength(0);
+    });
+
+    it('the loading text is kept for screen readers only', async () => {
+      const pending = new Subject<ExpiryStrikesResult>();
+      strikesFor = (_s, expiry) => (expiry === '2026-11-26' ? pending : of({ ok: true, strikes: STRIKE_GRID }));
+      const select = host.querySelectorAll<HTMLSelectElement>('select[id^="ml-expiry-"]')[0];
+      select.value = '2026-11-26';
+      select.dispatchEvent(new Event('change'));
+      await settle();
+      const status = host.querySelector('.select-wrap .visually-hidden');
+      expect(status?.textContent).toContain('Loading the strikes');
     });
   });
 

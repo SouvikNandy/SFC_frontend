@@ -511,6 +511,11 @@ export class MultiLegEodComponent implements OnInit {
     return this.expiryStrikes()[expiry] ?? [];
   }
 
+  /** A leg's strike list is being refreshed (the closing price or its expiry's strikes): spinner and disabled. */
+  strikeBusy(expiry: string): boolean {
+    return this.atmLoading() || this.strikesLoadingFor(expiry);
+  }
+
   strikesLoadingFor(expiry: string): boolean {
     return this.strikesPending().includes(expiry);
   }
