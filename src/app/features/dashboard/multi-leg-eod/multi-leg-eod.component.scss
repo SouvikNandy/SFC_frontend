@@ -222,6 +222,7 @@ button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
 }
 
 .inline-field .select-wrap { flex: 1 1 auto; }
+.leg-warn { grid-column: 1 / -1; margin: 0; color: var(--ink-faint); font-size: 11.5px; line-height: 1.4; }
 .leg-tools { display: flex; align-items: center; gap: 2px; }
 .leg-dot { display: inline-block; width: 10px; height: 10px; margin-right: 2px; border-radius: 50%; background: var(--leg-color); }
 
@@ -237,7 +238,9 @@ button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
   &:hover { color: var(--red); }
 }
 
-.legnote { margin: 10px 0 0; color: var(--ink-faint); font-size: 12px; line-height: 1.5; }
+/* The ATM note, its "updating" text and the empty placeholder after a failed lookup share one box height, so the legs panel does not move between them. */
+.legnote,
+.legnote-spacer { margin: 10px 0 0; min-height: 1.5em; color: var(--ink-faint); font-size: 12px; line-height: 1.5; }
 
 /* One colour per series so the dot, legend swatch and chart line always match. */
 .leg-c0 { --leg-color: var(--teal); }
@@ -317,4 +320,6 @@ button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
   select { font-size: 16px; }
   .legrow { grid-template-columns: 1fr 1fr; }
   .legrow .leg-tools { justify-self: end; }
+  .legnote,
+  .legnote-spacer { min-height: 4.5em; }   /* the explanation wraps to up to three lines on a phone */
 }

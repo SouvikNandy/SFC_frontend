@@ -9,7 +9,7 @@ import {
 } from '@angular/core';
 import { CLOSE_EOD_LABEL } from '../../../shared/utils/price-labels';
 import { nearestStrike } from '../../../shared/utils/atm-strike';
-import { isNoExpiriesResponse } from '../../../shared/utils/expiry-selection';
+import { cleanDates, isNoExpiriesResponse } from '../../../shared/utils/expiry-selection';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Observable, Subject, catchError, finalize, forkJoin, map, mergeMap, of, shareReplay, switchMap, tap } from 'rxjs';
 import { ToastService } from '../../../core/services/toast.service';
@@ -17,7 +17,7 @@ import { ChartTooltipComponent, ChartTooltipRow } from '../../../shared/componen
 import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
 import { DataTableColumn } from '../../../shared/components/data-table/data-table.types';
 import { DefaultStock } from '../../../shared/services/constantFile';
-import { clearedMessage, fromConflict, fromPickerBounds, tillConflict, tillPickerBounds } from '../../../shared/utils/date-range';
+import { clearedMessage, isIsoDate, fromConflict, fromPickerBounds, tillConflict, tillPickerBounds } from '../../../shared/utils/date-range';
 import { EodDataRow } from '../eod/eod.model';
 import { EodService } from '../eod/eod.service';
 import { ExpiryStrikesService } from '../eod/expiry-strikes.service';
@@ -39,6 +39,7 @@ import {
   combinedRows,
   csvFilename,
   isLegComplete,
+  isSparseAtm,
   legCacheKey,
   PRESET_SESSIONS,
   legLabel,
@@ -116,6 +117,22 @@ export class MultiLegEodComponent implements OnInit {
   private readonly metaExpiries = signal<string[]>([]);
   /** Expiries from `dd_expiry` for the resolved range of any mode (only those between From and To, in the order returned); null when not loaded. */
   private readonly rangeExpiries = signal<string[] | null>(null);
+  /** Expiries `dd_expiry` also lists after the To date (it returns every expiry alive in the window, including later ones). Empty until the range answers. */
+  private readonly laterExpiries = signal<string[]>([]);
+  /** The To date for which no expiry is listed on or after it, so the untouched legs could not be given a valid default; empty otherwise. */
+  private readonly forwardExpiryTill = signal('');
+  /**
+   * One explanation for the case where nothing is listed on or after To. When legs also sit on an expiry before the From date (so no data is
+   * requested for them) that is said in the same sentence, so the screen shows a single message and the validation is not lost.
+   */
+  readonly forwardExpiryNote = computed(() => {
+    const till = this.forwardExpiryTill();
+    if (!till) return '';
+    const { from, expired } = this.expiredLegs();
+    if (!expired.length) return `No expiry is listed on or after ${this.longDate(till)}, so the legs keep their expiries. Choose an expiry.`;
+    const plural = expired.length > 1;
+    return `No expiry is listed on or after ${this.longDate(till)}, and ${plural ? 'expiries' : 'expiry'} ${expired.map(expiry => this.longDate(expiry)).join(', ')} ${plural ? 'are' : 'is'} before the From date (${this.longDate(from)}), so no data is requested for ${plural ? 'them' : 'it'}. Choose a different date range.`;
+  });
   readonly expiryError = signal('');
   /** True from the moment an expiry request is sent until its answer (or a newer decision) arrives. */
   readonly expiryLoading = signal(false);
@@ -127,16 +144,28 @@ export class MultiLegEodComponent implements OnInit {
   readonly expiriesEmpty = computed(() => this.rangeExpiries()?.length === 0);
   /** Listed expiries that have not passed (today's included), from `dd_symbol_details`. */
   readonly upcomingExpiries = computed(() => this.metaExpiries().filter(expiry => expiry >= this.today));
-  /** The dropdown: the range's historical expiries plus the upcoming ones, de-duplicated, earliest first. Until the range answers (or when it fails) it is the standard list. */
+  /** The dropdown: the range's historical expiries plus those listed after To and the upcoming ones, de-duplicated, earliest first. Until the range answers (or when it fails) it is the standard list. */
   readonly expiries = computed(() => {
     const historical = this.rangeExpiries();
-    return historical === null ? this.metaExpiries() : [...new Set([...historical, ...this.upcomingExpiries()])].sort();
+    return historical === null ? this.metaExpiries() : [...new Set([...historical, ...this.laterExpiries(), ...this.upcomingExpiries()])].sort();
   });
   /** Leg expiries missing from the range's list. The legs stay as chosen and are flagged. */
   readonly unlistedExpiries = computed(() => {
     const listed = this.rangeExpiries() === null ? null : this.expiries();
     if (listed === null) return [];
     return [...new Set(this.legs().map(leg => leg.expiry).filter(expiry => !listed.includes(expiry)))];
+  });
+  /** Legs whose expiry is before the From date: no data can exist for them, so none is requested. */
+  private readonly expiredLegs = computed(() => {
+    const resolved = this.rangeResolution();
+    if (!('range' in resolved)) return { from: '', expired: [] as string[] };
+    return { from: resolved.range.from, expired: [...new Set(this.legs().map(leg => leg.expiry).filter(expiry => isIsoDate(expiry) && expiry < resolved.range.from))] };
+  });
+  readonly expiredLegMessage = computed(() => {
+    const { from, expired } = this.expiredLegs();
+    return expired.length
+      ? `${expired.length === 1 ? 'Expiry' : 'Expiries'} ${expired.map(expiry => this.longDate(expiry)).join(', ')} ${expired.length === 1 ? 'is' : 'are'} before the From date (${this.longDate(from)}), so no data is requested for ${expired.length === 1 ? 'it' : 'them'}. Choose a later expiry.`
+      : '';
   });
   readonly unlistedExpiriesLabel = computed(() => this.unlistedExpiries().map(expiry => this.longDate(expiry)).join(', '));
   readonly underlying = signal<number | null>(null);
@@ -255,11 +284,15 @@ export class MultiLegEodComponent implements OnInit {
   private wantedExpiryKey = '';
   /** The first load after a symbol change waits for the range's expiries, the historical ATM and the legs' strikes, so the default legs are requested once, complete. */
   private readonly initPending = new Set<'expiry' | 'atm' | 'strikes'>();
+  /** A date change is waiting for its expiry list, closing price and strike lists; the legs are requested once, when all have answered (flushHeld). */
+  private held = false;
+  /** True while a date change is starting its requests, so answers that arrive at once do not send the held reload before the others were started. */
+  private syncing = false;
   private readonly strikesRequest$ = new Subject<{ symbol: string; expiry: string }>();
   private readonly atmRequest$ = new Subject<{ symbol: string; till: string } | null>();
   /** Symbol and To date the ATM currently wanted was asked for; an answer for any other key is stale. */
   private wantedAtmKey = '';
-  private readonly dataRequest$ = new Subject<{ symbol: string; legs: LegSelection[]; range: DateRange }>();
+  private readonly dataRequest$ = new Subject<{ symbol: string; legs: LegSelection[]; range: DateRange } | null>();
 
   ngOnInit(): void {
     this.watchViewport();
@@ -344,10 +377,7 @@ export class MultiLegEodComponent implements OnInit {
       this.customFrom.set(ymd(from));
     }
     this.page.set(0);
-    this.syncRangeExpiries();
-    this.syncHistoricalAtm();
-    this.ensureStrikes();
-    this.reload();
+    this.syncRangeExpiriesThenReload();
   }
 
   /** A new From date is never refused; a To date that no longer fits it (earlier, or over a year later) is cleared to be picked again. */
@@ -360,10 +390,7 @@ export class MultiLegEodComponent implements OnInit {
       this.clearedNote.set(clearedMessage('To', conflict));
     }
     this.page.set(0);
-    this.syncRangeExpiries();
-    this.syncHistoricalAtm();
-    this.ensureStrikes();
-    this.reload();
+    this.syncRangeExpiriesThenReload();
   }
 
   /** Mirror of onCustomFrom: a From date that no longer fits the new To date is cleared. */
@@ -376,10 +403,7 @@ export class MultiLegEodComponent implements OnInit {
       this.clearedNote.set(clearedMessage('From', conflict));
     }
     this.page.set(0);
-    this.syncRangeExpiries();
-    this.syncHistoricalAtm();
-    this.ensureStrikes();
-    this.reload();
+    this.syncRangeExpiriesThenReload();
   }
 
   /* ================= legs ================= */
@@ -388,7 +412,10 @@ export class MultiLegEodComponent implements OnInit {
     if (this.legs().length >= MAX_LEGS || !this.expiries().length) return;
     const last = this.legs()[this.legs().length - 1];
     const expiry = last?.expiry ?? this.expiries()[0];
-    this.legs.update(list => [...list, this.newLeg('CE', this.atmFor(expiry), expiry)]);
+    const leg = this.newLeg('CE', this.atmFor(expiry), expiry);
+    // An expiry copied from a leg the user set by hand is the user's choice too: it must not be moved by a later default.
+    if (last?.picked?.expiry) leg.picked = { expiry: true };
+    this.legs.update(list => [...list, leg]);
     this.ensureStrikes();
     this.afterLegChange();
   }
@@ -522,7 +549,13 @@ export class MultiLegEodComponent implements OnInit {
 
   /** The ATM for an expiry: the strike listed for it that is nearest the underlying close of the To date. Null while either is unknown. */
   atmFor(expiry: string): number | null {
+    if (this.atmLoading()) return null;   // the close held meanwhile belongs to the previous To date
     return nearestStrike(this.strikesFor(expiry), this.underlying());
+  }
+
+  /** The leg's calculated ATM is far from the underlying close because its expiry lists few strikes near the money. Independent of the strike chosen. */
+  sparseAtm(expiry: string): boolean {
+    return isSparseAtm(this.atmFor(expiry), this.underlying());
   }
 
   /** Suffix for a strike the user kept that the expiry does not list (or whose list could not be checked). */
@@ -541,6 +574,8 @@ export class MultiLegEodComponent implements OnInit {
 
   /** Untouched strikes follow their expiry's ATM (none while it is unknown); strikes the user picked are never changed. True when a leg changed. */
   private applyDefaultStrikes(): boolean {
+    // While the closing price of a new To date loads, the one held is the previous date's: no strike is derived from it.
+    if (this.atmLoading()) return false;
     const before = this.legs();
     const after = before.map(leg => {
       if (leg.picked?.strike) return leg;
@@ -593,6 +628,11 @@ export class MultiLegEodComponent implements OnInit {
     this.reload();
   }
 
+  /** A leg is requested only when complete and not expired before the range starts: such a contract has no data and the backend refuses it (HTTP 422). */
+  private isRequestable(leg: LegSelection, range: DateRange): boolean {
+    return isLegComplete(leg) && leg.expiry >= range.from;
+  }
+
   /** Requests every complete leg for the resolved range; switchMap drops responses to superseded selections. */
   private reload(): void {
     const resolved = this.rangeResolution();
@@ -600,12 +640,63 @@ export class MultiLegEodComponent implements OnInit {
     this.hover.set(null);
     // Show the chosen legs immediately; their bars arrive from the API.
     this.series.set(legs.map(leg => ({ leg, label: legLabel(leg), status: 'loading' as const, rows: [] })));
-    if (!('range' in resolved) || !legs.some(isLegComplete)) {
+    if (!('range' in resolved) || !legs.some(leg => this.isRequestable(leg, resolved.range))) {
       this.loading.set(false);
       this.series.set(legs.map(leg => ({ leg, label: legLabel(leg), status: 'ready' as const, rows: [] })));
       return;
     }
     this.dataRequest$.next({ symbol: this.symbol(), legs, range: resolved.range });
+  }
+
+  /**
+   * A date change: ask for the new expiry list and the ATM, then reload. While a new expiry list is requested the legs still carry the
+   * expiries of the previous dates, so the reload waits for the list's answer (see the expiry handler) instead of requesting them.
+   */
+  private syncRangeExpiriesThenReload(): void {
+    this.held = true;
+    this.syncing = true;
+    try {
+      this.syncRangeExpiries();
+      this.syncHistoricalAtm();
+      this.ensureStrikes();
+    } finally {
+      this.syncing = false;
+    }
+    this.flushHeld();
+  }
+
+  /** The new dates' inputs are still loading: the expiry list, the closing price, or a strike list one of the legs needs. */
+  private inputsPending(): boolean {
+    return this.expiryLoading() || this.atmLoading() || this.legs().some(leg => this.strikesLoadingFor(leg.expiry));
+  }
+
+  /**
+   * Sends the held reload once the expiry list, the historical closing price and the strike lists are all in, so a leg is only ever requested
+   * with the expiry and strike that belong to the new dates. While anything is outstanding the legs show as loading and nothing is requested.
+   */
+  private flushHeld(): void {
+    if (!this.held || this.syncing || this.initPending.size > 0) return;
+    if (this.inputsPending()) {
+      this.showHeld();
+      return;
+    }
+    this.held = false;
+    this.reload();
+  }
+
+  /** Shows the legs as loading and drops any request still running for the previous dates; nothing new is requested until the inputs have answered. */
+  private showHeld(): void {
+    this.hover.set(null);
+    this.series.set(this.legs().map(leg => ({ leg, label: legLabel(leg), status: 'loading' as const, rows: [] })));
+    this.loading.set(true);
+    this.dataRequest$.next(null);
+  }
+
+  /** The expiry list has been processed and the untouched legs synchronised: send the held reload once nothing else is outstanding (the first load is sent by settleInit). */
+  private reloadAfterExpiries(wasInitial: boolean, changed: boolean): void {
+    if (wasInitial) return;
+    if (this.held) this.flushHeld();
+    else if (changed && !this.inputsPending()) this.reload();
   }
 
   /** Every range mode: ask `dd_expiry` for the resolved From..To once the dates are complete and valid; anything else drops the list. */
@@ -614,6 +705,8 @@ export class MultiLegEodComponent implements OnInit {
     if (!('range' in resolved) || !this.symbol()) {
       this.wantedExpiryKey = '';
       this.rangeExpiries.set(null);
+      this.laterExpiries.set([]);
+      this.forwardExpiryTill.set('');
       this.expiryError.set('');
       this.expiryLoading.set(false);
       this.initPending.delete('expiry');
@@ -658,7 +751,16 @@ export class MultiLegEodComponent implements OnInit {
   private settleInit(kind: 'expiry' | 'atm' | 'strikes', changed: boolean): void {
     const wasPending = this.initPending.delete(kind);
     if (this.initPending.size > 0) return;
-    if (changed || wasPending) this.reload();
+    if (wasPending) {
+      // The first load is complete. A date change made meanwhile is still waiting for its own inputs.
+      this.held = this.inputsPending();
+      if (this.held) this.showHeld();
+      else this.reload();
+      return;
+    }
+    // A later answer: with a date change waiting, the reload is sent when every input is in; otherwise only a changed leg needs one.
+    if (this.held) this.flushHeld();
+    else if (changed && !this.inputsPending()) this.reload();
   }
 
   private setupPipelines(): void {
@@ -672,9 +774,12 @@ export class MultiLegEodComponent implements OnInit {
         this.strikesPending.set([]);
         this.metaExpiries.set([]);
         this.rangeExpiries.set(null);
+        this.laterExpiries.set([]);
+        this.forwardExpiryTill.set('');
         this.expiryError.set('');
         this.expiryLoading.set(false);
         this.initPending.clear();
+        this.held = false;
         this.wantedExpiryKey = '';
         this.expiryRequest$.next(null);
         this.atmLoading.set(false);
@@ -752,9 +857,12 @@ export class MultiLegEodComponent implements OnInit {
 
     this.expiryRequest$.pipe(
       switchMap(request => (request ? this.eod.getDdExpiry({ symbol: request.symbol, trade_from: request.from, trade_till: request.till }).pipe(
-        // The backend also lists expiries outside the dates asked for: only From..To, inclusive, are kept.
-        map(response => ({ key: expiryKey(request), expiries: Array.isArray(response.data?.expiry_date) ? response.data.expiry_date.filter(expiry => expiry >= request.from && expiry <= request.till) : null })),
-        catchError(error => of({ key: expiryKey(request), expiries: isNoExpiriesResponse(error) ? ([] as string[]) : null })),
+        // The backend also lists expiries after the dates asked for: those from From..To (inclusive) are the range's own, those after To are kept as the later ones.
+        map(response => {
+          const listed = Array.isArray(response.data?.expiry_date) ? cleanDates(response.data.expiry_date) : null;
+          return { key: expiryKey(request), till: request.till, expiries: listed ? listed.filter(expiry => expiry >= request.from && expiry <= request.till) : null, later: listed ? listed.filter(expiry => expiry > request.till) : [] };
+        }),
+        catchError(error => of({ key: expiryKey(request), till: request.till, expiries: isNoExpiriesResponse(error) ? ([] as string[]) : null, later: [] as string[] })),
       ) : of(null))),
       takeUntilDestroyed(this.destroyRef),
     ).subscribe(result => {
@@ -763,23 +871,30 @@ export class MultiLegEodComponent implements OnInit {
       if (!result.expiries) {
         // Keep the standard list and say so: the dropdown is never silently wrong.
         this.rangeExpiries.set(null);
+        this.laterExpiries.set([]);
+        this.forwardExpiryTill.set('');
         this.expiryError.set('Unable to load expiries for these dates. Showing the standard expiry list.');
         this.toast.error(this.expiryError());
+        const wasInitial = this.initPending.has('expiry');
         this.settleInit('expiry', false);
         this.ensureStrikes();
+        this.reloadAfterExpiries(wasInitial, false);
         return;
       }
       this.expiryError.set('');
       this.rangeExpiries.set(result.expiries);
-      // Untouched default legs sit on the most recent expiry inside the range; with none there, on the nearest upcoming one; with neither they stay as they are.
-      // Legs the user chose are kept and flagged instead.
-      const latest = result.expiries.reduce<string | null>((best, expiry) => (best === null || expiry > best ? expiry : best), null);
-      const target = latest ?? this.upcomingExpiries()[0] ?? null;
+      this.laterExpiries.set(result.later);
+      // Untouched default legs sit on the nearest expiry on or after the selected To date (never the system date, and never an expired contract).
+      // With none listed they stay as they are and the reason is shown; legs the user chose are kept and flagged instead.
+      const target = this.expiries().find(expiry => expiry >= result.till) ?? null;
+      this.forwardExpiryTill.set(target ? '' : result.till);
       const changed = !!target && this.legs().some(leg => !leg.picked?.expiry && leg.expiry !== target);
       if (changed) this.legs.update(list => list.map(leg => (leg.picked?.expiry ? leg : { ...leg, expiry: target! })));
       if (changed) this.applyDefaultStrikes();   // untouched strikes move to the new expiry's ATM once its strikes are known
+      const wasInitial = this.initPending.has('expiry');
       this.settleInit('expiry', changed);
       this.ensureStrikes();
+      this.reloadAfterExpiries(wasInitial, changed);
     });
 
     this.strikesRequest$.pipe(
@@ -797,7 +912,8 @@ export class MultiLegEodComponent implements OnInit {
       }
       const changed = this.applyDefaultStrikes();
       if (this.initPending.has('strikes')) this.settleStrikesInit(changed);
-      else if (changed) this.reload();
+      else if (this.held) this.flushHeld();
+      else if (changed && !this.inputsPending()) this.reload();
     });
 
     this.dataRequest$.pipe(
@@ -805,11 +921,14 @@ export class MultiLegEodComponent implements OnInit {
         this.loading.set(true);
         this.loadError.set('');
       }),
-      switchMap(({ symbol, legs, range }) => forkJoin(legs.map(leg => this.loadLeg(symbol, leg, range))).pipe(
-        map(results => ({ symbol, results })),
-      )),
+      // A null request only cancels what is running (see holdForExpiries).
+      switchMap(request => (request ? forkJoin(request.legs.map(leg => this.loadLeg(request.symbol, leg, request.range))).pipe(
+        map(results => ({ symbol: request.symbol, results })),
+      ) : of(null))),
       takeUntilDestroyed(this.destroyRef),
-    ).subscribe(({ symbol, results }) => {
+    ).subscribe(answer => {
+      if (!answer) return;
+      const { symbol, results } = answer;
       this.loading.set(false);
       if (symbol !== this.symbol()) return;
       this.series.set(results);
@@ -828,7 +947,7 @@ export class MultiLegEodComponent implements OnInit {
    */
   private loadLeg(symbol: string, leg: LegSelection, range: DateRange) {
     const base = { leg, label: legLabel(leg) };
-    if (!isLegComplete(leg)) return of<LegSeries>({ ...base, status: 'ready', rows: [] });
+    if (!this.isRequestable(leg, range)) return of<LegSeries>({ ...base, status: 'ready', rows: [] });
     return this.legRows(symbol, leg, range).pipe(
       map((rows): LegSeries => ({ ...base, status: 'ready', rows })),
       catchError(() => of<LegSeries>({ ...base, status: 'error', rows: [] })),

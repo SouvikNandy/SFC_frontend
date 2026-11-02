@@ -15,6 +15,9 @@ import {
   resolveRange,
   singleLegCsv,
   singleLegRows,
+  SPARSE_ATM_THRESHOLD_PERCENT,
+  atmDistancePercent,
+  isSparseAtm,
 } from './multi-leg-eod.util';
 
 const bar = (date: string, close: number, extra: Partial<EodDataRow> = {}): EodDataRow =>
@@ -175,5 +178,38 @@ describe('CSV', () => {
     expect(csvFilename('NIFTY', [leg(1, 'CE', 22600)])).toBe('NIFTY_22600CE_2026-10-29_EOD.csv');
     expect(csvFilename('NIFTY', [leg(1, 'CE', 22600), leg(2, 'PE', 22400, '2026-11-26')])).toBe('NIFTY_22600CE_2026-10-29_22400PE_2026-11-26_EOD.csv');
     expect(csvFilename('M&M/FIN', [leg(1, 'CE', 1)])).toBe('M_M_FIN_1CE_2026-10-29_EOD.csv');
+  });
+});
+
+describe('sparse ATM warning helpers', () => {
+  it('the threshold is a named constant of 1 percent', () => expect(SPARSE_ATM_THRESHOLD_PERCENT).toBe(1));
+
+  it('distance is abs(atm - close) / close * 100', () => {
+    expect(atmDistancePercent(22400, 22421.95)).toBeCloseTo(0.0979, 3);
+    expect(atmDistancePercent(22500, 23053.1)).toBeCloseTo(2.399, 2);
+    expect(atmDistancePercent(110, 100)).toBeCloseTo(10, 10);
+    expect(atmDistancePercent(90, 100)).toBeCloseTo(10, 10);
+  });
+
+  it('is null when the ATM or the close is missing, not finite, or the close is not positive', () => {
+    for (const [atm, close] of [[null, 100], [100, null], [undefined, 100], [100, undefined], [NaN, 100], [100, NaN], [100, 0], [100, -5], [Infinity, 100]] as const) {
+      expect(atmDistancePercent(atm, close), String([atm, close])).toBeNull();
+    }
+  });
+
+  it('flags only a distance strictly above the threshold; exactly at it or below is not flagged', () => {
+    expect(isSparseAtm(101.01, 100)).toBe(true);
+    expect(isSparseAtm(101, 100)).toBe(false);          // exactly 1%
+    expect(isSparseAtm(99.5, 100)).toBe(false);
+    expect(isSparseAtm(98.9, 100)).toBe(true);
+    expect(isSparseAtm(100, 100)).toBe(false);
+  });
+
+  it('never flags without a usable ATM or close, and the threshold can be passed in', () => {
+    expect(isSparseAtm(null, 100)).toBe(false);
+    expect(isSparseAtm(100, null)).toBe(false);
+    expect(isSparseAtm(100, 0)).toBe(false);
+    expect(isSparseAtm(103, 100, 5)).toBe(false);
+    expect(isSparseAtm(106, 100, 5)).toBe(true);
   });
 });

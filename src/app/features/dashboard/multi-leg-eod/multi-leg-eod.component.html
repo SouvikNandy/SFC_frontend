@@ -67,11 +67,13 @@
         <p class="hint-line" role="status">{{ symbolsLoading() ? 'Loading symbol list…' : 'Loading strikes and expiries…' }}</p>
         }
         @if (rangeError()) { <p class="input-error" role="alert">{{ clearedNote() || rangeError() }}</p> }
-        @if (expiriesEmpty()) { <p class="input-error" role="status">No expiries are listed for these dates.</p> }
+        @if (expiriesEmpty() && !forwardExpiryNote()) { <p class="input-error" role="status">No expiries are listed for these dates.</p> }
         @if (atmError()) { <p class="input-error" role="alert">{{ atmError() }}</p> }
         @for (message of strikeIssueMessages(); track message) { <p class="input-error" role="alert">{{ message }}</p> }
         @if (expiryError()) { <p class="input-error" role="alert">{{ expiryError() }}</p> }
-        @if (unlistedExpiries().length) { <p class="input-error" role="status">{{ unlistedExpiries().length === 1 ? 'Expiry' : 'Expiries' }} {{ unlistedExpiriesLabel() }} not listed for these dates. The selection is kept; choose a listed expiry to change it.</p> }
+        @if (expiredLegMessage() && !forwardExpiryNote()) { <p class="input-error" role="alert">{{ expiredLegMessage() }}</p> }
+        @if (forwardExpiryNote()) { <p class="input-error" role="status">{{ forwardExpiryNote() }}</p> }
+        @if (unlistedExpiries().length && !forwardExpiryNote()) { <p class="input-error" role="status">{{ unlistedExpiries().length === 1 ? 'Expiry' : 'Expiries' }} {{ unlistedExpiriesLabel() }} not listed for these dates. The selection is kept; choose a listed expiry to change it.</p> }
         @if (metaError()) { <p class="input-error" role="alert">{{ metaError() }}</p> }
     </div>
 
@@ -132,11 +134,18 @@
                 <span [class]="'leg-dot ' + legColorClass(index)" aria-hidden="true"></span>
                 <button type="button" class="legx" [attr.aria-label]="'Remove leg ' + (index + 1)" (click)="removeLeg(leg.id)">×</button>
             </div>
+            @if (sparseAtm(leg.expiry)) {
+            <p class="leg-warn" role="note">Available strikes are limited. Calculated ATM is significantly away from the underlying close.</p>
+            }
         </div>
         }
         }
-        @if (underlying() !== null && tradeDate()) {
+        @if (atmLoading()) {
+        <p class="legnote" role="status">Updating ATM reference price…</p>
+        } @else if (underlying() !== null && tradeDate()) {
         <p class="legnote">ATM is the strike nearest the underlying close of {{ underlying() }} on {{ longDate(tradeDate()) }}, from the strikes listed for each leg's expiry.</p>
+        } @else if (atmError()) {
+        <p class="legnote-spacer" aria-hidden="true"></p>
         }
     </div>
 

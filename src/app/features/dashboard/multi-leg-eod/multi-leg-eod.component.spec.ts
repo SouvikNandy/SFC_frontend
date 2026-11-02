@@ -128,9 +128,9 @@ describe('MultiLegEodComponent', () => {
   it('defaults to 3M and starts with an ATM CE and PE on the nearest expiry, requested from the API', () => {
     expect(component.range()).toBe('3M');
     expect(host.querySelector('.seg button.active')?.textContent?.trim()).toBe('3M');
-    expect(component.legs().map(l => [l.optionType, l.strike, l.expiry])).toEqual([['CE', 22600, '2026-10-29'], ['PE', 22600, '2026-10-29']]);
+    expect(component.legs().map(l => [l.optionType, l.strike, l.expiry])).toEqual([['CE', 22600, '2026-11-26'], ['PE', 22600, '2026-11-26']]);
     expect(requests).toHaveLength(2);
-    expect(requests[0]).toMatchObject({ symbol: 'NIFTY', option_type: 'CE', strike: 22600, expiry: '2026-10-29' });
+    expect(requests[0]).toMatchObject({ symbol: 'NIFTY', option_type: 'CE', strike: 22600, expiry: '2026-11-26' });
     expect(requests[0].date_from < requests[0].date_till).toBe(true);
     expect(host.querySelectorAll('.legend span')).toHaveLength(2);
     expect(host.querySelectorAll('.chartbox path.line')).toHaveLength(2);
@@ -169,7 +169,7 @@ describe('MultiLegEodComponent', () => {
     expect(requests).toHaveLength(2);              // an identical contract is served from the cache
     requests.length = 0;
     await select('#ml-strike-3', '22700');
-    expect(requests).toEqual([expect.objectContaining({ option_type: 'CE', strike: 22700, expiry: '2026-10-29' })]);
+    expect(requests).toEqual([expect.objectContaining({ option_type: 'CE', strike: 22700, expiry: '2026-11-26' })]);
     await click('.legrow:last-of-type .legx');
     expect(component.legs()).toHaveLength(2);
     for (let i = 0; i < 10; i++) component.addLeg();
@@ -300,8 +300,8 @@ describe('MultiLegEodComponent', () => {
   it('combined table shows one close column per leg, latest first; missing values are explicit', async () => {
     await reloadWith(req => of(req.option_type === 'CE' ? makeRows(5, 100) : makeRows(2, 50)));   // PE only has the last 2 sessions
     const heads = Array.from(host.querySelectorAll('.data-table th, table th')).map(th => th.textContent?.trim());
-    expect(heads).toContain('22600 CE · 29 Oct');
-    expect(heads).toContain('22600 PE · 29 Oct');
+    expect(heads).toContain('22600 CE · 26 Nov');
+    expect(heads).toContain('22600 PE · 26 Nov');
     const first = component.combined()[0];
     expect(first.date).toBe(isoDaysAgo(1));
     expect(first.closes).toEqual([105, 52]);
@@ -313,7 +313,7 @@ describe('MultiLegEodComponent', () => {
 
   it('single-leg mode shows Date/Open/High/Low/Close/Volume/OI and keeps latest-first order', async () => {
     const ceId = component.legs()[0].id;
-    await click('.legchips button', '22600 CE · 29 Oct');
+    await click('.legchips button', '22600 CE · 26 Nov');
     expect(component.activeLegIndex()).toBe(0);
     const heads = Array.from(host.querySelectorAll('table th')).map(th => th.textContent?.trim());
     expect(heads).toEqual(['Date', 'Open', 'High', 'Low', 'Close (EOD)', 'Volume', 'OI']);
@@ -391,9 +391,9 @@ describe('MultiLegEodComponent', () => {
 
     it('combined export: one close per leg for the visible sessions, named by symbol and legs', async () => {
       await click('.outline');
-      expect(downloads).toEqual(['NIFTY_22600CE_2026-10-29_22600PE_2026-10-29_EOD.csv']);
+      expect(downloads).toEqual(['NIFTY_22600CE_2026-11-26_22600PE_2026-11-26_EOD.csv']);
       const text = await blobs[0].text();
-      expect(text.split('\n')[0]).toBe('Date,22600 CE · 29 Oct,22600 PE · 29 Oct');
+      expect(text.split('\n')[0]).toBe('Date,22600 CE · 26 Nov,22600 PE · 26 Nov');
       expect(text.split('\n')).toHaveLength(6);
       expect(text.split('\n')[1]).toBe(`${isoDaysAgo(5)},101.00,51.00`);
       await new Promise(resolve => setTimeout(resolve, 600));
@@ -401,9 +401,9 @@ describe('MultiLegEodComponent', () => {
     });
 
     it('single-leg export: OHLC, volume and OI for the selected leg only', async () => {
-      await click('.legchips button', '22600 PE · 29 Oct');
+      await click('.legchips button', '22600 PE · 26 Nov');
       await click('.outline');
-      expect(downloads).toEqual(['NIFTY_22600PE_2026-10-29_EOD.csv']);
+      expect(downloads).toEqual(['NIFTY_22600PE_2026-11-26_EOD.csv']);
       const lines = (await blobs[0].text()).split('\n');
       expect(lines[0]).toBe('Date,Open,High,Low,Close,Volume,OI');
       expect(lines[1]).toBe(`${isoDaysAgo(5)},50.00,53.00,47.00,51.00,1000,5000`);
@@ -487,8 +487,10 @@ describe('MultiLegEodComponent', () => {
     const listed = (call: ExpiryRequest, dates = ALL) => dates.filter(d => d >= call.trade_from && d <= call.trade_till);
     /** dd_symbol_details lists 2026-10-29 and 2026-11-26; with "today" pinned to 2026-10-30 only the latter is upcoming. */
     const UP = '2026-11-26';
-    /** The dropdown: the range's historical expiries plus the upcoming ones, de-duplicated, earliest first. */
-    const combined = (historical: string[]) => [...new Set([...historical, UP])].sort();
+    /** The dates the backend lists after a request's To date. */
+    const after = (call: ExpiryRequest, dates = ALL) => dates.filter(d => d > call.trade_till);
+    /** The dropdown: the range's historical expiries, those listed after To and the upcoming ones, de-duplicated, earliest first. */
+    const combined = (historical: string[], later: string[] = []) => [...new Set([...historical, ...later, UP])].sort();
     const expiryOptions = () => Array.from(host.querySelectorAll<HTMLOptionElement>('select[id^="ml-expiry-"] option')).map(o => o.value);
     const asRequest = (preset: Parameters<typeof resolveRange>[0], customFrom = '', customTill = '') => {
       const resolved = resolveRange(preset, component.today, customFrom, customTill) as { range: { from: string; till: string } };
@@ -519,46 +521,46 @@ describe('MultiLegEodComponent', () => {
     it('switching between modes replaces the list with that mode\'s dates only', async () => {
       for (const preset of ['1W', '1M', '3M'] as const) {
         await click('.field .seg button', preset);
-        expect(component.expiries(), preset).toEqual(combined(listed(expiryCalls.at(-1)!)));
-        expect(expiryOptions(), preset).toEqual(expect.arrayContaining(combined(listed(expiryCalls.at(-1)!))));
+        expect(component.expiries(), preset).toEqual(combined(listed(expiryCalls.at(-1)!), after(expiryCalls.at(-1)!)));
+        expect(expiryOptions(), preset).toEqual(expect.arrayContaining(combined(listed(expiryCalls.at(-1)!), after(expiryCalls.at(-1)!))));
       }
       await customRange();
-      expect(component.expiries()).toEqual(combined([E1, E2]));
+      expect(component.expiries()).toEqual(combined([E1, E2], [isoDaysAgo(1), '2099-12-31']));
       await click('.field .seg button', '1W');
-      expect(component.expiries()).toEqual(combined(listed(expiryCalls.at(-1)!)));
-      expect(component.expiries()).not.toContain('2099-12-31');
+      expect(component.expiries()).toEqual(combined(listed(expiryCalls.at(-1)!), after(expiryCalls.at(-1)!)));
+      expect(component.expiries()).not.toContain(isoDaysAgo(25));      // before the window: never listed
     });
 
-    it('keeps only expiries from From to To inclusive: earlier and later dates are dropped, the boundaries stay', async () => {
-      const before = isoDaysAgo(25), after = isoDaysAgo(1);
-      expiryFor = req => reply(req, [before, from, E1, till, after, '2099-12-31']);
+    it('the range\'s own expiries are From to To inclusive and earlier dates are dropped; dates after To are listed as later expiries', async () => {
+      const before = isoDaysAgo(25), afterTo = isoDaysAgo(1);
+      expiryFor = req => reply(req, [before, from, E1, till, afterTo, '2099-12-31']);
       await customRange();
-      expect(component.expiries()).toEqual(combined([from, E1, till]));
-      expect(expiryOptions()).toEqual(expect.arrayContaining([from, E1, till]));
-      for (const outside of [before, after, '2099-12-31']) expect(expiryOptions()).not.toContain(outside);
+      expect(component.expiries()).toEqual(combined([from, E1, till], [afterTo, '2099-12-31']));
+      expect(expiryOptions()).toEqual(expect.arrayContaining([from, E1, till, afterTo, '2099-12-31']));
+      expect(expiryOptions()).not.toContain(before);
     });
 
-    it('untouched default legs select the most recent expiry in the range, whatever order the list arrives in; the dropdown is sorted earliest first', async () => {
-      expiryFor = req => reply(req, [E2, E1, E3]);
+    it('untouched default legs take the nearest expiry on or after To, whatever order the list arrives in; the dropdown is sorted earliest first', async () => {
+      expiryFor = req => reply(req, [E2, E1, E3]);                       // all before To: the nearest on or after it is the upcoming one
       await customRange();
       expect(component.expiries()).toEqual(combined([E1, E3, E2]));
-      expect(component.legs().map(l => l.expiry)).toEqual([E2, E2]);
+      expect(component.legs().map(l => l.expiry)).toEqual([UP, UP]);
       expiryFor = req => reply(req, [E1, E3, E2]);
       component.onCustomFrom(isoDaysAgo(19));
       await settle();
       expect(component.expiries()).toEqual(combined([E1, E3, E2]));
-      expect(component.legs().map(l => l.expiry)).toEqual([E2, E2]);
+      expect(component.legs().map(l => l.expiry)).toEqual([UP, UP]);
     });
 
-    it('a default leg is never put on a date outside the range returned by dd_expiry; the To date itself is allowed; with none in range the nearest upcoming expiry is the safe default', async () => {
+    it('a default leg takes the nearest listed expiry on or after To: the To date itself counts, and so does a later date that has since passed', async () => {
       expiryFor = req => reply(req, [from, E1, till, isoDaysAgo(1), '2099-12-31']);
       await customRange();
       expect(component.legs().map(l => l.expiry)).toEqual([till, till]);
       expiryFor = req => reply(req, [isoDaysAgo(25), isoDaysAgo(1)]);
       component.onCustomTill(isoDaysAgo(3));
       await settle();
-      expect(component.expiries()).toEqual([UP]);                          // nothing in range: only the upcoming expiry is listed
-      expect(component.legs().map(l => l.expiry)).toEqual([UP, UP]);       // untouched default legs take it; they are never left on, or sent to, an unlisted date
+      expect(component.expiries()).toEqual([isoDaysAgo(1), UP]);          // nothing in range: the later date and the upcoming one
+      expect(component.legs().map(l => l.expiry)).toEqual([isoDaysAgo(1), isoDaysAgo(1)]);   // the nearest on or after the To date (not the system date)
     });
 
     it('manually chosen expiries stay as chosen when the range or the list changes', async () => {
@@ -568,16 +570,16 @@ describe('MultiLegEodComponent', () => {
       expiryFor = req => reply(req, [E3, E2]);
       component.onCustomFrom(isoDaysAgo(19));
       await settle();
-      expect(component.legs().map(l => l.expiry)).toEqual([E1, E2]);       // the edited leg keeps E1 (now unlisted); the other stays where it was
+      expect(component.legs().map(l => l.expiry)).toEqual([E1, UP]);       // the edited leg keeps E1 (now unlisted); the other takes the nearest expiry on or after To
       expect(component.unlistedExpiries()).toEqual([E1]);
       await click('.field .seg button', '1W');
       expect(component.legs()[0].expiry).toBe(E1);
     });
 
-    it('future expiries survive: dates after To come from dd_symbol_details, are not duplicated, and expired standard dates do not leak in', async () => {
-      expiryFor = req => reply(req, [E1, UP, '2099-12-31']);       // the backend echoes an upcoming date and an unrelated far one
+    it('future expiries survive: dates after To come from dd_expiry and dd_symbol_details, are not duplicated, and expired standard dates do not leak in', async () => {
+      expiryFor = req => reply(req, [E1, UP, '2099-12-31']);       // the backend echoes an upcoming date and a far one
       await customRange();
-      expect(component.expiries()).toEqual([E1, UP]);               // UP once; 2099-12-31 is outside the range and not in the standard list
+      expect(component.expiries()).toEqual([E1, UP, '2099-12-31']);   // UP once; far-future dates are kept, never hidden
       expect(component.expiries()).not.toContain('2026-10-29');     // standard-list date already expired: it only appears if the range returns it
       expiryFor = req => reply(req, ['2026-10-29', E1]);
       component.onCustomFrom('2026-10-15');
@@ -590,17 +592,17 @@ describe('MultiLegEodComponent', () => {
       const window = asRequest('1M');
       expiryFor = req => reply(req, ['2000-01-01', window.trade_from, window.trade_till, '2099-12-31']);
       await click('.field .seg button', '1M');
-      expect(component.expiries()).toEqual(combined([window.trade_from, window.trade_till]));
+      expect(component.expiries()).toEqual(combined([window.trade_from, window.trade_till], ['2099-12-31']));
     });
 
-    it('when every returned date is outside the range the empty-range message shows and only the upcoming expiry is listed; an edited leg is kept, an untouched one takes the nearest upcoming expiry', async () => {
+    it('when no returned date is inside the range the empty-range message shows; an edited leg is kept, an untouched one takes the nearest expiry on or after To', async () => {
       expiryFor = req => reply(req, [isoDaysAgo(25), isoDaysAgo(1)]);
       component.setLegExpiry(component.legs()[0].id, '2026-09-01');
       await settle();
       await customRange();
-      expect(component.expiries()).toEqual([UP]);
+      expect(component.expiries()).toEqual([isoDaysAgo(1), UP]);
       expect(host.textContent).toContain('No expiries are listed for these dates.');
-      expect(component.legs().map(l => l.expiry)).toEqual(['2026-09-01', UP]);
+      expect(component.legs().map(l => l.expiry)).toEqual(['2026-09-01', isoDaysAgo(1)]);
     });
 
     it('makes no call while the dates are incomplete or invalid, and none twice for the same dates', async () => {
@@ -619,7 +621,7 @@ describe('MultiLegEodComponent', () => {
 
     it('legs keep their selections; an expiry missing from the list stays selected and is flagged', async () => {
       await customRange();
-      expect(component.legs().map(l => l.expiry)).toEqual([E2, E2]);       // untouched default legs take the most recent expiry in the range
+      expect(component.legs().map(l => l.expiry)).toEqual([isoDaysAgo(1), isoDaysAgo(1)]);   // untouched default legs take the nearest expiry on or after To
       component.setLegExpiry(component.legs()[0].id, '2026-09-01');
       await settle();
       expect(component.legs()[0].expiry).toBe('2026-09-01');
@@ -726,18 +728,18 @@ describe('MultiLegEodComponent', () => {
 
     it('dd_symbol_details still supplies the starting metadata; the historical close of To then sets spot, ATM and strikes', async () => {
       expect(component.underlying()).toBe(22630);
-      expect(component.atmFor('2026-10-29')).toBe(22600);
-      expect(component.strikesFor('2026-10-29')).toEqual(STRIKE_GRID);
+      expect(component.atmFor('2026-11-26')).toBe(22600);
+      expect(component.strikesFor('2026-11-26')).toEqual(STRIKE_GRID);
       expect(component.tradeDate()).toBe('2026-10-29');           // the session the close belongs to
       expect(component.expiries()).toContain('2026-10-29');       // expiries still start from the dd_symbol_details list
       await customRange();
       expect(component.underlying()).toBe(22630);
-      expect(component.strikesFor('2026-10-29')).toEqual(STRIKE_GRID);
+      expect(component.strikesFor('2026-11-26')).toEqual(STRIKE_GRID);
     });
 
     it('the default legs are requested once, on an expiry from the range\'s list', () => {
       expect(requests).toHaveLength(2);
-      expect(requests.every(r => r.expiry === '2026-10-29')).toBe(true);
+      expect(requests.every(r => r.expiry === '2026-11-26')).toBe(true);
     });
   });
 
@@ -756,7 +758,7 @@ describe('MultiLegEodComponent', () => {
     it('the first load asks for the To date of the default range (today for a preset) and builds the legs on that ATM', () => {
       expect(atmCalls).toEqual([{ symbol: 'NIFTY', till: '2026-10-30' }]);
       expect(legStrikes()).toEqual([22600, 22600]);
-      expect(component.atmFor('2026-10-29')).toBe(22600);
+      expect(component.atmFor('2026-11-26')).toBe(22600);
       expect(component.tradeDate()).toBe('2026-10-29');
     });
 
@@ -772,7 +774,7 @@ describe('MultiLegEodComponent', () => {
       component.onCustomTill('2026-01-31');
       await settle();
       expect(atmCalls.at(-1)).toEqual({ symbol: 'NIFTY', till: '2026-01-31' });
-      expect(component.atmFor('2026-10-29')).toBe(25300);
+      expect(component.atmFor('2026-11-26')).toBe(25300);
       expect(component.tradeDate()).toBe('2026-01-30');
       expect(legStrikes()).toEqual([25300, 25300]);
     });
@@ -809,7 +811,7 @@ describe('MultiLegEodComponent', () => {
       component.onCustomTill('2026-01-31');
       await settle();
       expect(legStrikes()).toEqual([22700, 25300]);                      // the picked strike stays; the untouched leg follows the new ATM
-      expect(component.atmFor('2026-10-29')).toBe(25300);
+      expect(component.atmFor('2026-11-26')).toBe(25300);
       const option = host.querySelectorAll<HTMLSelectElement>('select[id^="ml-strike-"]')[0].selectedOptions[0];
       expect(option.textContent?.trim()).toBe('22700');                      // still listed for this expiry: not flagged
     });
@@ -835,9 +837,9 @@ describe('MultiLegEodComponent', () => {
       await settle();
       expect(host.textContent).toContain('Unable to load the closing price for');
       expect(legStrikes()).toEqual([null, null]);                          // not the current ATM from dd_symbol_details
-      expect(component.strikesFor('2026-10-29')).toEqual(STRIKE_GRID);
+      expect(component.strikesFor('2026-11-26')).toEqual(STRIKE_GRID);
       // nothing on screen presents today's ATM or spot as the answer
-      expect(component.atmFor('2026-10-29')).toBeNull();
+      expect(component.atmFor('2026-11-26')).toBeNull();
       expect(component.underlying()).toBeNull();
       expect(host.querySelector('.legnote')).toBeNull();
       expect(Array.from(host.querySelectorAll('select[id^="ml-strike-"] option')).some(o => /ATM/.test(o.textContent ?? ''))).toBe(false);
@@ -888,7 +890,7 @@ describe('MultiLegEodComponent', () => {
       await settle();
       slow.next({ ok: true, session: '2026-01-30', underlying: 25320.65, strikes: ATM_STRIKES, atm: 25300 });
       await settle();
-      expect(component.atmFor('2026-10-29')).toBe(25100);
+      expect(component.atmFor('2026-11-26')).toBe(25100);
       expect(legStrikes()).toEqual([25100, 25100]);
     });
 
@@ -898,7 +900,7 @@ describe('MultiLegEodComponent', () => {
   });
 
   describe('strikes of the selected expiry (dd_strikes)', () => {
-    const OTHER = '2026-11-26';
+    const OTHER = '2026-10-29';
     const legStrikes = () => component.legs().map(l => l.strike);
     const strikeSelects = () => Array.from(host.querySelectorAll<HTMLSelectElement>('select[id^="ml-strike-"]'));
     const expirySelects = () => Array.from(host.querySelectorAll<HTMLSelectElement>('select[id^="ml-expiry-"]'));
@@ -917,7 +919,7 @@ describe('MultiLegEodComponent', () => {
     };
 
     it('the first load asks dd_strikes once for the legs\' expiry, and the legs load on that expiry\'s ATM', () => {
-      expect(strikeCalls).toEqual([{ symbol: 'NIFTY', expiry: '2026-10-29' }]);
+      expect(strikeCalls).toEqual([{ symbol: 'NIFTY', expiry: '2026-11-26' }]);
       expect(legStrikes()).toEqual([22600, 22600]);
       expect(requests).toHaveLength(2);
     });
@@ -1004,7 +1006,7 @@ describe('MultiLegEodComponent', () => {
       strikesFor = (_s, expiry) => (expiry === OTHER ? (++attempt === 1 ? of({ ok: false, reason: 'unavailable' }) : ok([22550, 22650])) : ok(STRIKE_GRID));
       await chooseExpiry(0, OTHER);
       expect(legStrikes()[0]).toBeNull();
-      await chooseExpiry(0, '2026-10-29');
+      await chooseExpiry(0, '2026-11-26');
       await chooseExpiry(0, OTHER);
       expect(legStrikes()[0]).toBe(22650);
     });
@@ -1013,7 +1015,7 @@ describe('MultiLegEodComponent', () => {
       strikesFor = (_s, expiry) => (expiry === OTHER ? ok([22550, 22650]) : ok(STRIKE_GRID));
       await chooseExpiry(0, OTHER);
       const calls = strikeCalls.length;
-      await chooseExpiry(0, '2026-10-29');
+      await chooseExpiry(0, '2026-11-26');
       await chooseExpiry(0, OTHER);
       expect(strikeCalls).toHaveLength(calls);
       expect(legStrikes()).toEqual([22650, 22600]);
@@ -1023,11 +1025,11 @@ describe('MultiLegEodComponent', () => {
       const slow = new Subject<ExpiryStrikesResult>();
       strikesFor = (_s, expiry) => (expiry === OTHER ? slow : ok(STRIKE_GRID));
       await chooseExpiry(0, OTHER);
-      await chooseExpiry(0, '2026-10-29');                                  // back to the first expiry before the slow answer
+      await chooseExpiry(0, '2026-11-26');                                  // back to the first expiry before the slow answer
       expect(legStrikes()).toEqual([22600, 22600]);
       slow.next({ ok: true, strikes: [22550, 22650] });
       await settle();
-      expect(component.strikesFor('2026-10-29')).toEqual(STRIKE_GRID);
+      expect(component.strikesFor('2026-11-26')).toEqual(STRIKE_GRID);
       expect(component.strikesFor(OTHER)).toEqual([22550, 22650]);          // stored under its own expiry
       expect(legStrikes()).toEqual([22600, 22600]);                          // the leg is still on the first expiry and its ATM
     });
@@ -1049,7 +1051,7 @@ describe('MultiLegEodComponent', () => {
       strikeCalls.length = 0;
       component.selectSymbol('BANKNIFTY');
       await settle();
-      expect(strikeCalls).toEqual([{ symbol: 'BANKNIFTY', expiry: '2026-10-29' }]);
+      expect(strikeCalls).toEqual([{ symbol: 'BANKNIFTY', expiry: '2026-11-26' }]);
       expect(legStrikes()).toEqual([59600, 59600]);
     });
 
@@ -1074,9 +1076,9 @@ describe('MultiLegEodComponent', () => {
 
     it('a strike list that is loading shows a spinner inside that leg\'s strike control only, disabled, with no text line', async () => {
       const pending = new Subject<ExpiryStrikesResult>();
-      strikesFor = (_s, expiry) => (expiry === '2026-11-26' ? pending : of({ ok: true, strikes: STRIKE_GRID }));
+      strikesFor = (_s, expiry) => (expiry === '2026-10-29' ? pending : of({ ok: true, strikes: STRIKE_GRID }));
       const select = host.querySelectorAll<HTMLSelectElement>('select[id^="ml-expiry-"]')[0];
-      select.value = '2026-11-26';
+      select.value = '2026-10-29';
       select.dispatchEvent(new Event('change'));
       await settle();
       expect(spinnersIn('select[id^="ml-strike-"]')).toBe(1);
@@ -1121,13 +1123,789 @@ describe('MultiLegEodComponent', () => {
 
     it('the loading text is kept for screen readers only', async () => {
       const pending = new Subject<ExpiryStrikesResult>();
-      strikesFor = (_s, expiry) => (expiry === '2026-11-26' ? pending : of({ ok: true, strikes: STRIKE_GRID }));
+      strikesFor = (_s, expiry) => (expiry === '2026-10-29' ? pending : of({ ok: true, strikes: STRIKE_GRID }));
       const select = host.querySelectorAll<HTMLSelectElement>('select[id^="ml-expiry-"]')[0];
-      select.value = '2026-11-26';
+      select.value = '2026-10-29';
       select.dispatchEvent(new Event('change'));
       await settle();
       const status = host.querySelector('.select-wrap .visually-hidden');
       expect(status?.textContent).toContain('Loading the strikes');
+    });
+  });
+
+  describe('date changes wait for the expiry list before requesting the legs', () => {
+    type ExpiryReply = { data: { symbol: string; trade_from: string; trade_till: string; expiry_date: string[] } };
+    const ALL = ['2026-10-22', '2026-10-29', '2026-11-26'];
+    const answer = (subject: Subject<ExpiryReply>, dates: string[]) => subject.next({ data: { symbol: 'NIFTY', trade_from: '', trade_till: '', expiry_date: dates } });
+    const legExpiries = () => component.legs().map(l => l.expiry);
+    const expiryControls = () => Array.from(host.querySelectorAll<HTMLSelectElement>('select[id^="ml-expiry-"]'));
+    const customRange = async (from: string, till: string) => {
+      await click('.field .seg button', 'Custom');
+      requests.length = 0;   // the switch itself reloads the default 30 days; only the date change is under test
+      component.onCustomFrom(from);
+      component.onCustomTill(till);
+      await settle();
+    };
+    /** Legs left on 2026-10-22 by a range that ends that day: the nearest expiry on or after its To date. */
+    const legsOnOldExpiry = async () => {
+      expiryFor = req => reply(req, ALL);
+      await customRange('2026-10-01', '2026-10-22');
+      expect(legExpiries()).toEqual(['2026-10-22', '2026-10-22']);
+    };
+
+    it('the reproduced case: legs on an expiry before the new From date request nothing with it, then load on the new expiry', async () => {
+      await legsOnOldExpiry();
+      const slow = new Subject<ExpiryReply>();
+      expiryFor = () => slow;
+      requests.length = 0;
+      component.onCustomFrom('2026-10-25');
+      component.onCustomTill('2026-10-30');
+      await settle();
+      expect(requests).toEqual([]);                                       // no request carries the old expiry with the new dates
+      expect(component.loading()).toBe(true);
+      expect(component.series().every(s => s.status === 'loading')).toBe(true);
+      answer(slow, ['2026-10-29', '2026-11-26']);                         // the nearest expiry on or after To (30 Oct) is 26 Nov
+      await settle();
+      expect(legExpiries()).toEqual(['2026-11-26', '2026-11-26']);
+      expect(requests.length).toBeGreaterThan(0);
+      expect(requests.every(r => r.expiry === '2026-11-26' && r.date_from === '2026-10-25')).toBe(true);
+      expect(requests.some(r => r.expiry === '2026-10-22')).toBe(false);
+      expect(component.loading()).toBe(false);
+    });
+
+    it('a closing price or strike list that arrives before the expiry list does not trigger a request with the old expiry', async () => {
+      const slow = new Subject<ExpiryReply>();
+      expiryFor = () => slow;
+      atmFor = () => of({ ok: true, session: '2026-10-28', underlying: 22300, strikes: [], atm: 0 });
+      await click('.field .seg button', 'Custom');
+      requests.length = 0;
+      component.onCustomFrom('2026-10-01');
+      component.onCustomTill('2026-10-28');
+      await settle();
+      expect(component.legs().map(l => l.strike)).toEqual([22400, 22400]);   // untouched strikes followed the new close ...
+      expect(requests).toEqual([]);                                          // ... but nothing is requested while the expiry list is pending
+      answer(slow, ['2026-11-03']);
+      await settle();
+      expect(requests.length).toBeGreaterThan(0);
+      expect(requests.every(r => r.expiry === '2026-11-03' && r.date_till === '2026-10-28')).toBe(true);
+    });
+
+    it('an unchanged expiry is still requested, once, after the list answers', async () => {
+      const slow = new Subject<ExpiryReply>();
+      expiryFor = () => slow;
+      requests.length = 0;
+      await click('.field .seg button', '1M');
+      expect(requests).toEqual([]);
+      answer(slow, ['2026-11-26']);
+      await settle();
+      expect(legExpiries()).toEqual(['2026-11-26', '2026-11-26']);
+      expect(requests.map(r => r.option_type).sort()).toEqual(['CE', 'PE']);
+      expect(requests.every(r => r.expiry === '2026-11-26')).toBe(true);
+    });
+
+    it('a failed expiry list still reloads the legs, so nothing stays loading, and a leg expired before From is not requested', async () => {
+      await legsOnOldExpiry();
+      expiryFor = () => throwError(() => new HttpErrorResponse({ status: 500 }));
+      requests.length = 0;
+      component.onCustomFrom('2026-10-25');
+      component.onCustomTill('2026-10-30');
+      await settle();
+      expect(component.loading()).toBe(false);
+      expect(legExpiries()).toEqual(['2026-10-22', '2026-10-22']);        // unchanged: the list is unknown
+      expect(requests).toEqual([]);                                       // both expire before From
+      expect(host.textContent).toContain('is before the From date');
+      expect(host.textContent).toContain('Unable to load expiries for these dates');
+    });
+
+    it('a failed list for dates that still contain the expiry reloads with it', async () => {
+      expiryFor = () => throwError(() => new HttpErrorResponse({ status: 500 }));
+      requests.length = 0;
+      await click('.field .seg button', '1M');
+      expect(component.loading()).toBe(false);
+      expect(requests.map(r => r.expiry)).toEqual(['2026-11-26', '2026-11-26']);
+    });
+
+    it('a manually chosen expiry is kept when the dates change; if it is before From nothing is requested for it and the reason is shown', async () => {
+      const select = expiryControls()[0];
+      select.value = '2026-10-22';
+      select.dispatchEvent(new Event('change'));
+      await settle();
+      expect(legExpiries()).toEqual(['2026-10-22', '2026-11-26']);
+      await customRange('2026-10-26', '2026-10-30');
+      expect(legExpiries()).toEqual(['2026-10-22', '2026-11-26']);        // the pick is not replaced
+      expect(component.legs()[0].picked?.expiry).toBe(true);
+      expect(requests.every(r => r.expiry !== '2026-10-22')).toBe(true);  // no 422-bound request
+      expect(requests.some(r => r.expiry === '2026-11-26')).toBe(true);   // the other leg still loads
+      expect(component.expiredLegMessage()).toContain('22 Oct 2026');
+      expect(host.textContent).toContain('Expiry 22 Oct 2026 is before the From date (26 Oct 2026)');
+      expect(component.series()[0].rows).toEqual([]);
+      expect(component.series()[0].status).toBe('ready');
+    });
+
+    it('the same expiry is requested again once the From date is moved back to include it', async () => {
+      const select = expiryControls()[0];
+      select.value = '2026-10-22';
+      select.dispatchEvent(new Event('change'));
+      await settle();
+      await customRange('2026-10-26', '2026-10-30');
+      requests.length = 0;
+      component.onCustomFrom('2026-10-20');
+      await settle();
+      expect(component.expiredLegMessage()).toBe('');
+      expect(requests.some(r => r.expiry === '2026-10-22' && r.date_from === '2026-10-20')).toBe(true);
+    });
+
+    it('an expiry equal to the From date is valid', async () => {
+      const select = expiryControls()[0];
+      select.value = '2026-10-22';
+      select.dispatchEvent(new Event('change'));
+      await settle();
+      requests.length = 0;
+      await customRange('2026-10-22', '2026-10-30');
+      expect(component.expiredLegMessage()).toBe('');
+      expect(requests.some(r => r.expiry === '2026-10-22')).toBe(true);
+    });
+
+    it('a late expiry list for earlier dates is ignored: only the latest dates are ever requested', async () => {
+      const first = new Subject<ExpiryReply>();
+      const second = new Subject<ExpiryReply>();
+      expiryFor = req => (req.trade_from === '2026-10-30' ? first : second);
+      requests.length = 0;
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom('2026-10-30');
+      component.onCustomTill('2026-10-30');
+      await settle();
+      component.onCustomFrom('2026-10-20');                               // newer dates before the first list answers
+      await settle();
+      answer(first, []);                                                   // late: dropped
+      await settle();
+      expect(requests).toEqual([]);
+      answer(second, ['2026-10-22', '2026-10-29']);
+      await settle();
+      expect(requests.every(r => r.date_from === '2026-10-20' && r.expiry === '2026-11-26')).toBe(true);
+    });
+
+    it('the first load is unchanged: the legs are requested once, after the expiry list, the close and the strikes', () => {
+      expect(requests).toHaveLength(2);
+      expect(requests.every(r => r.expiry === '2026-11-26' && r.strike === 22600)).toBe(true);
+    });
+  });
+
+  describe('default expiry: the nearest listed on or after the To date', () => {
+    const NEAR = '2026-11-03';
+    const legExpiries = () => component.legs().map(l => l.expiry);
+    const customRange = async (from: string, till: string) => {
+      await click('.field .seg button', 'Custom');
+      requests.length = 0;
+      component.onCustomFrom(from);
+      component.onCustomTill(till);
+      await settle();
+    };
+
+    it('historical and upcoming expiries coexist: the nearest on or after To wins, not the latest in range or the earliest upcoming', async () => {
+      expiryFor = req => reply(req, ['2026-10-14', '2026-10-21', NEAR, '2026-11-10', '2026-11-26']);
+      await customRange('2026-10-01', '2026-10-28');
+      expect(legExpiries()).toEqual([NEAR, NEAR]);
+      const final = requests.filter(r => r.date_till === '2026-10-28');   // the intermediate request for the half-edited dates is not under test
+      expect(final.length).toBeGreaterThan(0);
+      expect(final.every(r => r.expiry === NEAR)).toBe(true);
+    });
+
+    it('the comparison uses the selected To date, not the system date (pinned to 30 Oct): an expiry between To and today is eligible', async () => {
+      expiryFor = req => reply(req, ['2026-10-14', '2026-10-21', '2026-10-29', NEAR]);
+      await customRange('2026-10-01', '2026-10-25');
+      expect(legExpiries()).toEqual(['2026-10-29', '2026-10-29']);        // already past "today", but on or after the To date
+    });
+
+    it('an expiry on the To date itself counts as on or after it', async () => {
+      expiryFor = req => reply(req, ['2026-10-14', '2026-10-21', NEAR]);
+      await customRange('2026-10-01', '2026-10-21');
+      expect(legExpiries()).toEqual(['2026-10-21', '2026-10-21']);
+    });
+
+    it('every preset ends today: the default is the nearest expiry on or after it', async () => {
+      expiryFor = req => reply(req, ['2026-10-14', '2026-10-21', '2026-10-29', NEAR, '2026-11-10']);
+      for (const preset of ['1W', '1M', '3M'] as const) {
+        await click('.field .seg button', preset);
+        expect(legExpiries(), preset).toEqual([NEAR, NEAR]);
+      }
+    });
+
+    it('with no expiry on or after To the legs are not moved to an invalid expiry and the reason is shown', async () => {
+      metaFor = symbol => of({ data: { ...details(symbol).data, expiry_date: ['2026-10-22'] } });
+      expiryFor = req => reply(req, ['2026-10-14', '2026-10-22']);
+      component.selectSymbol('BANKNIFTY');
+      await settle();
+      expect(legExpiries()).toEqual(['2026-10-22', '2026-10-22']);       // unchanged: nothing valid to move to
+      expect(component.forwardExpiryNote()).toContain('No expiry is listed on or after 30 Oct 2026');
+      expect(host.textContent).toContain('No expiry is listed on or after 30 Oct 2026');
+    });
+
+    it('the note clears when a later range has an expiry on or after To', async () => {
+      metaFor = symbol => of({ data: { ...details(symbol).data, expiry_date: ['2026-10-22'] } });
+      expiryFor = req => reply(req, ['2026-10-14', '2026-10-22']);
+      component.selectSymbol('BANKNIFTY');
+      await settle();
+      expect(component.forwardExpiryNote()).not.toBe('');
+      await customRange('2026-10-01', '2026-10-20');
+      expect(component.forwardExpiryNote()).toBe('');
+      expect(legExpiries()).toEqual(['2026-10-22', '2026-10-22']);
+    });
+
+    it('a manually chosen expiry, historical or not, is never overwritten by the default', async () => {
+      expiryFor = req => reply(req, ['2026-10-14', '2026-10-21', NEAR]);
+      const first = host.querySelector<HTMLSelectElement>('select[id^="ml-expiry-"]')!;
+      first.value = '2026-10-22';
+      first.dispatchEvent(new Event('change'));
+      await settle();
+      await customRange('2026-10-01', '2026-10-28');
+      expect(legExpiries()).toEqual(['2026-10-22', NEAR]);                // the pick stays; the untouched leg takes the nearest on or after To
+      await click('.field .seg button', '1W');
+      expect(legExpiries()[0]).toBe('2026-10-22');
+    });
+
+    it('a symbol change re-applies the rule for the new symbol', async () => {
+      expiryFor = req => reply(req, req.symbol === 'BANKNIFTY' ? ['2026-10-21', '2026-11-04'] : ['2026-10-21', NEAR]);
+      component.selectSymbol('BANKNIFTY');
+      await settle();
+      expect(legExpiries()).toEqual(['2026-11-04', '2026-11-04']);
+    });
+
+    it('the initial load already requests the legs on that expiry, once', () => {
+      expect(requests).toHaveLength(2);
+      expect(requests.every(r => r.expiry === '2026-11-26')).toBe(true);
+    });
+
+    it('the ATM still comes from the To-date close, asked once per To date, whatever the expiry', async () => {
+      expiryFor = req => reply(req, ['2026-10-21', NEAR, '2026-11-26']);
+      await customRange('2026-10-01', '2026-10-28');
+      const asked = atmCalls.filter(call => call.till === '2026-10-28');
+      expect(asked).toHaveLength(1);
+      const before = atmCalls.length;
+      const select = host.querySelector<HTMLSelectElement>('select[id^="ml-expiry-"]')!;
+      select.value = '2026-11-26';
+      select.dispatchEvent(new Event('change'));
+      await settle();
+      expect(atmCalls).toHaveLength(before);                                // changing an expiry asks for no new close
+      expect(atmCalls.every(call => !['2026-11-03', '2026-11-26'].includes(call.till))).toBe(true);   // never the expiry date
+    });
+
+    it('a picked strike stays when the default expiry moves', async () => {
+      const strike = host.querySelectorAll<HTMLSelectElement>('select[id^="ml-strike-"]')[0];
+      strike.value = '22700';
+      strike.dispatchEvent(new Event('change'));
+      await settle();
+      expiryFor = req => reply(req, ['2026-10-21', NEAR]);
+      await customRange('2026-10-01', '2026-10-28');
+      expect(component.legs()[0].strike).toBe(22700);
+      expect(component.legs()[0].picked?.strike).toBe(true);
+    });
+  });
+
+  describe('sparse strike warning', () => {
+    const SPARSE = '2026-10-29';
+    const warnings = () => Array.from(host.querySelectorAll('.leg-warn')).map(el => el.textContent?.trim());
+    const TEXT = 'Available strikes are limited. Calculated ATM is significantly away from the underlying close.';
+    const chooseExpiry = async (index: number, expiry: string) => {
+      const el = host.querySelectorAll<HTMLSelectElement>('select[id^="ml-expiry-"]')[index];
+      el.value = expiry;
+      el.dispatchEvent(new Event('change'));
+      await settle();
+    };
+
+    it('no warning when the ATM is within 1% of the close (22600 against 22630)', () => {
+      expect(warnings()).toEqual([]);
+    });
+
+    it('warns, on that leg only, when its expiry lists too few strikes near the money (ATM more than 1% away)', async () => {
+      strikesFor = (_s, expiry) => (expiry === SPARSE ? of({ ok: true, strikes: [21000, 22000] }) : of({ ok: true, strikes: STRIKE_GRID }));
+      await chooseExpiry(1, SPARSE);
+      expect(component.atmFor(SPARSE)).toBe(22000);
+      expect(warnings()).toEqual([TEXT]);
+      expect(host.querySelectorAll('.legrow')[1].querySelector('.leg-warn')).toBeTruthy();
+      expect(host.querySelectorAll('.legrow')[0].querySelector('.leg-warn')).toBeNull();
+    });
+
+    it('legs warn independently: two sparse legs show two warnings, a dense one none', async () => {
+      strikesFor = (_s, expiry) => (expiry === SPARSE ? of({ ok: true, strikes: [21000, 22000] }) : of({ ok: true, strikes: STRIKE_GRID }));
+      await chooseExpiry(0, SPARSE);
+      await chooseExpiry(1, SPARSE);
+      expect(warnings()).toEqual([TEXT, TEXT]);
+      await chooseExpiry(1, '2026-11-26');
+      expect(warnings()).toEqual([TEXT]);
+    });
+
+    it('the warning disappears when the expiry is changed to one with strikes near the close, and the ATM itself is unchanged', async () => {
+      strikesFor = (_s, expiry) => (expiry === SPARSE ? of({ ok: true, strikes: [21000, 22000] }) : of({ ok: true, strikes: STRIKE_GRID }));
+      await chooseExpiry(0, SPARSE);
+      expect(warnings()).toHaveLength(1);
+      await chooseExpiry(0, '2026-11-26');
+      expect(warnings()).toEqual([]);
+      expect(component.atmFor('2026-11-26')).toBe(22600);
+    });
+
+    it('exactly 1% is not flagged and just above is', async () => {
+      // 22630 * 1% = 226.3: a strike at 22630 - 226.3 = 22403.7 would be exactly on the line; 22400 is 1.0163% away, 22450 is 0.795% away
+      strikesFor = (_s, expiry) => (expiry === SPARSE ? of({ ok: true, strikes: [22400] }) : of({ ok: true, strikes: STRIKE_GRID }));
+      await chooseExpiry(0, SPARSE);
+      expect(warnings()).toEqual([TEXT]);
+      strikesFor = (_s, expiry) => (expiry === '2026-10-22' ? of({ ok: true, strikes: [22450] }) : of({ ok: true, strikes: STRIKE_GRID }));
+      await chooseExpiry(0, '2026-10-22');
+      expect(warnings()).toEqual([]);
+    });
+
+    it('updates when the To date changes the underlying close', async () => {
+      strikesFor = () => of({ ok: true, strikes: [22000, 22600, 23200] });
+      component.selectSymbol('BANKNIFTY');
+      await settle();
+      expect(warnings()).toEqual([]);                                       // 22630 against 22600
+      atmFor = () => of({ ok: true, session: '2026-10-21', underlying: 22300, strikes: [], atm: 0 });
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom('2026-10-01');
+      component.onCustomTill('2026-10-21');
+      await settle();
+      expect(component.underlying()).toBe(22300);
+      expect(component.atmFor(component.legs()[0].expiry)).toBe(22000);     // 22300 is nearer 22000 than 22600 ...
+      expect(warnings()).toEqual([TEXT, TEXT]);                             // ... and 22000 is 1.35% away
+    });
+
+    it('shows nothing without a closing price, and the ATM is not guessed', async () => {
+      atmFor = () => of({ ok: false, reason: 'unavailable' });
+      component.selectSymbol('BANKNIFTY');
+      await settle();
+      expect(component.underlying()).toBeNull();
+      expect(warnings()).toEqual([]);
+    });
+
+    it('shows nothing when the expiry lists no strikes, or a zero close arrives', async () => {
+      strikesFor = () => of({ ok: false, reason: 'none' });
+      component.selectSymbol('BANKNIFTY');
+      await settle();
+      expect(warnings()).toEqual([]);
+      strikesFor = () => of({ ok: true, strikes: STRIKE_GRID });
+      atmFor = () => of({ ok: true, session: '2026-10-29', underlying: 0, strikes: [], atm: 0 });
+      component.selectSymbol('RELIANCE');
+      await settle();
+      expect(warnings()).toEqual([]);
+    });
+
+    it('never changes a strike the user picked, and raises no toast', async () => {
+      strikesFor = (_s, expiry) => (expiry === SPARSE ? of({ ok: true, strikes: [21000, 22000] }) : of({ ok: true, strikes: STRIKE_GRID }));
+      const strike = host.querySelectorAll<HTMLSelectElement>('select[id^="ml-strike-"]')[0];
+      strike.value = '22700';
+      strike.dispatchEvent(new Event('change'));
+      await settle();
+      await chooseExpiry(0, SPARSE);
+      expect(component.legs()[0].strike).toBe(22700);                       // kept; the warning is about the ATM, not the choice
+      expect(warnings()).toEqual([TEXT]);
+    });
+  });
+
+  describe('adding a leg keeps an inherited manual expiry', () => {
+    const NEAR = '2026-11-03';
+    const legExpiries = () => component.legs().map(l => l.expiry);
+    const pickExpiry = async (index: number, value: string) => {
+      const el = host.querySelectorAll<HTMLSelectElement>('select[id^="ml-expiry-"]')[index];
+      el.value = value;
+      el.dispatchEvent(new Event('change'));
+      await settle();
+    };
+    const addLeg = async () => { await click('.legs-head .ghost', '+ Add leg'); };
+
+    it('a leg added after the LAST leg was set by hand inherits the expiry and the choice', async () => {
+      await pickExpiry(1, '2026-10-22');
+      await addLeg();
+      expect(legExpiries()).toEqual(['2026-11-26', '2026-10-22', '2026-10-22']);
+      expect(component.legs().map(l => !!l.picked?.expiry)).toEqual([false, true, true]);
+    });
+
+    it('the inherited expiry survives a preset change, a To change and a From change, like the leg it was copied from', async () => {
+      await pickExpiry(1, '2026-10-22');
+      await addLeg();
+      expiryFor = req => reply(req, ['2026-10-22', NEAR, '2026-11-26']);
+      for (const preset of ['1W', '1M', '3M'] as const) {
+        await click('.field .seg button', preset);
+        expect(legExpiries(), preset).toEqual([NEAR, '2026-10-22', '2026-10-22']);   // the untouched leg takes the nearest listed on or after To
+      }
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom('2026-10-01');
+      component.onCustomTill('2026-10-28');
+      await settle();
+      expect(legExpiries()).toEqual([NEAR, '2026-10-22', '2026-10-22']);       // only the untouched leg follows the new default
+      component.onCustomFrom('2026-10-02');
+      await settle();
+      expect(legExpiries()).toEqual([NEAR, '2026-10-22', '2026-10-22']);
+    });
+
+    it('a leg added after an automatically chosen expiry stays automatic and follows the default', async () => {
+      await addLeg();
+      expect(component.legs().map(l => !!l.picked?.expiry)).toEqual([false, false, false]);
+      expiryFor = req => reply(req, ['2026-10-22', NEAR, '2026-11-26']);
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom('2026-10-01');
+      component.onCustomTill('2026-10-28');
+      await settle();
+      expect(legExpiries()).toEqual([NEAR, NEAR, NEAR]);
+    });
+
+    it('selections stay independent: an untouched leg, a leg set by hand, and a copy of the latter', async () => {
+      await pickExpiry(1, '2026-10-22');
+      await addLeg();
+      await pickExpiry(2, '2026-10-29');                                         // the copy is then changed by hand again
+      expect(legExpiries()).toEqual(['2026-11-26', '2026-10-22', '2026-10-29']);
+      expect(component.legs().map(l => !!l.picked?.expiry)).toEqual([false, true, true]);
+      expiryFor = req => reply(req, ['2026-10-22', '2026-10-29', NEAR]);
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom('2026-10-01');
+      component.onCustomTill('2026-10-28');
+      await settle();
+      expect(legExpiries()).toEqual(['2026-10-29', '2026-10-22', '2026-10-29']);   // 29 Oct is the nearest listed on or after 28 Oct
+    });
+
+    it('the copied leg\'s strike is still automatic (only the expiry choice is inherited)', async () => {
+      await pickExpiry(1, '2026-10-22');
+      await addLeg();
+      expect(component.legs()[2].picked?.strike).toBeUndefined();
+    });
+  });
+
+  describe('legs are requested only when the expiry list, the closing price and the strikes of the new dates are all in', () => {
+    type ExpiryReply = { data: { symbol: string; trade_from: string; trade_till: string; expiry_date: string[] } };
+    const NEAR = '2026-11-03';
+    const legStrikes = () => component.legs().map(l => l.strike);
+    const legExpiries = () => component.legs().map(l => l.expiry);
+    const expiryAnswer = (subject: Subject<ExpiryReply>, dates: string[]) => subject.next({ data: { symbol: 'NIFTY', trade_from: '', trade_till: '', expiry_date: dates } });
+    const closeAnswer = (subject: Subject<HistoricalUnderlyingResult>, underlying: number) => subject.next({ ok: true, session: '2026-10-28', underlying, strikes: [], atm: 0 });
+    /** Custom range 1..28 Oct (To changes from 30 Oct): its expiry list and closing price are held back by the returned subjects. */
+    const slowDateChange = async () => {
+      const expiry = new Subject<ExpiryReply>();
+      const close = new Subject<HistoricalUnderlyingResult>();
+      expiryFor = req => (req.trade_till === '2026-10-28' ? expiry : reply(req, ['2026-10-22', NEAR, '2026-11-26']));
+      atmFor = (_s, till) => (till === '2026-10-28' ? close : of({ ok: true, session: '2026-10-29', underlying: 22630, strikes: [], atm: 22600 }));
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom('2026-10-01');                                       // To is still 30 Oct: this intermediate state answers at once
+      await settle();
+      requests.length = 0;
+      component.onCustomTill('2026-10-28');
+      await settle();
+      return { expiry, close };
+    };
+
+    it('the expiry list arrives first: nothing is requested until the closing price is in, then once with the new expiry and its ATM', async () => {
+      const { expiry, close } = await slowDateChange();
+      expect(requests).toEqual([]);
+      expect(component.loading()).toBe(true);
+      expiryAnswer(expiry, ['2026-10-22', NEAR]);
+      await settle();
+      expect(requests).toEqual([]);                                              // the old close (22630 -> 22600) must not be used
+      expect(component.loading()).toBe(true);
+      closeAnswer(close, 22300);
+      await settle();
+      expect(requests).toHaveLength(2);
+      expect(requests.every(r => r.expiry === NEAR && r.strike === 22400 && r.date_till === '2026-10-28')).toBe(true);
+      expect(component.loading()).toBe(false);
+      expect(legExpiries()).toEqual([NEAR, NEAR]);
+      expect(legStrikes()).toEqual([22400, 22400]);
+    });
+
+    it('the closing price arrives first: still nothing until the expiry list is in, then once', async () => {
+      const { expiry, close } = await slowDateChange();
+      closeAnswer(close, 22300);
+      await settle();
+      expect(requests).toEqual([]);                                              // legs still carry the previous dates\' expiry
+      expect(component.loading()).toBe(true);
+      expiryAnswer(expiry, ['2026-10-22', NEAR]);
+      await settle();
+      expect(requests).toHaveLength(2);
+      expect(requests.every(r => r.expiry === NEAR && r.strike === 22400)).toBe(true);
+      expect(component.loading()).toBe(false);
+    });
+
+    it('a strike list the new expiry needs is also waited for', async () => {
+      const strikes = new Subject<ExpiryStrikesResult>();
+      strikesFor = (_s, expiry) => (expiry === NEAR ? strikes : of({ ok: true, strikes: STRIKE_GRID }));
+      const { expiry, close } = await slowDateChange();
+      expiryAnswer(expiry, ['2026-10-22', NEAR]);
+      closeAnswer(close, 22300);
+      await settle();
+      expect(requests).toEqual([]);                                              // expiry and close are in, but the strikes of NEAR are not
+      expect(component.loading()).toBe(true);
+      expect(strikeBusyAny()).toBe(true);
+      strikes.next({ ok: true, strikes: [22250, 22350, 22450] });
+      await settle();
+      expect(requests).toHaveLength(2);
+      expect(requests.every(r => r.expiry === NEAR && r.strike === 22250)).toBe(true);   // 22300 is equally far from 22250 and 22350: the lower strike wins
+    });
+
+    it('a strike the user picked is kept through the whole sequence and requested once', async () => {
+      const select = host.querySelectorAll<HTMLSelectElement>('select[id^="ml-strike-"]')[0];
+      select.value = '22700';
+      select.dispatchEvent(new Event('change'));
+      await settle();
+      const { expiry, close } = await slowDateChange();
+      expiryAnswer(expiry, ['2026-10-22', NEAR]);
+      closeAnswer(close, 22300);
+      await settle();
+      expect(legStrikes()).toEqual([22700, 22400]);
+      expect(requests.filter(r => r.option_type === 'CE').map(r => r.strike)).toEqual([22700]);
+      expect(requests).toHaveLength(2);
+    });
+
+    it('a failed closing price does not leave the screen loading: the legs load without a strike and the reason shows', async () => {
+      const { expiry, close } = await slowDateChange();
+      expiryAnswer(expiry, ['2026-10-22', NEAR]);
+      close.next({ ok: false, reason: 'unavailable' });
+      await settle();
+      expect(component.loading()).toBe(false);
+      expect(requests).toEqual([]);                                              // no strike is known, so nothing is requested
+      expect(host.textContent).toContain('Unable to load the closing price');
+    });
+
+    it('a failed expiry list does not leave the screen loading and does not use the previous close', async () => {
+      const expiry = new Subject<ExpiryReply>();
+      const close = new Subject<HistoricalUnderlyingResult>();
+      expiryFor = req => (req.trade_till === '2026-10-28' ? expiry : reply(req, ['2026-10-22', NEAR, '2026-11-26']));
+      atmFor = (_s, till) => (till === '2026-10-28' ? close : of({ ok: true, session: '2026-10-29', underlying: 22630, strikes: [], atm: 22600 }));
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom('2026-10-01');
+      await settle();
+      requests.length = 0;
+      component.onCustomTill('2026-10-28');
+      await settle();
+      expiry.error(new HttpErrorResponse({ status: 500 }));
+      await settle();
+      expect(requests).toEqual([]);                                              // the close is still outstanding
+      closeAnswer(close, 22300);
+      await settle();
+      expect(component.loading()).toBe(false);
+      expect(requests.every(r => r.strike === 22400 && r.date_till === '2026-10-28')).toBe(true);
+    });
+
+    it('rapid consecutive changes: answers for the earlier dates are ignored and only the latest dates are requested, once', async () => {
+      const firstExpiry = new Subject<ExpiryReply>();
+      const firstClose = new Subject<HistoricalUnderlyingResult>();
+      const secondExpiry = new Subject<ExpiryReply>();
+      const secondClose = new Subject<HistoricalUnderlyingResult>();
+      expiryFor = req => (req.trade_till === '2026-10-28' ? firstExpiry : req.trade_till === '2026-10-27' ? secondExpiry : reply(req, ['2026-10-22', NEAR]));
+      atmFor = (_s, till) => (till === '2026-10-28' ? firstClose : till === '2026-10-27' ? secondClose : of({ ok: true, session: '2026-10-29', underlying: 22630, strikes: [], atm: 22600 }));
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom('2026-10-01');
+      await settle();
+      requests.length = 0;
+      component.onCustomTill('2026-10-28');
+      component.onCustomTill('2026-10-27');
+      await settle();
+      expiryAnswer(firstExpiry, ['2026-10-22', NEAR]);                           // late answers for the earlier To date
+      closeAnswer(firstClose, 22300);
+      await settle();
+      expect(requests).toEqual([]);
+      expect(component.loading()).toBe(true);
+      expiryAnswer(secondExpiry, ['2026-10-22', NEAR]);
+      secondClose.next({ ok: true, session: '2026-10-27', underlying: 22690, strikes: [], atm: 0 });
+      await settle();
+      expect(requests).toHaveLength(2);
+      expect(requests.every(r => r.date_till === '2026-10-27' && r.expiry === NEAR && r.strike === 22700)).toBe(true);
+    });
+
+    it('a preset change that keeps the To date waits only for the expiry list and requests once', async () => {
+      const expiry = new Subject<ExpiryReply>();
+      expiryFor = () => expiry;
+      requests.length = 0;
+      await click('.field .seg button', '1M');
+      expect(requests).toEqual([]);
+      expiryAnswer(expiry, ['2026-11-03', '2026-11-26']);
+      await settle();
+      expect(requests).toHaveLength(2);
+      expect(component.loading()).toBe(false);
+      expect(atmCalls.filter(c => c.till === '2026-10-30')).toHaveLength(1);       // the close of the unchanged To date is not asked again
+    });
+
+    it('every input already cached: the date change reloads at once, once', async () => {
+      requests.length = 0;
+      await click('.field .seg button', '1M');
+      await click('.field .seg button', '3M');
+      expect(requests.length).toBeLessThanOrEqual(2);
+      expect(component.loading()).toBe(false);
+    });
+
+    function strikeBusyAny(): boolean {
+      return Array.from(host.querySelectorAll<HTMLSelectElement>('select[id^="ml-strike-"]')).some(el => el.disabled);
+    }
+  });
+
+  describe('one message when no expiry is listed on or after To', () => {
+    const inputErrors = () => Array.from(host.querySelectorAll('.input-error')).map(el => el.textContent?.trim() ?? '');
+    const noForward = async () => {
+      metaFor = symbol => of({ data: { ...details(symbol).data, expiry_date: ['2026-10-22'] } });
+      expiryFor = req => reply(req, ['2026-10-14', '2026-10-22']);
+      component.selectSymbol('BANKNIFTY');
+      await settle();
+    };
+
+    it('shows only that explanation, not the empty-range and unlisted-expiry messages that follow from it', async () => {
+      await noForward();
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom('2026-10-01');
+      component.onCustomTill('2026-10-21');
+      await settle();
+      component.onCustomTill('2026-10-30');
+      await settle();
+      const messages = inputErrors();
+      expect(messages.filter(m => m.includes('No expiry is listed on or after 30 Oct 2026'))).toHaveLength(1);
+      expect(messages.some(m => m.includes('No expiries are listed for these dates'))).toBe(false);
+      expect(messages.some(m => m.includes('not listed for these dates'))).toBe(false);
+    });
+
+    it('when a leg is also before the From date the validation is part of the same single message', async () => {
+      await noForward();
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom('2026-10-24');
+      component.onCustomTill('2026-10-30');
+      await settle();
+      const messages = inputErrors();
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain('No expiry is listed on or after 30 Oct 2026');
+      expect(messages[0]).toContain('22 Oct 2026 is before the From date (24 Oct 2026)');
+      expect(component.expiredLegMessage()).toContain('22 Oct 2026');            // the check itself still runs: nothing is requested for that leg
+    });
+
+    it('the before-From validation still shows on its own when an expiry is listed after To', async () => {
+      const select = host.querySelectorAll<HTMLSelectElement>('select[id^="ml-expiry-"]')[0];
+      select.value = '2026-10-22';
+      select.dispatchEvent(new Event('change'));
+      await settle();
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom('2026-10-26');
+      component.onCustomTill('2026-10-30');
+      await settle();
+      expect(inputErrors().some(m => m.includes('Expiry 22 Oct 2026 is before the From date (26 Oct 2026)'))).toBe(true);
+    });
+  });
+
+  describe('ATM explanatory note while the closing price loads', () => {
+    const UPDATING = 'Updating ATM reference price…';
+    const noteBoxes = () => Array.from(host.querySelectorAll('.legnote, .legnote-spacer'));
+    const noteText = () => host.querySelector('.legnote')?.textContent?.trim() ?? null;
+    const OLD_CLOSE = '22630';
+    const closeFor = (underlying: number, session: string): HistoricalUnderlyingResult => ({ ok: true, session, underlying, strikes: [], atm: 0 });
+    /** Custom range ending 28 Oct: its closing price is held back by the returned subject. */
+    const changeTo = async (till: string, subject: Subject<HistoricalUnderlyingResult>) => {
+      const before = atmFor;
+      atmFor = (symbol, d) => (d === till ? subject : before(symbol, d));
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom('2026-10-01');
+      await settle();
+      component.onCustomTill(till);
+      await settle();
+    };
+
+    it('shows the current explanation before any change, with the close of the To date', () => {
+      expect(noteText()).toContain('underlying close of 22630 on 29 Oct 2026');
+      expect(noteBoxes()).toHaveLength(1);
+    });
+
+    it('a To date change replaces the note at once with the updating text and never shows the previous close', async () => {
+      const close = new Subject<HistoricalUnderlyingResult>();
+      await changeTo('2026-10-28', close);
+      expect(component.atmLoading()).toBe(true);
+      expect(noteText()).toBe(UPDATING);
+      expect(host.textContent).not.toContain('underlying close of 22630');
+      expect(host.querySelector('.legnote')?.getAttribute('role')).toBe('status');
+    });
+
+    it('the closing price arriving brings back the explanation for the new date', async () => {
+      const close = new Subject<HistoricalUnderlyingResult>();
+      await changeTo('2026-10-28', close);
+      close.next(closeFor(22300, '2026-10-28'));
+      await settle();
+      expect(noteText()).toContain('underlying close of 22300 on 28 Oct 2026');
+      expect(noteText()).not.toContain(UPDATING);
+      expect(noteText()).not.toContain(OLD_CLOSE);
+    });
+
+    it('a failed lookup leaves no explanation and no stale value; the reason is shown and the space is kept', async () => {
+      const close = new Subject<HistoricalUnderlyingResult>();
+      await changeTo('2026-10-28', close);
+      close.next({ ok: false, reason: 'unavailable' });
+      await settle();
+      expect(host.querySelector('.legnote')).toBeNull();
+      expect(host.textContent).not.toContain(OLD_CLOSE);
+      expect(host.textContent).not.toContain(UPDATING);
+      expect(host.textContent).toContain('Unable to load the closing price');
+      expect(host.querySelectorAll('.legnote-spacer')).toHaveLength(1);        // the same box stays in the layout
+    });
+
+    it('rapid consecutive changes: a late answer for the earlier date is ignored and the note keeps saying updating until the latest arrives', async () => {
+      const first = new Subject<HistoricalUnderlyingResult>();
+      const second = new Subject<HistoricalUnderlyingResult>();
+      const before = atmFor;
+      atmFor = (symbol, d) => (d === '2026-10-28' ? first : d === '2026-10-27' ? second : before(symbol, d));
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom('2026-10-01');
+      await settle();
+      component.onCustomTill('2026-10-28');
+      component.onCustomTill('2026-10-27');
+      await settle();
+      expect(noteText()).toBe(UPDATING);
+      first.next(closeFor(22300, '2026-10-28'));                              // late
+      await settle();
+      expect(noteText()).toBe(UPDATING);
+      expect(host.textContent).not.toContain('22300');
+      second.next(closeFor(22690, '2026-10-27'));
+      await settle();
+      expect(noteText()).toContain('underlying close of 22690 on 27 Oct 2026');
+    });
+
+    it('a change that keeps the To date does not show the updating text (the close is not asked again)', async () => {
+      const calls = atmCalls.length;
+      await click('.field .seg button', '1M');
+      expect(noteText()).toContain('underlying close of 22630');
+      expect(atmCalls).toHaveLength(calls);
+    });
+
+    it('no layout shift: exactly one note box exists in every state and the loading and loaded notes are the same element type and class', async () => {
+      const close = new Subject<HistoricalUnderlyingResult>();
+      expect(noteBoxes()).toHaveLength(1);
+      const loaded = noteBoxes()[0];
+      await changeTo('2026-10-28', close);
+      expect(noteBoxes()).toHaveLength(1);
+      const loading = noteBoxes()[0];
+      expect(loading.tagName).toBe(loaded.tagName);
+      expect(loading.className).toBe(loaded.className);                        // one CSS box for both, with its reserved height
+      close.next(closeFor(22300, '2026-10-28'));
+      await settle();
+      expect(noteBoxes()).toHaveLength(1);
+      expect(noteBoxes()[0].className).toBe(loaded.className);
+      const failing = new Subject<HistoricalUnderlyingResult>();
+      atmFor = (symbol, d) => (d === '2026-10-26' ? failing : of(closeFor(22630, '2026-10-29')));
+      component.onCustomTill('2026-10-26');
+      await settle();
+      failing.next({ ok: false, reason: 'no-session' });
+      await settle();
+      expect(noteBoxes()).toHaveLength(1);                                    // the spacer takes the note's place
+    });
+
+    it('a symbol change shows the updating text instead of the previous symbol\'s close', async () => {
+      const close = new Subject<HistoricalUnderlyingResult>();
+      atmFor = () => close;
+      component.selectSymbol('BANKNIFTY');
+      await settle();
+      expect(noteText()).toBe(UPDATING);
+      expect(host.textContent).not.toContain(OLD_CLOSE);
+      close.next(closeFor(59610.45, '2026-10-29'));
+      await settle();
+      expect(noteText()).toContain('underlying close of 59610.45');
+    });
+
+    it('does not touch the ATM calculation: strikes and markers behave as before around the update', async () => {
+      const close = new Subject<HistoricalUnderlyingResult>();
+      await changeTo('2026-10-28', close);
+      expect(component.legs().map(l => l.strike)).toEqual([22600, 22600]);       // unchanged until the new close is in
+      expect(requests.filter(r => r.date_till === '2026-10-28')).toEqual([]);   // and nothing is requested meanwhile
+      close.next(closeFor(22300, '2026-10-28'));
+      await settle();
+      expect(component.legs().map(l => l.strike)).toEqual([22400, 22400]);
+      expect(requests.filter(r => r.date_till === '2026-10-28')).toHaveLength(2);
     });
   });
 

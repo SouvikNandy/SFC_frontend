@@ -73,6 +73,25 @@ export function resolveRange(preset: RangePreset, today: string, customFrom: str
     return { range: { from: ymd(from), till: today } };
 }
 
+/**
+ * A calculated ATM further than this many percent from the underlying close is flagged: the expiry lists too few strikes near the money
+ * (far expiries are sparse). Change it here; it only drives the warning, never the ATM or a selection.
+ */
+export const SPARSE_ATM_THRESHOLD_PERCENT = 1;
+
+/** abs(atm - close) / close * 100; null when either value is missing, not finite or the close is not positive. */
+export function atmDistancePercent(atm: number | null | undefined, close: number | null | undefined): number | null {
+    if (atm === null || atm === undefined || close === null || close === undefined) return null;
+    if (!Number.isFinite(atm) || !Number.isFinite(close) || close <= 0) return null;
+    return (Math.abs(atm - close) / close) * 100;
+}
+
+/** True when the ATM is known and strictly further than the threshold from the close (exactly at the threshold is not flagged). */
+export const isSparseAtm = (atm: number | null | undefined, close: number | null | undefined, thresholdPercent: number = SPARSE_ATM_THRESHOLD_PERCENT): boolean => {
+    const distance = atmDistancePercent(atm, close);
+    return distance !== null && distance > thresholdPercent;
+};
+
 export const legLabel = (leg: Pick<LegSelection, 'strike' | 'optionType' | 'expiry'>): string =>
     `${leg.strike ?? '–'} ${leg.optionType} · ${shortDate(leg.expiry).replace(/^0/, '')}`;
 
