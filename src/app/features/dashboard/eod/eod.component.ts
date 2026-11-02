@@ -29,11 +29,15 @@ import {
 import { ToastService } from '../../../core/services/toast.service';
 import { DefaultStock } from '../../../shared/services/constantFile';
 import { CLOSE_EOD_LABEL } from '../../../shared/utils/price-labels';
+import { nearestStrike } from '../../../shared/utils/atm-strike';
 import { defaultExpiry, isNoExpiriesResponse, selectExpiries } from '../../../shared/utils/expiry-selection';
 import { MAX_RANGE_MESSAGE, clearedMessage, exceedsOneYear, fromConflict, fromPickerBounds, isIsoDate, localTodayIso, tillConflict, tillPickerBounds } from '../../../shared/utils/date-range';
+import { ExpiryStrikesService } from './expiry-strikes.service';
+import { HistoricalUnderlyingService } from './historical-underlying.service';
 import { EMPTY, Subject, of } from 'rxjs';
 import { catchError, finalize, map, switchMap, takeUntil, tap } from 'rxjs/operators';
 
+const NO_EOD_ROWS: EodResponse = { success: true, data: { results: [], page: 1, has_next: false, has_previous: false } };
 const PRICE_FORMAT = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const THOUSANDS_FORMAT = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
@@ -61,7 +65,27 @@ export class EodComponent implements OnInit, OnDestroy {
   instrument: 'FUT' | 'CE' | 'PE' = 'FUT';
   strike?: number;
   expiry?: string;
+  /** Strikes listed for the selected expiry (`dd_strikes`); empty until they have loaded. */
   strikeOptions: number[] = [];
+  strikesLoading = false;
+  /** Why the strike list is empty or could not be loaded; shown under the Strike control. */
+  strikeNote = '';
+  /** Why no default strike could be set from the To date's closing price; empty when it could. */
+  underlyingNote = '';
+  /** True once the strikes of the selected expiry have loaded, so a strike missing from them can be flagged. */
+  strikesLoaded = false;
+  /** The underlying close of the To date (or the previous session) is being fetched. */
+  underlyingLoading = false;
+  /** The underlying close the default strike is based on, and the session it belongs to; null when unknown. */
+  underlyingClose: number | null = null;
+  underlyingSession = '';
+  /** The user chose the strike: it is kept (and flagged when the expiry does not list it) instead of following the ATM. */
+  private strikePicked = false;
+  /** Symbol and expiry / symbol and To date the wanted answer is for; any other answer is stale. */
+  private strikesKey = '';
+  /** The table request was held back because the expiry list for the new dates is still loading; the list's answer sends it. */
+  private tableHeld = false;
+  private underlyingKey = '';
   /** Every expiry `dd_expiry` returns for the selected dates, including those after To (see selectExpiries); never derived from today's date. */
   expiryOptions: string[] = [];
   expiryLoading = false;
@@ -132,12 +156,16 @@ export class EodComponent implements OnInit, OnDestroy {
 
   private refresh$ = new Subject<{ loadMetadata: boolean }>();
   private expiryRequest$ = new Subject<{ symbol: string; from: string; till: string } | null>();
+  private strikesRequest$ = new Subject<{ symbol: string; expiry: string } | null>();
+  private underlyingRequest$ = new Subject<{ symbol: string; till: string } | null>();
   private destroy$ = new Subject<void>();
 
   constructor(
     private readonly svc: EodService,
     private readonly changeDetector: ChangeDetectorRef,
     private readonly toast: ToastService,
+    private readonly historicalUnderlying: HistoricalUnderlyingService,
+    private readonly expiryStrikes: ExpiryStrikesService,
   ) {}
 
   ngOnInit(): void {
@@ -154,6 +182,7 @@ export class EodComponent implements OnInit, OnDestroy {
     this.setupReload();
     this.setupChart();
     this.setupExpiries();
+    this.setupStrikes();
     this.loadSymbols();
     this.refresh$.next({ loadMetadata: true });
   }
@@ -183,6 +212,7 @@ export class EodComponent implements OnInit, OnDestroy {
       .pipe(
         takeUntil(this.destroy$),
         tap(({ loadMetadata }) => {
+          this.tableHeld = false;
           this.loading = true;
           this.isMetadataLoading = loadMetadata;
           this.isEodLoading = !loadMetadata;
@@ -193,6 +223,14 @@ export class EodComponent implements OnInit, OnDestroy {
             this.chart = null;
             this.ddGreeksData = null;
             this.strikeOptions = [];
+            this.strikePicked = false;
+            this.strikeNote = '';
+            this.underlyingNote = '';
+            this.strikesLoaded = false;
+            this.underlyingClose = null;
+            this.underlyingSession = '';
+            this.cancelStrikes();
+            this.cancelUnderlying();
             this.expiryOptions = [];
             this.expiryNote = '';
             this.cancelExpiries();
@@ -216,11 +254,10 @@ export class EodComponent implements OnInit, OnDestroy {
             ? this.svc.getDdGreeks({ symbol: this.symbol }).pipe(
                 tap((res) => {
                   this.ddGreeksData = res.data;
-                  this.strikeOptions = res.data.strike ?? [];
-                  this.strike = this.selectDefaultStrike(res.data.strike, res.data.atm_strike);
                   this.isMetadataLoading = false;
                   this.isEodLoading = true;
                   this.syncExpiries();
+                  this.syncUnderlying();
                   this.requestChart();
                 }),
               )
@@ -300,7 +337,7 @@ export class EodComponent implements OnInit, OnDestroy {
   private chartRequestBody(): EodChartRequest | null {
     if (!this.symbol || !this.isChartRangeValid()) return null;
     const option = this.instrument !== 'FUT';
-    if (option && (this.strike == null || !this.expiry)) return null;
+    if (option && (this.strike == null || !this.expiry || this.expiryLoading)) return null;
     const { date_from, date_till } = this.calcDateRange(this.range);
     return {
       symbol: this.symbol,
@@ -400,6 +437,14 @@ export class EodComponent implements OnInit, OnDestroy {
   }
 
   private loadEod() {
+    // While the expiry list for the new dates loads, the selected expiry may not exist for them: hold the request (the loading state stays)
+    // and let the list's answer send it, so the table is only ever requested with the latest valid expiry.
+    if (this.instrument !== 'FUT' && this.expiryLoading) {
+      this.tableHeld = true;
+      return EMPTY;
+    }
+    // An option table needs its strike and expiry: with either still unknown (loading, or none could be set) nothing is requested.
+    if (this.instrument !== 'FUT' && (this.strike == null || !this.expiry)) return of(NO_EOD_ROWS);
     const { date_from, date_till } = this.calcDateRange(this.range);
     const req: EodRequest = {
       symbol: this.symbol,
@@ -426,6 +471,12 @@ export class EodComponent implements OnInit, OnDestroy {
   private cancelExpiries(): void {
     this.expiryKey = '';
     this.expiryLoading = false;
+    if (this.tableHeld) {
+      // Nothing will answer for these dates any more: do not leave the table loading.
+      this.tableHeld = false;
+      this.loading = false;
+      this.isEodLoading = false;
+    }
     this.expiryRequest$.next(null);
   }
 
@@ -472,13 +523,121 @@ export class EodComponent implements OnInit, OnDestroy {
         if (result.failed) this.toast.error(this.expiryNote);
         // Keep the user's expiry when it is still offered; otherwise the most recent one inside the dates.
         this.expiry = previous && this.expiryOptions.includes(previous) ? previous : defaultExpiry(this.expiryOptions, from, till);
-        if (this.expiry !== previous && this.instrument !== 'FUT') this.resetPageAndRefresh();
+        // The table and chart were held back while the list loaded: send them now, with the expiry that is valid for these dates.
+        if (this.instrument !== 'FUT') this.resetPageAndRefresh();
+        this.syncStrikes();
         this.changeDetector.markForCheck();
       });
   }
 
-  private selectDefaultStrike(strikes: number[], atmStrike: number): number | undefined {
-    return strikes.includes(atmStrike) ? atmStrike : strikes[0];
+  /** Asks for the underlying close of the To date (the previous session when it was not a trading day): once per symbol and To date. */
+  private syncUnderlying(): void {
+    const window = this.expiryWindow();
+    if (!window) {
+      this.cancelUnderlying();
+      return;
+    }
+    const key = `${this.symbol}|${window.till}`;
+    if (key === this.underlyingKey) return;
+    this.underlyingKey = key;
+    this.underlyingClose = null;
+    this.underlyingSession = '';
+    this.underlyingNote = '';
+    this.underlyingLoading = true;
+    this.underlyingRequest$.next({ symbol: this.symbol, till: window.till });
+    this.applyDefaultStrike();   // no close is known any more: an untouched strike must not keep following the previous one
+    this.changeDetector.markForCheck();
+  }
+
+  private cancelUnderlying(): void {
+    this.underlyingKey = '';
+    this.underlyingLoading = false;
+    this.underlyingRequest$.next(null);
+  }
+
+  /** Asks `dd_strikes` for the selected expiry's strikes, once per symbol and expiry. Futures have no strike, so nothing is asked for them. */
+  private syncStrikes(): void {
+    if (!this.symbol || !this.expiry || this.instrument === 'FUT') {
+      if (this.instrument === 'FUT' || !this.expiry) this.cancelStrikes();
+      return;
+    }
+    const key = `${this.symbol}|${this.expiry}`;
+    if (key === this.strikesKey) return;
+    this.strikesKey = key;
+    this.strikeOptions = [];
+    this.strikesLoaded = false;
+    this.strikeNote = '';
+    this.strikesLoading = true;
+    this.strikesRequest$.next({ symbol: this.symbol, expiry: this.expiry });
+    this.applyDefaultStrike();
+    this.changeDetector.markForCheck();
+  }
+
+  private cancelStrikes(): void {
+    this.strikesKey = '';
+    this.strikesLoading = false;
+    this.strikesRequest$.next(null);
+  }
+
+  private setupStrikes(): void {
+    this.strikesRequest$
+      .pipe(
+        takeUntil(this.destroy$),
+        switchMap((request) => (request
+          ? this.expiryStrikes.resolve(request.symbol, request.expiry).pipe(map((result) => ({ key: `${request.symbol}|${request.expiry}`, expiry: request.expiry, result })))
+          : of(null))),
+      )
+      .subscribe((answer) => {
+        if (!answer || answer.key !== this.strikesKey) return;
+        this.strikesLoading = false;
+        const { result, expiry } = answer;
+        this.strikeOptions = result.ok ? result.strikes : [];
+        this.strikesLoaded = result.ok;
+        this.strikeNote = result.ok ? '' : result.reason === 'none'
+          ? 'No strikes are listed for this expiry.'
+          : 'Unable to load the strikes for this expiry.';
+        if (!result.ok && result.reason === 'unavailable') this.toast.error(`Unable to load the strikes for the ${expiry} expiry.`);
+        this.applyDefaultStrike();
+        this.changeDetector.markForCheck();
+      });
+
+    this.underlyingRequest$
+      .pipe(
+        takeUntil(this.destroy$),
+        switchMap((request) => (request
+          ? this.historicalUnderlying.resolve(request.symbol, request.till).pipe(map((result) => ({ key: `${request.symbol}|${request.till}`, till: request.till, result })))
+          : of(null))),
+      )
+      .subscribe((answer) => {
+        if (!answer || answer.key !== this.underlyingKey) return;
+        this.underlyingLoading = false;
+        if (answer.result.ok) {
+          this.underlyingClose = answer.result.underlying;
+          this.underlyingSession = answer.result.session;
+        } else {
+          // Never the current price: without the close there is no default strike, and the user is told why.
+          this.underlyingClose = null;
+          this.underlyingSession = '';
+          this.underlyingNote = answer.result.reason === 'no-session'
+            ? `No trading session was found on or before ${answer.till}, so the ATM strike could not be set. Select a strike.`
+            : `Unable to load the closing price for ${answer.till}, so the ATM strike could not be set. Select a strike.`;
+          this.toast.error(this.underlyingNote);
+        }
+        this.applyDefaultStrike();
+        this.changeDetector.markForCheck();
+      });
+  }
+
+  /**
+   * An untouched strike is the listed strike of the selected expiry nearest the underlying close of the To date; none while either is unknown.
+   * A strike the user chose is never changed. Option tables reload when the strike changed.
+   */
+  private applyDefaultStrike(): void {
+    if (this.strikePicked) return;
+    const target = nearestStrike(this.strikeOptions, this.underlyingClose) ?? undefined;
+    if (target === this.strike) return;
+    this.strike = target;
+    if (this.instrument !== 'FUT' && !this.isMetadataLoading) this.resetPageAndRefresh();
   }
 
   private setRows(rows: EodDataRow[]): void {
@@ -594,6 +753,7 @@ export class EodComponent implements OnInit, OnDestroy {
 
   onStrike(s: number) {
     this.strike = s;
+    this.strikePicked = true;
     this.resetPageAndRefresh();
   }
   onExpiry(e: string) {
@@ -640,6 +800,7 @@ export class EodComponent implements OnInit, OnDestroy {
   /** The custom From/To dates apply as soon as they form a valid range. */
   private applyCustomDates(): void {
     if (this.validateCustomDates()) this.resetPageAndRefresh();
+    else this.cancelExpiries();   // no valid dates: a list still loading for the previous dates is no longer wanted
   }
 
   onCustomFrom(val: string) {
@@ -666,7 +827,11 @@ export class EodComponent implements OnInit, OnDestroy {
 
   private resetPageAndRefresh(): void {
     this.currentPage = 1;
-    if (!this.isMetadataLoading) this.syncExpiries();   // the dates may have changed: the expiry list follows them
+    if (!this.isMetadataLoading) {
+      this.syncExpiries();   // the dates may have changed: the expiry list follows them
+      this.syncUnderlying();
+      this.syncStrikes();
+    }
     this.refreshEod();
     if (!this.isMetadataLoading) this.requestChart();   // a filter changed; paging (below) never touches the chart
   }

@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EodComponent } from './eod.component';
 import { EodRequest } from './eod.model';
 import { EodService } from './eod.service';
+import { ExpiryStrikesService } from './expiry-strikes.service';
+import { HistoricalUnderlyingService } from './historical-underlying.service';
 
 const row = { date: '2026-10-16', symbol: 'NIFTY', open: 10, high: 12, low: 9, close: 11, volume: 100, oi: 5 };
 
@@ -19,7 +21,10 @@ describe('EodComponent custom date range', () => {
         vi.setSystemTime(now);
         await TestBed.configureTestingModule({
             imports: [EodComponent],
-            providers: [{
+            providers: [
+                { provide: HistoricalUnderlyingService, useValue: { resolve: () => of({ ok: true, session: '2026-10-16', underlying: 22630, strikes: [22600], atm: 22600 }) } },
+                { provide: ExpiryStrikesService, useValue: { resolve: () => of({ ok: true, strikes: [22600] }) } },
+                {
                 provide: EodService,
                 useValue: {
                     getSymbols: () => of(['NIFTY']),

@@ -18,6 +18,29 @@ export interface DdGreeksRequest {
     trade_date?: string;
 }
 
+/** `POST /fo/dd_strikes`: the strikes listed for one expiry of a symbol. */
+export interface DdStrikesRequest {
+    symbol: EodSymbol;
+    expiry: string;
+}
+
+export interface DdStrikesData {
+    symbol: string;
+    expiry: string;
+    /** The backend spells this key "stikes". `strikes` / `strike` are read too, should it ever be corrected. */
+    stikes?: number[];
+    strikes?: number[];
+    strike?: number[];
+}
+
+export interface DdStrikesResponse {
+    success: boolean;
+    message?: string;
+    data: DdStrikesData;
+    timestamp?: string;
+    path?: string;
+}
+
 /** `POST /fo/dd_expiry`: the expiries listed for a symbol between two trade dates (YYYY-MM-DD). */
 export interface DdExpiryRequest {
     symbol: EodSymbol;

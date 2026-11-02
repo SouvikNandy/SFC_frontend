@@ -69,11 +69,16 @@
 
       <div class="control" *ngIf="instrument !== 'FUT'">
         <div class="label">Strike</div>
-        <select (change)="onStrikeChange($event)" [disabled]="isMetadataLoading">
+        <select (change)="onStrikeChange($event)" [disabled]="isMetadataLoading || strikesLoading || underlyingLoading">
+          <option *ngIf="strike == null" value="" disabled selected>{{ strikesLoading || underlyingLoading ? 'Loading strikes…' : 'Select strike' }}</option>
+          <option *ngIf="strike != null && strikesLoaded && !strikeOptions.includes(strike)" [value]="strike" selected>{{ strike }} (not listed for this expiry)</option>
           <option *ngFor="let r of strikeOptions" [value]="r" [selected]="strike === r">
             {{ r }}
           </option>
         </select>
+        <div class="field-hint" *ngIf="strikesLoading || underlyingLoading" role="status">Loading strikes for this expiry…</div>
+        <div class="range-error" *ngIf="!strikesLoading && !underlyingLoading && underlyingNote" role="status">{{ underlyingNote }}</div>
+        <div class="range-error" *ngIf="!strikesLoading && !underlyingLoading && strikeNote" role="status">{{ strikeNote }}</div>
       </div>
 
       <div class="control" *ngIf="instrument !== 'FUT'">

@@ -3,6 +3,8 @@ import { of } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EodComponent } from './eod.component';
 import { EodService } from './eod.service';
+import { ExpiryStrikesService } from './expiry-strikes.service';
+import { HistoricalUnderlyingService } from './historical-underlying.service';
 
 const older = { date: '2026-10-14', symbol: 'NIFTY', open: 100, high: 130, low: 90, close: 1234.5, volume: 123456, oi: 5000 };
 const newer = { date: '2026-10-16', symbol: 'NIFTY', open: 1000, high: 1200, low: 900, close: 1100, volume: 2500, oi: 150000 };
@@ -15,7 +17,10 @@ describe('EodComponent table rows', () => {
     async function create() {
         await TestBed.configureTestingModule({
             imports: [EodComponent],
-            providers: [{
+            providers: [
+                { provide: HistoricalUnderlyingService, useValue: { resolve: () => of({ ok: true, session: '2026-10-16', underlying: 22630, strikes: [22600], atm: 22600 }) } },
+                { provide: ExpiryStrikesService, useValue: { resolve: () => of({ ok: true, strikes: [22600] }) } },
+                {
                 provide: EodService,
                 useValue: {
                     getSymbols: () => of(['NIFTY']),

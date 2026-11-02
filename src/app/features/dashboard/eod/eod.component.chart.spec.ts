@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EodComponent } from './eod.component';
 import { EodChartPoint, EodChartRequest, EodChartResponse, EodRequest } from './eod.model';
 import { EodService } from './eod.service';
+import { ExpiryStrikesService } from './expiry-strikes.service';
+import { HistoricalUnderlyingService } from './historical-underlying.service';
 import { readChartPoints } from './eod-chart-points.util';
 
 const NOW = new Date(2026, 9, 19, 12, 0);
@@ -34,7 +36,10 @@ describe('EodComponent chart (/fo/eod/chart)', () => {
         vi.setSystemTime(NOW);
         await TestBed.configureTestingModule({
             imports: [EodComponent],
-            providers: [{
+            providers: [
+                { provide: HistoricalUnderlyingService, useValue: { resolve: () => of({ ok: true, session: '2026-10-16', underlying: 22630, strikes: [22600], atm: 22600 }) } },
+                { provide: ExpiryStrikesService, useValue: { resolve: () => of({ ok: true, strikes: [22600] }) } },
+                {
                 provide: EodService,
                 useValue: {
                     getSymbols: () => of(['NIFTY', 'BANKNIFTY']),

@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
 import { GreeksCalculatorService } from '../greeks/greeks-calculator.service';
-import { DdExpiryRequest, DdExpiryResponse, DdGreeksRequest, DdGreeksResponse, EodChartRequest, EodChartResponse, EodDataRow, EodRequest, EodResponse } from './eod.model';
+import { DdExpiryRequest, DdExpiryResponse, DdGreeksRequest, DdGreeksResponse, DdStrikesRequest, DdStrikesResponse, EodChartRequest, EodChartResponse, EodDataRow, EodRequest, EodResponse } from './eod.model';
 import { readEodPage } from './eod-rows.util';
 import { Observable, map, of, switchMap } from 'rxjs';
 
@@ -52,6 +52,10 @@ export class EodService {
 
     getDdExpiry(request: DdExpiryRequest): Observable<DdExpiryResponse> {
         return this.api.post<DdExpiryResponse, DdExpiryRequest>('/fo/dd_expiry', request);
+    }
+
+    getDdStrikes(request: DdStrikesRequest): Observable<DdStrikesResponse> {
+        return this.api.post<DdStrikesResponse, DdStrikesRequest>('/fo/dd_strikes', request);
     }
 
     getDdGreeks(request: DdGreeksRequest): Observable<DdGreeksResponse> {

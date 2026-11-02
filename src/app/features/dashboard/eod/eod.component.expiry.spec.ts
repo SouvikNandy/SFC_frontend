@@ -6,6 +6,8 @@ import { ToastService } from '../../../core/services/toast.service';
 import { EodComponent } from './eod.component';
 import { DdExpiryRequest, DdExpiryResponse, EodRequest } from './eod.model';
 import { EodService } from './eod.service';
+import { ExpiryStrikesService } from './expiry-strikes.service';
+import { HistoricalUnderlyingService } from './historical-underlying.service';
 
 // What the backend returns for a January 2026 window: every expiry alive in it, including later ones.
 const JAN_2026 = ['2026-01-06', '2026-01-13', '2026-01-20', '2026-01-27', '2026-02-03', '2026-02-10', '2026-02-17', '2026-02-24', '2026-03-02', '2026-03-30', '2026-04-28', '2026-06-30'];
@@ -18,6 +20,7 @@ describe('EodComponent expiry list (selected dates, not today)', () => {
     let calls: DdExpiryRequest[];
     let expiryFor: (req: DdExpiryRequest) => Observable<DdExpiryResponse>;
     const toastError = vi.fn();
+    const getEodChart = vi.fn((_: unknown) => of({ success: true, data: [] }));
     const getEod = vi.fn((_: EodRequest) => of({ success: true, data: { results: [row], page: 1, has_next: false, has_previous: false } }));
     const reply = (dates: string[]) => (req: DdExpiryRequest) => of({ success: true, data: { symbol: req.symbol, trade_from: req.trade_from, trade_till: req.trade_till, expiry_date: dates } });
     const noData = () => throwError(() => new HttpErrorResponse({ status: 422, error: { success: false, errors: { expiry_date: ['No data available.'] } } }));
@@ -27,12 +30,15 @@ describe('EodComponent expiry list (selected dates, not today)', () => {
         calls = [];
         expiryFor = reply(JAN_2026);
         getEod.mockClear();
+        getEodChart.mockClear();
         toastError.mockClear();
         vi.useFakeTimers({ toFake: ['Date'] });
         vi.setSystemTime(new Date(2026, 9, 18, 12, 0));
         await TestBed.configureTestingModule({
             imports: [EodComponent],
             providers: [
+                { provide: HistoricalUnderlyingService, useValue: { resolve: () => of({ ok: true, session: '2026-10-16', underlying: 22630, strikes: [22600], atm: 22600 }) } },
+                { provide: ExpiryStrikesService, useValue: { resolve: () => of({ ok: true, strikes: [22600] }) } },
                 { provide: ToastService, useValue: { error: toastError, success: vi.fn(), info: vi.fn() } },
                 {
                     provide: EodService,
@@ -41,7 +47,7 @@ describe('EodComponent expiry list (selected dates, not today)', () => {
                         getDdGreeks: ({ symbol: s }: { symbol: string }) => of({ success: true, data: { symbol: s, trade_date: '2026-10-16', expiry_date: ['2026-10-20', '2026-11-24'], underlying: 22630, strike: [22600], atm_strike: 22600, market_price: { CE: 1, PE: 1 } } }),
                         getDdExpiry: (req: DdExpiryRequest) => { calls.push(req); return expiryFor(req); },
                         getEod,
-                        getEodChart: () => of({ success: true, data: [] }),
+                        getEodChart,
                     },
                 },
             ],
@@ -247,5 +253,123 @@ describe('EodComponent expiry list (selected dates, not today)', () => {
         await settle();
         expect(component.symbol).toBe('RELIANCE');
         expect(component.expiryOptions).toEqual(['2026-02-10', '2026-02-24', '2026-03-30']);
+    });
+
+    describe('table and chart requests while the expiry list refreshes', () => {
+        const slowFor = (slow: Subject<DdExpiryResponse>, dates: string[]) => (req: DdExpiryRequest) => (req.trade_till === '2026-02-27' ? slow : reply(dates)(req));
+        const optionsOnJanuary = async () => {
+            await create();
+            await setRange('2026-01-01', '2026-01-31');
+            component.onExpiry('2026-01-27');
+            component.onInstrument('CE');
+            await settle();
+        };
+        const answer = (slow: Subject<DdExpiryResponse>, dates: string[]) => {
+            slow.next({ success: true, data: { symbol: 'NIFTY', trade_from: '2026-01-01', trade_till: '2026-02-27', expiry_date: dates } });
+            return settle();
+        };
+
+        it('a date change requests neither the table nor the chart with the old expiry; both follow the refreshed list', async () => {
+            await optionsOnJanuary();
+            const slow = new Subject<DdExpiryResponse>();
+            expiryFor = slowFor(slow, []);
+            getEod.mockClear();
+            getEodChart.mockClear();
+            component.onCustomTillChange('2026-02-27');
+            await settle();
+            expect(getEod).not.toHaveBeenCalled();
+            expect(getEodChart).not.toHaveBeenCalled();
+            expect(component.loading).toBe(true);                    // still loading, not an empty table
+            await answer(slow, ['2026-02-03', '2026-02-24']);
+            expect(getEod.mock.calls.map(call => call[0].expiry)).toEqual(['2026-02-24']);
+            expect(getEodChart.mock.calls.map(call => (call[0] as { expiry: string }).expiry)).toEqual(['2026-02-24']);
+            expect(component.loading).toBe(false);
+        });
+
+        it('a still valid expiry is kept and the held request is sent with it once the list answers', async () => {
+            await optionsOnJanuary();
+            const slow = new Subject<DdExpiryResponse>();
+            expiryFor = slowFor(slow, []);
+            getEod.mockClear();
+            component.onCustomTillChange('2026-02-27');
+            await settle();
+            await answer(slow, ['2026-01-27', '2026-02-24']);
+            expect(component.expiry).toBe('2026-01-27');
+            expect(getEod).toHaveBeenCalledTimes(1);
+            expect(getEod.mock.calls[0][0]).toMatchObject({ option_type: 'CE', expiry: '2026-01-27', date_till: '2026-02-27' });
+        });
+
+        it('a chosen strike is kept through the refresh', async () => {
+            await optionsOnJanuary();
+            component.onStrike(22600);
+            const slow = new Subject<DdExpiryResponse>();
+            expiryFor = slowFor(slow, []);
+            component.onCustomTillChange('2026-02-27');
+            await settle();
+            await answer(slow, ['2026-02-24']);
+            expect(component.strike).toBe(22600);
+            expect(getEod.mock.calls.at(-1)![0]).toMatchObject({ strike: 22600, expiry: '2026-02-24' });
+        });
+
+        it('a late list for earlier dates is dropped: only the latest expiry is ever requested', async () => {
+            await optionsOnJanuary();
+            const first = new Subject<DdExpiryResponse>();
+            const second = new Subject<DdExpiryResponse>();
+            expiryFor = req => (req.trade_till === '2026-02-27' ? first : second);
+            getEod.mockClear();
+            component.onCustomTillChange('2026-02-27');
+            await settle();
+            component.onCustomTillChange('2026-03-02');
+            await settle();
+            first.next({ success: true, data: { symbol: 'NIFTY', trade_from: '', trade_till: '', expiry_date: ['2026-02-24'] } });
+            await settle();
+            expect(getEod).not.toHaveBeenCalled();
+            second.next({ success: true, data: { symbol: 'NIFTY', trade_from: '', trade_till: '', expiry_date: ['2026-03-24'] } });
+            await settle();
+            expect(getEod.mock.calls.map(call => call[0].expiry)).toEqual(['2026-03-24']);
+        });
+
+        it('a failed list sends no table request with the old expiry and leaves nothing loading', async () => {
+            await optionsOnJanuary();
+            expiryFor = () => throwError(() => new HttpErrorResponse({ status: 500 }));
+            getEod.mockClear();
+            component.onCustomTillChange('2026-02-27');
+            await settle();
+            expect(getEod.mock.calls.every(call => call[0].expiry === undefined)).toBe(true);
+            expect(component.loading).toBe(false);
+            expect(component.expiryNote).toBe('Unable to load expiries for these dates.');
+        });
+
+        it('dates that become invalid while the list loads do not leave the table loading', async () => {
+            await optionsOnJanuary();
+            const slow = new Subject<DdExpiryResponse>();
+            expiryFor = slowFor(slow, []);
+            component.onCustomTillChange('2026-02-27');
+            await settle();
+            expect(component.loading).toBe(true);
+            component.onCustomTillChange('');
+            await settle();
+            expect(component.loading).toBe(false);
+        });
+
+        it('futures have no expiry to wait for: a date change requests the table at once', async () => {
+            await create();
+            await setRange('2026-01-01', '2026-01-31');
+            const slow = new Subject<DdExpiryResponse>();
+            expiryFor = slowFor(slow, []);
+            getEod.mockClear();
+            component.onCustomTillChange('2026-02-27');
+            await settle();
+            expect(getEod).toHaveBeenCalledTimes(1);
+            expect(getEod.mock.calls[0][0]).toMatchObject({ option_type: 'XX', date_till: '2026-02-27' });
+        });
+
+        it('changing only the option type or expiry (no new dates) is not held', async () => {
+            await optionsOnJanuary();
+            getEod.mockClear();
+            component.onExpiry('2026-01-13');
+            await settle();
+            expect(getEod.mock.calls.at(-1)![0]).toMatchObject({ expiry: '2026-01-13' });
+        });
     });
 });

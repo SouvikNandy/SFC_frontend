@@ -7,12 +7,15 @@ import { minusOneYear, plusOneYear } from '../../../shared/utils/date-range';
 import { resolveRange } from './multi-leg-eod.util';
 import { EodDataRow, EodRequest } from '../eod/eod.model';
 import { EodService } from '../eod/eod.service';
+import { ExpiryStrikesResult, ExpiryStrikesService } from '../eod/expiry-strikes.service';
 import { HistoricalUnderlyingResult, HistoricalUnderlyingService } from '../eod/historical-underlying.service';
 
 type RowsRequest = Omit<EodRequest, 'page' | 'page_size'>;
 type ExpiryRequest = { symbol: string; trade_from: string; trade_till: string };
 
 const strikes = [22400, 22500, 22600, 22700];
+/** What dd_strikes lists by default: wide enough for every ATM the tests use (spot 22630, 25320, 59610 ...). */
+const STRIKE_GRID = [...strikes, 24800, 24900, 25000, 25100, 25200, 25300, 25400, 25500, 25600, 59400, 59500, 59600, 59700];
 const details = (symbol: string) => ({ data: { symbol, trade_date: '2026-10-15', expiry_date: ['2026-10-29', '2026-11-26'], underlying: 22630, strike: strikes, atm_strike: 22600, market_price: { CE: 1, PE: 1 } } });
 
 /** "Today" for every test: the system clock is pinned to it in beforeEach, and the date helpers below use it too (never the real date, which module-level constants would otherwise read at import time). */
@@ -45,6 +48,8 @@ describe('MultiLegEodComponent', () => {
   let metaFor: (symbol: string) => Observable<ReturnType<typeof details>>;
   let expiryCalls: ExpiryRequest[];
   let atmCalls: Array<{ symbol: string; till: string }>;
+  let strikeCalls: Array<{ symbol: string; expiry: string }>;
+  let strikesFor: (symbol: string, expiry: string) => Observable<ExpiryStrikesResult>;
   let atmFor: (symbol: string, till: string) => Observable<HistoricalUnderlyingResult>;
   let expiryFor: (req: ExpiryRequest) => Observable<{ data: { symbol: string; trade_from: string; trade_till: string; expiry_date: string[] } }>;
 
@@ -76,6 +81,8 @@ describe('MultiLegEodComponent', () => {
     requests = [];
     expiryCalls = [];
     atmCalls = [];
+    strikeCalls = [];
+    strikesFor = () => of({ ok: true, strikes: STRIKE_GRID });
     // The historical ATM: the underlying closed at 22630 on the session, so 22600 is the nearest listed strike.
     atmFor = () => of({ ok: true, session: '2026-10-29', underlying: 22630, strikes, atm: 22600 });
     // The real backend also lists dates outside the requested range; 2026-11-26 is after "today" and is dropped for the presets.
@@ -88,6 +95,7 @@ describe('MultiLegEodComponent', () => {
       providers: [
         provideHttpClient(),
         provideRouter([]),
+        { provide: ExpiryStrikesService, useValue: { resolve: (symbol: string, expiry: string) => { strikeCalls.push({ symbol, expiry }); return strikesFor(symbol, expiry); } } },
         { provide: HistoricalUnderlyingService, useValue: { resolve: (symbol: string, till: string) => { atmCalls.push({ symbol, till }); return atmFor(symbol, till); } } },
         { provide: EodService, useValue: {
           getSymbols: () => of(['NIFTY', 'BANKNIFTY', 'RELIANCE']),
@@ -718,13 +726,13 @@ describe('MultiLegEodComponent', () => {
 
     it('dd_symbol_details still supplies the starting metadata; the historical close of To then sets spot, ATM and strikes', async () => {
       expect(component.underlying()).toBe(22630);
-      expect(component.atmStrike()).toBe(22600);
-      expect(component.strikes()).toEqual(strikes);
+      expect(component.atmFor('2026-10-29')).toBe(22600);
+      expect(component.strikesFor('2026-10-29')).toEqual(STRIKE_GRID);
       expect(component.tradeDate()).toBe('2026-10-29');           // the session the close belongs to
       expect(component.expiries()).toContain('2026-10-29');       // expiries still start from the dd_symbol_details list
       await customRange();
       expect(component.underlying()).toBe(22630);
-      expect(component.strikes()).toEqual(strikes);
+      expect(component.strikesFor('2026-10-29')).toEqual(STRIKE_GRID);
     });
 
     it('the default legs are requested once, on an expiry from the range\'s list', () => {
@@ -748,7 +756,7 @@ describe('MultiLegEodComponent', () => {
     it('the first load asks for the To date of the default range (today for a preset) and builds the legs on that ATM', () => {
       expect(atmCalls).toEqual([{ symbol: 'NIFTY', till: '2026-10-30' }]);
       expect(legStrikes()).toEqual([22600, 22600]);
-      expect(component.atmStrike()).toBe(22600);
+      expect(component.atmFor('2026-10-29')).toBe(22600);
       expect(component.tradeDate()).toBe('2026-10-29');
     });
 
@@ -757,15 +765,14 @@ describe('MultiLegEodComponent', () => {
       expect(requests.every(r => r.strike === 22600)).toBe(true);
     });
 
-    it('a Custom range uses its own To date: the close of that day sets the ATM and the strike list is that day\'s', async () => {
+    it('a Custom range uses its own To date: the close of that day sets the ATM, taken from the strikes of the leg\'s expiry', async () => {
       atmFor = (_s, till) => (till === '2026-01-31' ? found('2026-01-30', 25320.65, 25300) : found('2026-10-29', 22630, 22600));
       await click('.field .seg button', 'Custom');
       component.onCustomFrom('2026-01-01');
       component.onCustomTill('2026-01-31');
       await settle();
       expect(atmCalls.at(-1)).toEqual({ symbol: 'NIFTY', till: '2026-01-31' });
-      expect(component.atmStrike()).toBe(25300);
-      expect(component.strikes()).toEqual(ATM_STRIKES);
+      expect(component.atmFor('2026-10-29')).toBe(25300);
       expect(component.tradeDate()).toBe('2026-01-30');
       expect(legStrikes()).toEqual([25300, 25300]);
     });
@@ -777,7 +784,7 @@ describe('MultiLegEodComponent', () => {
       component.onCustomTill('2026-01-31');   // a Saturday
       await settle();
       expect(component.tradeDate()).toBe('2026-01-30');
-      expect(host.textContent).toContain('underlying close on 30 Jan 2026');
+      expect(host.textContent).toContain('on 30 Jan 2026');
     });
 
     it('changing the To date or the symbol recalculates strikes the user did not pick', async () => {
@@ -793,7 +800,7 @@ describe('MultiLegEodComponent', () => {
       expect(legStrikes()).toEqual([59600, 59600]);
     });
 
-    it('a strike the user picked is kept when the To date changes, the other leg follows the new ATM, and the strike list follows the date', async () => {
+    it('a strike the user picked is kept when the To date changes, and the other leg follows the new ATM', async () => {
       await pickStrike(1, 22700);
       expect(legStrikes()).toEqual([22700, 22600]);
       atmFor = () => found('2026-01-30', 25320.65, 25300);
@@ -802,10 +809,9 @@ describe('MultiLegEodComponent', () => {
       component.onCustomTill('2026-01-31');
       await settle();
       expect(legStrikes()).toEqual([22700, 25300]);                      // the picked strike stays; the untouched leg follows the new ATM
-      expect(component.atmStrike()).toBe(25300);
-      expect(component.strikes()).toEqual(ATM_STRIKES);
+      expect(component.atmFor('2026-10-29')).toBe(25300);
       const option = host.querySelectorAll<HTMLSelectElement>('select[id^="ml-strike-"]')[0].selectedOptions[0];
-      expect(option.textContent).toContain('not in the current strike list');
+      expect(option.textContent?.trim()).toBe('22700');                      // still listed for this expiry: not flagged
     });
 
     it('an unchanged To date asks nothing new (switching presets that end today reuses the answer)', async () => {
@@ -823,15 +829,15 @@ describe('MultiLegEodComponent', () => {
       expect(atmCalls).toHaveLength(before);
     });
 
-    it('a failed lookup shows why, keeps the strike list, and never falls back to the current price', async () => {
+    it('a failed lookup shows why, keeps the expiry\'s strike list, and never falls back to the current price', async () => {
       atmFor = () => of({ ok: false, reason: 'unavailable' });
       component.selectSymbol('BANKNIFTY');
       await settle();
       expect(host.textContent).toContain('Unable to load the closing price for');
       expect(legStrikes()).toEqual([null, null]);                          // not the current ATM from dd_symbol_details
-      expect(component.strikes()).toEqual(strikes);
+      expect(component.strikesFor('2026-10-29')).toEqual(STRIKE_GRID);
       // nothing on screen presents today's ATM or spot as the answer
-      expect(component.atmStrike()).toBeNull();
+      expect(component.atmFor('2026-10-29')).toBeNull();
       expect(component.underlying()).toBeNull();
       expect(host.querySelector('.legnote')).toBeNull();
       expect(Array.from(host.querySelectorAll('select[id^="ml-strike-"] option')).some(o => /ATM/.test(o.textContent ?? ''))).toBe(false);
@@ -882,12 +888,177 @@ describe('MultiLegEodComponent', () => {
       await settle();
       slow.next({ ok: true, session: '2026-01-30', underlying: 25320.65, strikes: ATM_STRIKES, atm: 25300 });
       await settle();
-      expect(component.atmStrike()).toBe(25100);
+      expect(component.atmFor('2026-10-29')).toBe(25100);
       expect(legStrikes()).toEqual([25100, 25100]);
     });
 
     it('does not depend on the real system date', async () => {
       expect(atmCalls[0].till).toBe('2026-10-30');                         // the pinned test clock, not the machine\'s
+    });
+  });
+
+  describe('strikes of the selected expiry (dd_strikes)', () => {
+    const OTHER = '2026-11-26';
+    const legStrikes = () => component.legs().map(l => l.strike);
+    const strikeSelects = () => Array.from(host.querySelectorAll<HTMLSelectElement>('select[id^="ml-strike-"]'));
+    const expirySelects = () => Array.from(host.querySelectorAll<HTMLSelectElement>('select[id^="ml-expiry-"]'));
+    const ok = (list: number[]): Observable<ExpiryStrikesResult> => of({ ok: true, strikes: list });
+    const chooseExpiry = async (index: number, expiry: string) => {
+      const el = expirySelects()[index];
+      el.value = expiry;
+      el.dispatchEvent(new Event('change'));
+      await settle();
+    };
+    const pickStrike = async (index: number, value: number) => {
+      const el = strikeSelects()[index];
+      el.value = String(value);
+      el.dispatchEvent(new Event('change'));
+      await settle();
+    };
+
+    it('the first load asks dd_strikes once for the legs\' expiry, and the legs load on that expiry\'s ATM', () => {
+      expect(strikeCalls).toEqual([{ symbol: 'NIFTY', expiry: '2026-10-29' }]);
+      expect(legStrikes()).toEqual([22600, 22600]);
+      expect(requests).toHaveLength(2);
+    });
+
+    it('the strike dropdown lists the expiry\'s strikes and marks its ATM', () => {
+      const options = Array.from(strikeSelects()[0].options).map(o => o.textContent?.trim());
+      expect(options).toContain('22600 (ATM)');
+      expect(options).toContain('59700');
+    });
+
+    it('changing a leg\'s expiry fetches that expiry\'s strikes and moves an untouched strike to its ATM', async () => {
+      strikesFor = (_s, expiry) => (expiry === OTHER ? ok([22550, 22650, 22750]) : ok(STRIKE_GRID));
+      requests.length = 0;
+      await chooseExpiry(0, OTHER);
+      expect(strikeCalls.at(-1)).toEqual({ symbol: 'NIFTY', expiry: OTHER });
+      expect(legStrikes()).toEqual([22650, 22600]);                       // 22630 is nearest to 22650 in that list; the other leg is on its own expiry
+      expect(Array.from(strikeSelects()[0].options).map(o => o.textContent?.trim())).toEqual(['22550', '22650 (ATM)', '22750']);
+      expect(requests.some(r => r.expiry === OTHER && r.strike === 22650)).toBe(true);
+      expect(requests.some(r => r.expiry === OTHER && r.strike === 22600)).toBe(false);   // never a strike of the previous expiry
+    });
+
+    it('a strike the user picked survives an expiry change and is flagged when the new expiry does not list it', async () => {
+      await pickStrike(0, 22700);
+      strikesFor = (_s, expiry) => (expiry === OTHER ? ok([22550, 22650]) : ok(STRIKE_GRID));
+      requests.length = 0;
+      await chooseExpiry(0, OTHER);
+      expect(legStrikes()).toEqual([22700, 22600]);
+      expect(strikeSelects()[0].selectedOptions[0].textContent?.trim()).toBe('22700 (not listed for this expiry)');
+      expect(requests.some(r => r.expiry === OTHER && r.strike === 22700)).toBe(true);
+    });
+
+    it('a picked strike that the new expiry lists is simply kept, without a flag', async () => {
+      await pickStrike(0, 22700);
+      strikesFor = (_s, expiry) => (expiry === OTHER ? ok([22650, 22700]) : ok(STRIKE_GRID));
+      await chooseExpiry(0, OTHER);
+      expect(strikeSelects()[0].selectedOptions[0].textContent?.trim()).toBe('22700');
+    });
+
+    it('strikes are tracked per leg: an untouched leg follows the expiry while a picked one in the same list does not', async () => {
+      await pickStrike(0, 22400);
+      strikesFor = (_s, expiry) => (expiry === OTHER ? ok([22550, 22650, 22750]) : ok(STRIKE_GRID));
+      await chooseExpiry(0, OTHER);
+      await chooseExpiry(1, OTHER);
+      expect(legStrikes()).toEqual([22400, 22650]);
+    });
+
+    it('while an expiry\'s strikes load, that leg has no strike, its dropdown is disabled with a hint, and no data is requested for it', async () => {
+      const pending = new Subject<ExpiryStrikesResult>();
+      strikesFor = (_s, expiry) => (expiry === OTHER ? pending : ok(STRIKE_GRID));
+      requests.length = 0;
+      await chooseExpiry(0, OTHER);
+      expect(component.strikesLoading()).toBe(true);
+      expect(legStrikes()).toEqual([null, 22600]);
+      expect(strikeSelects()[0].disabled).toBe(true);
+      expect(strikeSelects()[0].options[0].textContent).toContain('Loading strikes');
+      expect(host.textContent).toContain('Loading the strikes for the selected expiry');
+      expect(requests.some(r => r.expiry === OTHER)).toBe(false);
+      pending.next({ ok: true, strikes: [22550, 22650] });
+      await settle();
+      expect(component.strikesLoading()).toBe(false);
+      expect(legStrikes()).toEqual([22650, 22600]);
+      expect(requests.some(r => r.expiry === OTHER && r.strike === 22650)).toBe(true);
+    });
+
+    it('an expiry whose strikes cannot be loaded shows why; the untouched strike stays unset instead of keeping another expiry\'s', async () => {
+      strikesFor = (_s, expiry) => (expiry === OTHER ? of({ ok: false, reason: 'unavailable' }) : ok(STRIKE_GRID));
+      requests.length = 0;
+      await chooseExpiry(0, OTHER);
+      expect(host.textContent).toContain('Unable to load the strikes for the');
+      expect(legStrikes()).toEqual([null, 22600]);
+      expect(requests.some(r => r.expiry === OTHER)).toBe(false);
+    });
+
+    it('an expiry with no listed strikes says so, and a picked strike is flagged', async () => {
+      await pickStrike(0, 22700);
+      strikesFor = (_s, expiry) => (expiry === OTHER ? of({ ok: false, reason: 'none' }) : ok(STRIKE_GRID));
+      await chooseExpiry(0, OTHER);
+      expect(host.textContent).toContain('No strikes are listed for the');
+      expect(strikeSelects()[0].selectedOptions[0].textContent?.trim()).toBe('22700 (not listed for this expiry)');
+    });
+
+    it('a failed strike list can be retried by choosing the expiry again later (failures are not remembered)', async () => {
+      let attempt = 0;
+      strikesFor = (_s, expiry) => (expiry === OTHER ? (++attempt === 1 ? of({ ok: false, reason: 'unavailable' }) : ok([22550, 22650])) : ok(STRIKE_GRID));
+      await chooseExpiry(0, OTHER);
+      expect(legStrikes()[0]).toBeNull();
+      await chooseExpiry(0, '2026-10-29');
+      await chooseExpiry(0, OTHER);
+      expect(legStrikes()[0]).toBe(22650);
+    });
+
+    it('lists are kept per expiry: going back to a loaded expiry asks nothing new', async () => {
+      strikesFor = (_s, expiry) => (expiry === OTHER ? ok([22550, 22650]) : ok(STRIKE_GRID));
+      await chooseExpiry(0, OTHER);
+      const calls = strikeCalls.length;
+      await chooseExpiry(0, '2026-10-29');
+      await chooseExpiry(0, OTHER);
+      expect(strikeCalls).toHaveLength(calls);
+      expect(legStrikes()).toEqual([22650, 22600]);
+    });
+
+    it('a late answer for an earlier expiry never overwrites the latest one', async () => {
+      const slow = new Subject<ExpiryStrikesResult>();
+      strikesFor = (_s, expiry) => (expiry === OTHER ? slow : ok(STRIKE_GRID));
+      await chooseExpiry(0, OTHER);
+      await chooseExpiry(0, '2026-10-29');                                  // back to the first expiry before the slow answer
+      expect(legStrikes()).toEqual([22600, 22600]);
+      slow.next({ ok: true, strikes: [22550, 22650] });
+      await settle();
+      expect(component.strikesFor('2026-10-29')).toEqual(STRIKE_GRID);
+      expect(component.strikesFor(OTHER)).toEqual([22550, 22650]);          // stored under its own expiry
+      expect(legStrikes()).toEqual([22600, 22600]);                          // the leg is still on the first expiry and its ATM
+    });
+
+    it('an answer for the previous symbol is dropped after the symbol changed', async () => {
+      const slow = new Subject<ExpiryStrikesResult>();
+      strikesFor = (symbol, expiry) => (symbol === 'NIFTY' && expiry === OTHER ? slow : ok(STRIKE_GRID));
+      await chooseExpiry(0, OTHER);
+      component.selectSymbol('BANKNIFTY');
+      await settle();
+      slow.next({ ok: true, strikes: [1, 2, 3] });
+      await settle();
+      expect(component.strikesFor(OTHER)).toEqual([]);
+      expect(component.symbol()).toBe('BANKNIFTY');
+    });
+
+    it('a new symbol loads its own strike lists and defaults to its ATM', async () => {
+      atmFor = () => of({ ok: true, session: '2026-10-29', underlying: 59610.45, strikes: [59600], atm: 59600 });
+      strikeCalls.length = 0;
+      component.selectSymbol('BANKNIFTY');
+      await settle();
+      expect(strikeCalls).toEqual([{ symbol: 'BANKNIFTY', expiry: '2026-10-29' }]);
+      expect(legStrikes()).toEqual([59600, 59600]);
+    });
+
+    it('a newly added leg takes the ATM of its expiry\'s strikes', async () => {
+      strikesFor = (_s, expiry) => (expiry === OTHER ? ok([22550, 22650]) : ok(STRIKE_GRID));
+      await chooseExpiry(1, OTHER);
+      await click('.legs-head .ghost', '+ Add leg');
+      expect(component.legs()[2].expiry).toBe(OTHER);
+      expect(legStrikes()[2]).toBe(22650);
     });
   });
 
