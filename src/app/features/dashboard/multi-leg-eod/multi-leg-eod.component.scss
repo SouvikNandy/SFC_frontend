@@ -322,4 +322,6 @@ button:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
   .legrow .leg-tools { justify-self: end; }
   .legnote,
   .legnote-spacer { min-height: 4.5em; }   /* the explanation wraps to up to three lines on a phone */
+  /* The source note changes length with the session ("EOD · last session …" / "BhavCopy EOD closes"); on its own line it cannot re-wrap the title. */
+  .titlebar .source-note { flex-basis: 100%; }
 }

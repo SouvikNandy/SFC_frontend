@@ -33,7 +33,7 @@ import { nearestStrike } from '../../../shared/utils/atm-strike';
 import { defaultExpiry, isNoExpiriesResponse, selectExpiries } from '../../../shared/utils/expiry-selection';
 import { MAX_RANGE_MESSAGE, clearedMessage, exceedsOneYear, fromConflict, fromPickerBounds, isIsoDate, localTodayIso, tillConflict, tillPickerBounds } from '../../../shared/utils/date-range';
 import { ExpiryStrikesService } from './expiry-strikes.service';
-import { HistoricalUnderlyingService } from './historical-underlying.service';
+import { HistoricalUnderlyingService, UNDERLYING_UNAVAILABLE_MESSAGE } from './historical-underlying.service';
 import { EMPTY, Subject, of } from 'rxjs';
 import { catchError, finalize, map, switchMap, takeUntil, tap } from 'rxjs/operators';
 
@@ -72,6 +72,8 @@ export class EodComponent implements OnInit, OnDestroy {
   strikeNote = '';
   /** Why no default strike could be set from the To date's closing price; empty when it could. */
   underlyingNote = '';
+  /** The closing price is not in the backend's history for the To date: information (no error, no toast); the strike is chosen by hand. */
+  underlyingInfo = '';
   /** True once the strikes of the selected expiry have loaded, so a strike missing from them can be flagged. */
   strikesLoaded = false;
   /** The underlying close of the To date (or the previous session) is being fetched. */
@@ -226,6 +228,7 @@ export class EodComponent implements OnInit, OnDestroy {
             this.strikePicked = false;
             this.strikeNote = '';
             this.underlyingNote = '';
+            this.underlyingInfo = '';
             this.strikesLoaded = false;
             this.underlyingClose = null;
             this.underlyingSession = '';
@@ -543,6 +546,7 @@ export class EodComponent implements OnInit, OnDestroy {
     this.underlyingClose = null;
     this.underlyingSession = '';
     this.underlyingNote = '';
+    this.underlyingInfo = '';
     this.underlyingLoading = true;
     this.underlyingRequest$.next({ symbol: this.symbol, till: window.till });
     this.applyDefaultStrike();   // no close is known any more: an untouched strike must not keep following the previous one
@@ -618,10 +622,14 @@ export class EodComponent implements OnInit, OnDestroy {
           // Never the current price: without the close there is no default strike, and the user is told why.
           this.underlyingClose = null;
           this.underlyingSession = '';
-          this.underlyingNote = answer.result.reason === 'no-session'
-            ? `No trading session was found on or before ${answer.till}, so the ATM strike could not be set. Select a strike.`
-            : `Unable to load the closing price for ${answer.till}, so the ATM strike could not be set. Select a strike.`;
-          this.toast.error(this.underlyingNote);
+          if (answer.result.reason === 'no-data') {
+            this.underlyingInfo = UNDERLYING_UNAVAILABLE_MESSAGE;
+          } else {
+            this.underlyingNote = answer.result.reason === 'no-session'
+              ? `No trading session was found on or before ${answer.till}, so the ATM strike could not be set. Select a strike.`
+              : `Unable to load the closing price for ${answer.till}, so the ATM strike could not be set. Select a strike.`;
+            this.toast.error(this.underlyingNote);
+          }
         }
         this.applyDefaultStrike();
         this.changeDetector.markForCheck();

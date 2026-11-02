@@ -242,6 +242,23 @@
   width: 100%;
 }
 
+.range-info {
+  margin: $space-8 0 0;
+  color: var(--muted-2);
+  font-size: $font-size-12;
+}
+
+/* One reserved line (three on a phone) for the closing-price message, shown or not, so nothing below it moves. */
+.range-slot {
+  display: flow-root;   /* keeps the message's top margin inside the slot instead of pushing the slot down */
+  min-height: calc(#{$font-size-12} * 1.5 + #{$space-8});
+}
+
+.range-slot .range-error,
+.range-slot .range-info {
+  line-height: 1.5;
+}
+
 .range-error {
   margin: $space-8 0 0;
   color: var(--red);
@@ -278,6 +295,9 @@ input[type='text'] {
 }
 
 @media (max-width: 700px) {
+  .range-slot {
+    min-height: calc(#{$font-size-12} * 4.5 + #{$space-8});
+  }
   .custom-dates {
     display: flex;
     gap: $space-12;

@@ -80,7 +80,6 @@
           <span class="select-spinner" *ngIf="strikeBusy" aria-hidden="true"></span>
           <span class="visually-hidden" *ngIf="strikesLoading || underlyingLoading" role="status">Loading strikes for this expiry…</span>
         </div>
-        <div class="range-error" *ngIf="!strikesLoading && !underlyingLoading && underlyingNote" role="status">{{ underlyingNote }}</div>
         <div class="range-error" *ngIf="!strikesLoading && !underlyingLoading && strikeNote" role="status">{{ strikeNote }}</div>
       </div>
 
@@ -126,6 +125,11 @@
       </div>
 
       <button class="btn-export" (click)="downloadCsv()">Download CSV</button>
+    </div>
+    <!-- The slot keeps its height whether or not a message is shown, so the page does not move when the closing-price lookup answers. -->
+    <div class="range-slot" *ngIf="instrument !== 'FUT'">
+      <div class="range-error" *ngIf="!strikesLoading && !underlyingLoading && underlyingNote" role="status">{{ underlyingNote }}</div>
+      <div class="range-info" *ngIf="!strikesLoading && !underlyingLoading && underlyingInfo" role="status">{{ underlyingInfo }}</div>
     </div>
     <p class="range-error" role="alert" *ngIf="range === 'Custom' && error">{{ error }}</p>
   </div>

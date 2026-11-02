@@ -1,4 +1,4 @@
-import { nearestStrike, sessionsOnOrBefore } from './atm-strike';
+import { nearestStrike, sessionsOnOrBefore, isNoUnderlyingDataResponse } from './atm-strike';
 
 describe('nearestStrike', () => {
   const strikes = [25000, 25050, 25100, 25150, 25200, 25250, 25300, 25350];
@@ -43,5 +43,25 @@ describe('sessionsOnOrBefore', () => {
     expect(sessionsOnOrBefore(sessions, '2026-01-01')).toEqual([]);
     expect(sessionsOnOrBefore(sessions, 'bad')).toEqual([]);
     expect(sessionsOnOrBefore(null, '2026-01-30')).toEqual([]);
+  });
+});
+
+describe('isNoUnderlyingDataResponse', () => {
+  const err = (status: number, errors: unknown) => ({ status, error: { success: false, errors } });
+  it('matches the 422 "No data available." the backend sends before its price history starts', () => {
+    expect(isNoUnderlyingDataResponse(err(422, { underlying: ['No data available.'] }))).toBe(true);
+  });
+  it('matches the same answer under expiry_date (a date without a snapshot)', () => {
+    expect(isNoUnderlyingDataResponse(err(422, { expiry_date: ['No data available.'] }))).toBe(true);
+  });
+  it('does not match other 422s, other statuses, network errors or missing bodies', () => {
+    expect(isNoUnderlyingDataResponse(err(422, { trade_date: ['Date has wrong format.'] }))).toBe(false);
+    expect(isNoUnderlyingDataResponse(err(422, { underlying: ['Something else.'] }))).toBe(false);
+    expect(isNoUnderlyingDataResponse(err(422, { underlying: ['No data available.', 'Other.'] }))).toBe(false);
+    expect(isNoUnderlyingDataResponse(err(500, { underlying: ['No data available.'] }))).toBe(false);
+    expect(isNoUnderlyingDataResponse(err(0, null))).toBe(false);
+    expect(isNoUnderlyingDataResponse({ status: 422 })).toBe(false);
+    expect(isNoUnderlyingDataResponse(null)).toBe(false);
+    expect(isNoUnderlyingDataResponse(new Error('boom'))).toBe(false);
   });
 });

@@ -144,6 +144,8 @@
         <p class="legnote" role="status">Updating ATM reference price…</p>
         } @else if (underlying() !== null && tradeDate()) {
         <p class="legnote">ATM is the strike nearest the underlying close of {{ underlying() }} on {{ longDate(tradeDate()) }}, from the strikes listed for each leg's expiry.</p>
+        } @else if (atmInfo()) {
+        <p class="legnote" role="status">{{ atmInfo() }}</p>
         } @else if (atmError()) {
         <p class="legnote-spacer" aria-hidden="true"></p>
         }

@@ -3,6 +3,7 @@ import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 import { Observable, Subject, of, throwError } from 'rxjs';
 import { MultiLegEodComponent } from './multi-leg-eod.component';
+import { ToastService } from '../../../core/services/toast.service';
 import { minusOneYear, plusOneYear } from '../../../shared/utils/date-range';
 import { resolveRange } from './multi-leg-eod.util';
 import { EodDataRow, EodRequest } from '../eod/eod.model';
@@ -1997,7 +1998,120 @@ describe('MultiLegEodComponent', () => {
     });
   });
 
-    it('stale leg data is dropped when the range changes quickly', async () => {
+    const OLD_NOTE_CLOSE = '22630';
+  describe('historical underlying price unavailable (backend history gap)', () => {
+    const INFO = 'Historical underlying closing price is unavailable for this date. ATM cannot be calculated automatically. Please select a strike manually.';
+    const noData = (): Observable<HistoricalUnderlyingResult> => of({ ok: false, reason: 'no-data' });
+    const strikeTexts = (index: number) => Array.from(host.querySelectorAll<HTMLSelectElement>('select[id^="ml-strike-"]')[index].options).map(o => o.textContent?.trim());
+    let toastError: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => { toastError = vi.spyOn(TestBed.inject(ToastService), 'error'); });
+
+    const toGap = async () => {
+      atmFor = () => noData();
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom('2022-01-03');
+      component.onCustomTill('2022-06-02');
+      await settle();
+    };
+
+    it('shows the information message as information, not as an error, and raises no toast', async () => {
+      await toGap();
+      expect(host.querySelector('.legnote')?.textContent?.trim()).toBe(INFO);                    // in the ATM note's own reserved box
+      expect(host.querySelector('.hint-line')).toBeNull();                                       // not a new line above the legs
+      expect(Array.from(host.querySelectorAll('.input-error')).some(el => /closing price/i.test(el.textContent ?? ''))).toBe(false);
+      expect(component.atmError()).toBe('');
+      expect(toastError).not.toHaveBeenCalled();
+    });
+
+    it('calculates and displays no ATM: no strike, no marker, no spot, no explanation note, no sparse warning', async () => {
+      await toGap();
+      expect(component.legs().map(l => l.strike)).toEqual([null, null]);
+      expect(component.underlying()).toBeNull();
+      expect(component.atmFor(component.legs()[0].expiry)).toBeNull();
+      expect(strikeTexts(0).some(text => /ATM/.test(text ?? ''))).toBe(false);
+      expect(host.textContent).not.toContain('underlying close of');                          // the ATM explanation itself is absent
+      expect(host.querySelectorAll('.legnote, .legnote-spacer')).toHaveLength(1);                // one box in the layout, holding the message
+      expect(host.querySelectorAll('.leg-warn')).toHaveLength(0);
+      expect(host.textContent).not.toContain(OLD_NOTE_CLOSE);
+    });
+
+    it('the strike lists still load and a strike chosen by hand loads that leg\'s EOD data', async () => {
+      await toGap();
+      expect(component.strikesFor(component.legs()[0].expiry)).toEqual(STRIKE_GRID);
+      requests.length = 0;
+      const select = host.querySelectorAll<HTMLSelectElement>('select[id^="ml-strike-"]')[0];
+      select.value = '22700';
+      select.dispatchEvent(new Event('change'));
+      await settle();
+      expect(component.legs()[0].strike).toBe(22700);
+      expect(requests.some(r => r.strike === 22700 && r.option_type === 'CE' && r.date_till === '2022-06-02')).toBe(true);
+      expect(host.querySelector('.legnote')?.textContent?.trim()).toBe(INFO);
+    });
+
+    it('does not request legs that have no strike', async () => {
+      requests.length = 0;
+      await toGap();
+      expect(requests.filter(r => r.date_till === '2022-06-02')).toEqual([]);
+      expect(component.loading()).toBe(false);
+    });
+
+    it('a genuine failure is still an error with a toast and no information message', async () => {
+      atmFor = () => of({ ok: false, reason: 'unavailable' });
+      component.selectSymbol('BANKNIFTY');
+      await settle();
+      expect(host.textContent).toContain('Unable to load the closing price');
+      expect(host.querySelector('.hint-line')).toBeNull();
+      expect(toastError).toHaveBeenCalled();
+    });
+
+    it('moving the To date to one with a close clears the message and brings the ATM back', async () => {
+      await toGap();
+      atmFor = () => of({ ok: true, session: '2026-10-28', underlying: 22300, strikes: [], atm: 0 });
+      component.onCustomFrom('2026-10-01');
+      component.onCustomTill('2026-10-28');
+      await settle();
+      expect(host.textContent).not.toContain('Historical underlying closing price is unavailable');
+      expect(component.legs().map(l => l.strike)).toEqual([22400, 22400]);
+      expect(strikeTexts(0)).toContain('22400 (ATM)');
+    });
+
+    it('a strike picked by hand is kept when the To date moves into the gap, and nothing else is guessed', async () => {
+      const select = host.querySelectorAll<HTMLSelectElement>('select[id^="ml-strike-"]')[0];
+      select.value = '22700';
+      select.dispatchEvent(new Event('change'));
+      await settle();
+      await toGap();
+      expect(component.legs().map(l => l.strike)).toEqual([22700, null]);
+    });
+
+    it('a symbol change resets the message', async () => {
+      await toGap();
+      atmFor = () => of({ ok: true, session: '2026-10-29', underlying: 59610.45, strikes: [], atm: 0 });
+      strikesFor = () => of({ ok: true, strikes: [59500, 59600, 59700] });
+      component.selectSymbol('BANKNIFTY');
+      await settle();
+      expect(host.textContent).not.toContain('Historical underlying closing price is unavailable');
+    });
+
+    it('no layout shift: the loading note, the message and the loaded note all use the same single box', async () => {
+      const loading = new Subject<HistoricalUnderlyingResult>();
+      atmFor = () => loading;
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom('2022-01-03');
+      component.onCustomTill('2022-06-02');
+      await settle();
+      expect(host.querySelectorAll('.legnote, .legnote-spacer')).toHaveLength(1);              // "Updating ATM reference price…"
+      const loadingBox = host.querySelector('.legnote')!;
+      loading.next({ ok: false, reason: 'no-data' });
+      await settle();
+      const messageBox = host.querySelector('.legnote')!;
+      expect(host.querySelectorAll('.legnote, .legnote-spacer')).toHaveLength(1);
+      expect(messageBox.className).toBe(loadingBox.className);
+      expect(host.querySelector('.hint-line')).toBeNull();                                      // nothing is added above the legs
+    });
+  });
+
+  it('stale leg data is dropped when the range changes quickly', async () => {
     const slow = new Subject<EodDataRow[]>();
     let calls = 0;
     rowsFor = () => (calls++ < 2 ? slow : of(makeRows(3, 10)));   // the first range (1M) is slow, the second (1W) is fast

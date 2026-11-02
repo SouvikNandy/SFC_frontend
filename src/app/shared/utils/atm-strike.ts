@@ -23,3 +23,17 @@ export function sessionsOnOrBefore(sessionDates: readonly unknown[] | null | und
   const dates = (sessionDates ?? []).map(value => String(value).slice(0, 10)).filter(value => ISO_DATE.test(value) && value <= till);
   return [...new Set(dates)].sort().reverse();
 }
+
+/**
+ * The backend answers HTTP 422 `"No data available."` (under `underlying` before its price history starts, under `expiry_date` for a date
+ * without a snapshot) when it holds no price for a trade date. That is a gap in the data, not a failure of the request. Any other error,
+ * including any other 422, is not matched.
+ */
+export function isNoUnderlyingDataResponse(error: unknown): boolean {
+  const { status, error: body } = (error ?? {}) as { status?: number; error?: { errors?: Record<string, unknown> } };
+  if (status !== 422) return false;
+  return ['underlying', 'expiry_date'].some(key => {
+    const messages = body?.errors?.[key];
+    return Array.isArray(messages) && messages.length === 1 && messages[0] === 'No data available.';
+  });
+}

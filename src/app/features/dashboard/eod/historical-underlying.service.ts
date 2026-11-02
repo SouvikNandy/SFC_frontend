@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Observable, catchError, finalize, map, of, shareReplay, switchMap, tap } from 'rxjs';
-import { nearestStrike, sessionsOnOrBefore } from '../../../shared/utils/atm-strike';
+import { isNoUnderlyingDataResponse, nearestStrike, sessionsOnOrBefore } from '../../../shared/utils/atm-strike';
 import { EodChartRequest } from './eod.model';
 import { EodService } from './eod.service';
 
@@ -16,9 +16,21 @@ export interface HistoricalUnderlying {
   atm: number;
 }
 
+/**
+ * - `no-session`: no trading session on or before the date.
+ * - `no-data`: every attempted session answered that the backend holds no underlying price for it (its price history does not reach that
+ *   far back). A gap in the data, not a failure: nothing is retried and no error is raised.
+ * - `unavailable`: a genuine failure (server error, network error, an unexpected answer).
+ */
 export type HistoricalUnderlyingResult =
   | ({ ok: true } & HistoricalUnderlying)
-  | { ok: false; reason: 'no-session' | 'unavailable' };
+  | { ok: false; reason: 'no-session' | 'no-data' | 'unavailable' };
+
+/** Shown, as information and without an error toast, when the underlying close is not available for the date. */
+export const UNDERLYING_UNAVAILABLE_MESSAGE =
+  'Historical underlying closing price is unavailable for this date. ATM cannot be calculated automatically. Please select a strike manually.';
+
+type SessionOutcome = { kind: 'ok'; value: HistoricalUnderlying } | { kind: 'no-data' } | { kind: 'error' };
 
 /** How far back the session lookup reaches: longer than any run of weekends and exchange holidays. */
 const LOOKBACK_DAYS = 14;
@@ -62,17 +74,28 @@ export class HistoricalUnderlyingService {
     return lookup$;
   }
 
-  private firstSessionWithData(symbol: string, sessions: string[]): Observable<HistoricalUnderlyingResult> {
+  /**
+   * Tries the sessions newest first and returns the first with a usable close. One session without data does not end the search (an older one
+   * may have it). When none has, the result says why: `no-data` only if every attempt got the backend's specific "no data" answer, otherwise
+   * `unavailable`, because a genuine failure on any attempt means the gap cannot be told apart from an outage.
+   */
+  private firstSessionWithData(symbol: string, sessions: string[], sawError = false): Observable<HistoricalUnderlyingResult> {
     const [session, ...older] = sessions;
     return this.eod.getDdGreeks({ symbol, trade_date: session }).pipe(
-      map((response): HistoricalUnderlyingResult | null => {
+      map((response): SessionOutcome => {
         const data = response.data;
         const strikes = [...(data?.strike ?? [])].filter(Number.isFinite).sort((a, b) => a - b);
         const atm = nearestStrike(strikes, data?.underlying);
-        return atm === null ? null : { ok: true, session, underlying: data.underlying, strikes, atm };
+        // An answer without a usable price or strikes is unexpected, not a documented gap.
+        return atm === null ? { kind: 'error' } : { kind: 'ok', value: { session, underlying: data.underlying, strikes, atm } };
       }),
-      catchError(() => of(null)),
-      switchMap(result => (result ? of(result) : older.length ? this.firstSessionWithData(symbol, older) : of<HistoricalUnderlyingResult>({ ok: false, reason: 'unavailable' }))),
+      catchError((error): Observable<SessionOutcome> => of(isNoUnderlyingDataResponse(error) ? { kind: 'no-data' } : { kind: 'error' })),
+      switchMap((outcome): Observable<HistoricalUnderlyingResult> => {
+        if (outcome.kind === 'ok') return of({ ok: true, ...outcome.value });
+        const failed = sawError || outcome.kind === 'error';
+        if (older.length) return this.firstSessionWithData(symbol, older, failed);
+        return of({ ok: false, reason: failed ? 'unavailable' : 'no-data' });
+      }),
     );
   }
 }

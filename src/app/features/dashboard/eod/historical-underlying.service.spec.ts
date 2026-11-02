@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { Observable, of, throwError } from 'rxjs';
 import { HistoricalUnderlyingResult, HistoricalUnderlyingService } from './historical-underlying.service';
@@ -113,5 +114,92 @@ describe('HistoricalUnderlyingService', () => {
     const [a, b] = await Promise.all([resolve('NIFTY', '2026-01-30'), resolve('NIFTY', '2026-01-30')]);
     expect(a).toEqual(b);
     expect(chartCalls).toHaveLength(1);
+  });
+
+  describe('unavailable historical underlying price', () => {
+    const noData = (key = 'underlying') => throwError(() => new HttpErrorResponse({ status: 422, error: { success: false, errors: { [key]: ['No data available.'] } } }));
+    const serverError = () => throwError(() => new HttpErrorResponse({ status: 500, error: {} }));
+    const networkError = () => throwError(() => new HttpErrorResponse({ status: 0, error: new ProgressEvent('error') }));
+    const JUNE_2022 = ['2022-05-19', '2022-05-20', '2022-05-23', '2022-05-24', '2022-05-25', '2022-05-26', '2022-05-27', '2022-05-30', '2022-05-31', '2022-06-01', '2022-06-02'];
+
+    it('a date before the backend price history (2 Jun 2022): every session answers "no data", so the result is no-data, not a failure', async () => {
+      chart = () => of({ data: JUNE_2022.map(date => ({ date, close: 16621.2 })) });
+      details = () => noData();
+      expect(await resolve('NIFTY', '2022-06-02')).toEqual({ ok: false, reason: 'no-data' });
+      expect(detailCalls.map(call => call.trade_date)).toEqual(['2022-06-02', '2022-06-01', '2022-05-31']);   // the fallback is still tried
+    });
+
+    it('never substitutes the futures close from the session series', async () => {
+      chart = () => of({ data: JUNE_2022.map(date => ({ date, close: 16621.2 })) });
+      details = () => noData();
+      const result = await resolve('NIFTY', '2022-06-02');
+      expect(JSON.stringify(result)).not.toContain('16621');
+      expect(result.ok).toBe(false);
+      expect(chartCalls).toHaveLength(1);                                       // the series is asked for session dates only
+    });
+
+    it('one session without data does not end the search: the previous session\'s close is used', async () => {
+      details = req => (req.trade_date === '2026-01-30' ? noData() : detailsFor(req.trade_date as string, 25418.9, [25350, 25400, 25450]));
+      expect(await resolve('NIFTY', '2026-01-30')).toMatchObject({ ok: true, session: '2026-01-29', atm: 25400 });
+      expect(detailCalls.map(call => call.trade_date)).toEqual(['2026-01-30', '2026-01-29']);
+    });
+
+    it('two sessions without data and a third with a close still resolve', async () => {
+      details = req => (req.trade_date === '2026-01-28' ? detailsFor('2026-01-28', 25342.75, [25300, 25350, 25400]) : noData('expiry_date'));
+      expect(await resolve('NIFTY', '2026-01-30')).toMatchObject({ ok: true, session: '2026-01-28', atm: 25350 });
+    });
+
+    it('a weekend or holiday still maps to the previous session, and that session may itself be the first with data', async () => {
+      expect(await resolve('NIFTY', '2026-01-31')).toMatchObject({ ok: true, session: '2026-01-30' });
+      expect(await resolve('NIFTY', '2026-01-26')).toMatchObject({ ok: true, session: '2026-01-23' });
+      expect(detailCalls.map(call => call.trade_date)).toEqual(['2026-01-30', '2026-01-23']);
+    });
+
+    it('the "no data" answer under expiry_date counts as no-data too', async () => {
+      details = () => noData('expiry_date');
+      expect(await resolve('NIFTY', '2026-01-30')).toEqual({ ok: false, reason: 'no-data' });
+    });
+
+    it('a server error (HTTP 500) stays a genuine failure', async () => {
+      details = () => serverError();
+      expect(await resolve('NIFTY', '2026-01-30')).toEqual({ ok: false, reason: 'unavailable' });
+    });
+
+    it('a network failure stays a genuine failure', async () => {
+      details = () => networkError();
+      expect(await resolve('NIFTY', '2026-01-30')).toEqual({ ok: false, reason: 'unavailable' });
+    });
+
+    it('a failed session list stays a genuine failure', async () => {
+      chart = () => throwError(() => new HttpErrorResponse({ status: 500 }));
+      expect(await resolve('NIFTY', '2022-06-02')).toEqual({ ok: false, reason: 'unavailable' });
+      expect(detailCalls).toHaveLength(0);
+    });
+
+    it('a genuine failure among "no data" answers is not reported as a data gap', async () => {
+      const answers = [noData(), serverError(), noData()];
+      let i = 0;
+      details = () => answers[i++];
+      expect(await resolve('NIFTY', '2026-01-30')).toEqual({ ok: false, reason: 'unavailable' });
+    });
+
+    it('a failure on the newest session followed by a session with a close still resolves', async () => {
+      details = req => (req.trade_date === '2026-01-30' ? serverError() : detailsFor(req.trade_date as string, 25418.9));
+      expect(await resolve('NIFTY', '2026-01-30')).toMatchObject({ ok: true, session: '2026-01-29' });
+    });
+
+    it('any other 422 (for example a malformed date) is a failure, not a data gap', async () => {
+      details = () => throwError(() => new HttpErrorResponse({ status: 422, error: { errors: { trade_date: ['Date has wrong format.'] } } }));
+      expect(await resolve('NIFTY', '2026-01-30')).toEqual({ ok: false, reason: 'unavailable' });
+    });
+
+    it('a no-data result is not cached: asking again asks the backend again', async () => {
+      chart = () => of({ data: JUNE_2022.map(date => ({ date, close: 1 })) });
+      details = () => noData();
+      await resolve('NIFTY', '2022-06-02');
+      const calls = detailCalls.length;
+      await resolve('NIFTY', '2022-06-02');
+      expect(detailCalls.length).toBeGreaterThan(calls);
+    });
   });
 });

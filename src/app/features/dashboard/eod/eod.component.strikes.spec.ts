@@ -376,4 +376,114 @@ describe('EodComponent strikes of the selected expiry (dd_strikes)', () => {
             expect(host.textContent).not.toContain('(ATM)');
         });
     });
+
+    describe('historical underlying price unavailable (backend history gap)', () => {
+        const INFO = 'Historical underlying closing price is unavailable for this date. ATM cannot be calculated automatically. Please select a strike manually.';
+        const texts = () => Array.from(strikeSelect().options).map(o => o.textContent?.trim());
+        const openOptions = async () => {
+            await create();
+            underlyingFor = () => of({ ok: false, reason: 'no-data' });
+            await setRange('2022-01-03', '2022-06-02');
+            component.onExpiry('2026-01-27');
+            component.onInstrument('CE');
+            await settle();
+        };
+
+        it('shows the information message as information: not an error line, and no toast', async () => {
+            await openOptions();
+            expect(host.querySelector('.range-info')?.textContent?.trim()).toBe(INFO);
+            expect(host.textContent).not.toContain('Unable to load the closing price');
+            expect(host.querySelectorAll('.range-error').length).toBe(0);
+            expect(toastError).not.toHaveBeenCalled();
+        });
+
+        it('calculates and marks no ATM and sets no default strike', async () => {
+            await openOptions();
+            expect(component.strike).toBeUndefined();
+            expect(component.atmStrike).toBeNull();
+            expect(component.underlyingClose).toBeNull();
+            expect(texts().some(text => /ATM/.test(text ?? ''))).toBe(false);
+            expect(getEod.mock.calls.every(call => call[0].strike === undefined)).toBe(true);   // nothing requested with a guessed strike
+        });
+
+        it('the strike list still loads and a strike can be chosen by hand; the table is then requested', async () => {
+            await openOptions();
+            expect(component.strikeOptions).toEqual(GRID);
+            expect(strikeSelect().disabled).toBe(false);
+            getEod.mockClear();
+            component.onStrike(25200);
+            await settle();
+            expect(component.strike).toBe(25200);
+            expect(getEod.mock.calls.at(-1)![0]).toMatchObject({ option_type: 'CE', strike: 25200, expiry: '2026-01-27', date_till: '2022-06-02' });
+            expect(host.querySelector('.range-info')?.textContent?.trim()).toBe(INFO);          // still no ATM, still explained
+            expect(texts().some(text => /ATM/.test(text ?? ''))).toBe(false);
+        });
+
+        it('a genuine failure is still an error line with a toast, and shows no information message', async () => {
+            await create();
+            underlyingFor = () => of({ ok: false, reason: 'unavailable' });
+            await setRange('2026-01-01', '2026-01-31');
+            component.onExpiry('2026-01-27');
+            component.onInstrument('CE');
+            await settle();
+            expect(host.querySelector('.range-error')?.textContent).toContain('Unable to load the closing price');
+            expect(host.querySelector('.range-info')).toBeNull();
+            expect(toastError).toHaveBeenCalled();
+        });
+
+        it('moving the To date to one with a close clears the message and brings the ATM back', async () => {
+            await openOptions();
+            underlyingFor = () => closeOn('2026-01-30', 25320.65);
+            component.onCustomFromChange('2026-01-02');
+            component.onCustomTillChange('2026-01-30');
+            await settle();
+            expect(host.querySelector('.range-info')).toBeNull();
+            expect(component.strike).toBe(25300);
+            expect(texts()).toContain('25300 (ATM)');
+        });
+
+        it('no layout shift: the message sits in a slot that exists for option instruments with or without a message, not inside the Strike column', async () => {
+            await create();
+            await setRange('2026-01-01', '2026-01-31');
+            expect(host.querySelector('.range-slot')).toBeNull();                      // futures have no strike, so no slot
+            component.onExpiry('2026-01-27');
+            component.onInstrument('CE');
+            await settle();
+            const slot = host.querySelector('.range-slot');
+            expect(slot).toBeTruthy();                                                 // present while there is nothing to say
+            expect(slot!.textContent?.trim()).toBe('');
+            underlyingFor = () => of({ ok: false, reason: 'no-data' });
+            component.onCustomFromChange('2022-01-03');
+            component.onCustomTillChange('2022-06-02');
+            await settle();
+            expect(host.querySelectorAll('.range-slot')).toHaveLength(1);              // the same single slot now holds the message
+            expect(host.querySelector('.range-slot .range-info')?.textContent?.trim()).toContain('Historical underlying closing price is unavailable');
+            expect(strikeSelect().closest('.control')!.textContent).not.toContain('Historical underlying');
+        });
+
+        it('a genuine failure message uses the same slot', async () => {
+            await create();
+            underlyingFor = () => of({ ok: false, reason: 'unavailable' });
+            await setRange('2026-01-01', '2026-01-31');
+            component.onExpiry('2026-01-27');
+            component.onInstrument('CE');
+            await settle();
+            expect(host.querySelector('.range-slot .range-error')?.textContent).toContain('Unable to load the closing price');
+        });
+
+        it('a strike picked before the date moved into the gap is kept', async () => {
+            await create();
+            await setRange('2026-01-01', '2026-01-31');
+            component.onExpiry('2026-01-27');
+            component.onInstrument('CE');
+            await settle();
+            component.onStrike(25400);
+            underlyingFor = () => of({ ok: false, reason: 'no-data' });
+            component.onCustomFromChange('2022-01-03');
+            component.onCustomTillChange('2022-06-02');
+            await settle();
+            expect(component.strike).toBe(25400);
+            expect(texts().some(text => /ATM/.test(text ?? ''))).toBe(false);
+        });
+    });
 });

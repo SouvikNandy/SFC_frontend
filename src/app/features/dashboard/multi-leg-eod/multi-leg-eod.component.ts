@@ -21,7 +21,7 @@ import { clearedMessage, isIsoDate, fromConflict, fromPickerBounds, tillConflict
 import { EodDataRow } from '../eod/eod.model';
 import { EodService } from '../eod/eod.service';
 import { ExpiryStrikesService } from '../eod/expiry-strikes.service';
-import { HistoricalUnderlyingService } from '../eod/historical-underlying.service';
+import { HistoricalUnderlyingService, UNDERLYING_UNAVAILABLE_MESSAGE } from '../eod/historical-underlying.service';
 import { isNoTradeBar } from '../eod/eod-rows.util';
 import {
   CombinedTableRow,
@@ -140,6 +140,8 @@ export class MultiLegEodComponent implements OnInit {
   readonly atmLoading = signal(false);
   /** Why the ATM could not be determined for the selected To date; empty when it could. */
   readonly atmError = signal('');
+  /** The closing price is not in the backend's history for the To date: information (no error, no toast); strikes are chosen by hand. */
+  readonly atmInfo = signal('');
   /** The range itself has no historical expiries (the dropdown then holds only upcoming ones); the legs keep their selections. */
   readonly expiriesEmpty = computed(() => this.rangeExpiries()?.length === 0);
   /**
@@ -745,6 +747,7 @@ export class MultiLegEodComponent implements OnInit {
       this.wantedAtmKey = '';
       this.atmLoading.set(false);
       this.atmError.set('');
+      this.atmInfo.set('');
       this.initPending.delete('atm');
       this.atmRequest$.next(null);
       return false;
@@ -754,6 +757,7 @@ export class MultiLegEodComponent implements OnInit {
     if (key === this.wantedAtmKey) return false;
     this.wantedAtmKey = key;
     this.atmError.set('');
+    this.atmInfo.set('');
     this.atmLoading.set(true);
     this.atmRequest$.next(request);
     return true;
@@ -796,6 +800,7 @@ export class MultiLegEodComponent implements OnInit {
         this.expiryRequest$.next(null);
         this.atmLoading.set(false);
         this.atmError.set('');
+        this.atmInfo.set('');
         this.wantedAtmKey = '';
         this.atmRequest$.next(null);
         this.underlying.set(null);
@@ -852,15 +857,20 @@ export class MultiLegEodComponent implements OnInit {
       const { result, till } = answer;
       if (!result.ok) {
         // No fallback to today's price: the strikes the legs already have stay, and the reason is shown.
-        this.atmError.set(result.reason === 'no-session'
-          ? `No trading session was found on or before ${this.longDate(till)}, so the ATM strike could not be set. Select a strike.`
-          : `Unable to load the closing price for ${this.longDate(till)}, so the ATM strike could not be set. Select a strike.`);
-        this.toast.error(this.atmError());
+        if (result.reason === 'no-data') {
+          this.atmInfo.set(UNDERLYING_UNAVAILABLE_MESSAGE);
+        } else {
+          this.atmError.set(result.reason === 'no-session'
+            ? `No trading session was found on or before ${this.longDate(till)}, so the ATM strike could not be set. Select a strike.`
+            : `Unable to load the closing price for ${this.longDate(till)}, so the ATM strike could not be set. Select a strike.`);
+          this.toast.error(this.atmError());
+        }
         this.clearAtm();
         this.settleInit('atm', this.applyDefaultStrikes());
         return;
       }
       this.atmError.set('');
+      this.atmInfo.set('');
       this.underlying.set(result.underlying);
       this.tradeDate.set(result.session);
       // Legs whose strike the user never picked follow the strike of their own expiry nearest the new close; picked strikes are kept.
