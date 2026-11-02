@@ -67,7 +67,7 @@
         <p class="hint-line" role="status">{{ symbolsLoading() ? 'Loading symbol list…' : 'Loading strikes and expiries…' }}</p>
         }
         @if (rangeError()) { <p class="input-error" role="alert">{{ clearedNote() || rangeError() }}</p> }
-        @if (expiriesEmpty() && !forwardExpiryNote()) { <p class="input-error" role="status">No expiries are listed for these dates.</p> }
+        @if (emptyRangeMessage()) { <p class="input-error" role="status">{{ emptyRangeMessage() }}</p> }
         @if (atmError()) { <p class="input-error" role="alert">{{ atmError() }}</p> }
         @for (message of strikeIssueMessages(); track message) { <p class="input-error" role="alert">{{ message }}</p> }
         @if (expiryError()) { <p class="input-error" role="alert">{{ expiryError() }}</p> }

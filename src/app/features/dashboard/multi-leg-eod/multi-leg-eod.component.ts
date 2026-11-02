@@ -142,6 +142,18 @@ export class MultiLegEodComponent implements OnInit {
   readonly atmError = signal('');
   /** The range itself has no historical expiries (the dropdown then holds only upcoming ones); the legs keep their selections. */
   readonly expiriesEmpty = computed(() => this.rangeExpiries()?.length === 0);
+  /**
+   * Shown when no expiry falls inside the selected dates. The second sentence says what the untouched legs were given, so it only appears while
+   * some leg still follows the default; when every leg was chosen by hand nothing was selected for them. With no expiry on or after To the
+   * forward-expiry message explains the situation instead, so this one stays hidden.
+   */
+  readonly emptyRangeMessage = computed(() => {
+    if (!this.expiriesEmpty() || this.forwardExpiryNote()) return '';
+    const base = 'No expiry falls within the selected date range.';
+    return this.legs().some(leg => !leg.picked?.expiry)
+      ? `${base} The nearest available expiry on or after the To date is selected for the option legs.`
+      : base;
+  });
   /** Listed expiries that have not passed (today's included), from `dd_symbol_details`. */
   readonly upcomingExpiries = computed(() => this.metaExpiries().filter(expiry => expiry >= this.today));
   /** The dropdown: the range's historical expiries plus those listed after To and the upcoming ones, de-duplicated, earliest first. Until the range answers (or when it fails) it is the standard list. */

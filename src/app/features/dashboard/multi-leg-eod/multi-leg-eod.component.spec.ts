@@ -601,7 +601,7 @@ describe('MultiLegEodComponent', () => {
       await settle();
       await customRange();
       expect(component.expiries()).toEqual([isoDaysAgo(1), UP]);
-      expect(host.textContent).toContain('No expiries are listed for these dates.');
+      expect(host.textContent).toContain('No expiry falls within the selected date range.');
       expect(component.legs().map(l => l.expiry)).toEqual(['2026-09-01', isoDaysAgo(1)]);
     });
 
@@ -657,7 +657,7 @@ describe('MultiLegEodComponent', () => {
       expect(component.expiries()).toEqual([UP]);                          // not the standard list, which still holds the expired 2026-10-29
       expect(component.expiriesEmpty()).toBe(true);
       expect(component.expiryError()).toBe('');
-      expect(host.textContent).toContain('No expiries are listed for these dates.');
+      expect(host.textContent).toContain('No expiry falls within the selected date range.');
       expect(host.textContent).not.toContain('Showing the standard expiry list');
       expect(component.legs().map(l => l.expiry)).toEqual(['2026-09-01', UP]);   // edited leg kept; the untouched one is not left on an unlisted date
     });
@@ -1753,6 +1753,7 @@ describe('MultiLegEodComponent', () => {
       const messages = inputErrors();
       expect(messages.filter(m => m.includes('No expiry is listed on or after 30 Oct 2026'))).toHaveLength(1);
       expect(messages.some(m => m.includes('No expiries are listed for these dates'))).toBe(false);
+      expect(messages.some(m => m.includes('No expiry falls within the selected date range'))).toBe(false);   // the forward-expiry message already covers it
       expect(messages.some(m => m.includes('not listed for these dates'))).toBe(false);
     });
 
@@ -1909,7 +1910,94 @@ describe('MultiLegEodComponent', () => {
     });
   });
 
-  it('stale leg data is dropped when the range changes quickly', async () => {
+  describe('message when no expiry falls within the selected date range', () => {
+    const FULL = 'No expiry falls within the selected date range. The nearest available expiry on or after the To date is selected for the option legs.';
+    const BASE = 'No expiry falls within the selected date range.';
+    const emptyMessages = () => Array.from(host.querySelectorAll('.input-error')).map(el => el.textContent?.trim() ?? '').filter(m => m.startsWith('No expiry falls'));
+    const toEmptyRange = async () => {
+      expiryFor = req => reply(req, ['2026-11-03', '2026-11-26']);             // both after To: nothing inside the dates
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom('2026-10-23');
+      component.onCustomTill('2026-10-25');
+      await settle();
+    };
+    const pick = async (index: number, value: string) => {
+      const el = host.querySelectorAll<HTMLSelectElement>('select[id^="ml-expiry-"]')[index];
+      el.value = value;
+      el.dispatchEvent(new Event('change'));
+      await settle();
+    };
+
+    it('uses the new wording in full when the legs follow the default and an eligible expiry exists', async () => {
+      await toEmptyRange();
+      expect(component.expiriesEmpty()).toBe(true);
+      expect(emptyMessages()).toEqual([FULL]);
+      expect(component.legs().map(l => l.expiry)).toEqual(['2026-11-03', '2026-11-03']);   // what the message says happened
+    });
+
+    it('never shows the old wording', async () => {
+      await toEmptyRange();
+      expect(host.textContent).not.toContain('No expiries are listed for these dates');
+    });
+
+    it('is not shown when an expiry falls inside the dates', async () => {
+      expiryFor = req => reply(req, ['2026-10-24', '2026-11-03']);
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom('2026-10-23');
+      component.onCustomTill('2026-10-25');
+      await settle();
+      expect(component.expiriesEmpty()).toBe(false);
+      expect(emptyMessages()).toEqual([]);
+    });
+
+    it('stays accurate when only some legs follow the default: the second sentence still applies', async () => {
+      await pick(0, '2026-10-22');
+      await toEmptyRange();
+      expect(component.legs().map(l => !!l.picked?.expiry)).toEqual([true, false]);
+      expect(emptyMessages()).toEqual([FULL]);
+    });
+
+    it('stays accurate when every leg was chosen by hand: nothing was selected for them, so only the first sentence is shown', async () => {
+      await pick(0, '2026-10-22');
+      await pick(1, '2026-10-29');
+      await toEmptyRange();
+      expect(component.legs().map(l => l.expiry)).toEqual(['2026-10-22', '2026-10-29']);   // unchanged
+      expect(emptyMessages()).toEqual([BASE]);
+      expect(host.textContent).not.toContain('is selected for the option legs');
+    });
+
+    it('is replaced by the forward-expiry message when no expiry exists on or after To', async () => {
+      metaFor = symbol => of({ data: { ...details(symbol).data, expiry_date: ['2026-10-22'] } });
+      expiryFor = req => reply(req, ['2026-10-14', '2026-10-22']);
+      component.selectSymbol('BANKNIFTY');
+      await settle();
+      await click('.field .seg button', 'Custom');
+      component.onCustomFrom('2026-10-23');
+      component.onCustomTill('2026-10-30');
+      await settle();
+      expect(component.expiriesEmpty()).toBe(true);
+      expect(emptyMessages()).toEqual([]);                                     // not claiming a selection that did not happen
+      expect(component.forwardExpiryNote()).toContain('No expiry is listed on or after 30 Oct 2026');
+    });
+
+    it('does not change which expiry the legs take, their strikes or the requests', async () => {
+      await toEmptyRange();
+      expect(component.legs().map(l => l.strike)).toEqual([22600, 22600]);
+      const forTheDates = requests.filter(r => r.date_till === '2026-10-25');   // earlier requests belong to the intermediate dates
+      expect(forTheDates.length).toBeGreaterThan(0);
+      expect(forTheDates.every(r => r.expiry === '2026-11-03')).toBe(true);
+    });
+
+    it('disappears again when the dates are changed to include an expiry', async () => {
+      await toEmptyRange();
+      expiryFor = req => reply(req, ['2026-10-24', '2026-11-03']);
+      component.onCustomFrom('2026-10-20');
+      await settle();
+      expect(emptyMessages()).toEqual([]);
+    });
+  });
+
+    it('stale leg data is dropped when the range changes quickly', async () => {
     const slow = new Subject<EodDataRow[]>();
     let calls = 0;
     rowsFor = () => (calls++ < 2 ? slow : of(makeRows(3, 10)));   // the first range (1M) is slow, the second (1W) is fast
