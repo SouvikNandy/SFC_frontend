@@ -1019,6 +1019,10 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
             ? this.api.getSymbolDetails({ symbol }).pipe(
                 catchError(() => {
                   this.error = 'Unable to load symbol details. Please try again.';
+                  // No chain can be requested without details: end both loading states so the error shows instead of a spinner.
+                  this.detailsLoading = false;
+                  this.loading = false;
+                  this.cd.markForCheck();
                   return EMPTY;
                 }),
               )

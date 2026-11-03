@@ -38,7 +38,6 @@
 
 - Live market feed (REST/WebSocket) — no backend contract yet; plug into `LiveDataService`.
 - Subscription layer (out of scope) — extend `LiveDataAccess` in `LiveDataAccessService`.
-- Tabler icon CDN link in `src/index.html` returns 404, so all `ti ti-*` icons are blank app-wide (pre-existing).
 
 - Add focused EOD service/component tests when the test matcher setup is repaired.
 - Consider a projected-cell extension only if a future grouped table needs migration without visual changes.
@@ -117,3 +116,6 @@ _Keep bullets factual and small; link issues or PRs when useful._
 - Multi-Leg ATM note (2026-11-02): while the To-date close loads the note reads 'Updating ATM reference price…' (never the previous close); after a failed lookup an empty .legnote-spacer keeps the box (the error message is shown as before); .legnote/.legnote-spacer share one min-height (1.5em, 4.5em on phones) so the legs panel does not move.
 
 - EOD valuation date (2026-11-03, Raja confirmed; supersedes Change List item 2): EOD days to expiry count from `dd_symbol_details.trade_date` via `eodValuationDate` (shared/utils/expiry.ts; falls back to today IST only if missing/invalid) in Greeks, IV, Probability, Options Chain and Payoff. Payoff valuationDate = trade date of the loaded symbol in EOD and Custom (user decision); "T+0 (today)" labels now say "valuation date". Greeks Custom/Live -> EOD re-applies the loaded details (was blank). Expiry selection unchanged (no selectors added to Greeks/Probability). 757/757 tests, build passes.
+
+- Bug-closure review (2026-11-03): fixed Greeks strike dropdown showing the first listed strike while the field and calculation used the ATM (per-option `[selected]`; the select's `[value]` ran before its options existed); Greeks failed symbol load kept the previous badge/strikes; Probability late ATM-IV answer for the previous symbol could set the next symbol's volatility/result (ATM request now cancelled on symbol change); IV late close-price answer produced a result after the next symbol failed to load and its expiries/strikes/trade date survived (now cancelled and cleared); Options Chain failed symbol details left the spinner on forever; Tabler icons 404 (cdnjs path) -> jsdelivr `@tabler/icons-webfont@2.44.0`, same icon set. Tests: `symbol-switch-stale-state.spec.ts` (7); 764/764, build passes; browser (live API over CDP, incl. forced 500s and held responses) 151/151.
+- Open after review (full register: docs/open-issues.md): PO - Greeks/Probability EOD day count stays editable and then combines the first expiry's prices/ATM IV with the typed days. Backend - `/tools/options-chain` has no trade date; `xx_close.trade_date` is not cross-checked with `dd_symbol_details.trade_date`; expiries lapsing between the trade date and today.

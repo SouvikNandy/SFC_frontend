@@ -140,10 +140,11 @@
             [value]="form.value.strikeKey"
             (change)="onStrikeSelectChange($any($event.target).value)"
           >
-            <option *ngFor="let s of strikeOptions" [value]="s">
+            <!-- [selected] per option: the select's [value] is applied before new options exist, so it alone shows the first strike. -->
+            <option *ngFor="let s of strikeOptions" [value]="s" [selected]="'' + s === form.value.strikeKey">
               ₹{{ s.toLocaleString('en-IN') }}
             </option>
-            <option value="custom">Custom strike…</option>
+            <option value="custom" [selected]="form.value.strikeKey === 'custom'">Custom strike…</option>
           </select>
           <div class="unit-wrap">
             <input type="number" formControlName="strike" /><span class="unit">₹</span>

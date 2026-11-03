@@ -477,6 +477,10 @@ export class GreeksComponent implements OnInit, OnDestroy {
                 }),
                 catchError(() => {
                     this.symbolDetailsLoading = false;
+                    // Nothing of the previous symbol stays on screen as if it belonged to this one.
+                    this.badgeText = '';
+                    this.strikeOptions = [];
+                    this.results = {};
                     this.toast.error('Unable to load symbol details. Please try again.');
                     return EMPTY;
                 })

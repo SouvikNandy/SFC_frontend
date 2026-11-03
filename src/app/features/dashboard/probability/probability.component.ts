@@ -320,6 +320,9 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
           this.detailRows = [];
           this.symbolDetails = null;
           this.expiryDate = '';
+          this.sourceNote = '';
+          // A late at-the-money answer for the previous symbol must not set this symbol's volatility.
+          this.atmRequest$.next(null);
         }),
         switchMap((symbol) =>
           symbol

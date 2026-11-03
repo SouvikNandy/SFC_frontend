@@ -305,6 +305,13 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
                 this.result = null;
                 this.chart = null;
                 this.symbolDetails = null;
+                // Nothing of the previous symbol survives: no late close-price answer, no expiries, strikes or trade date.
+                this.closeRequest$.next(null);
+                this.expiryDate = '';
+                this.expiryOptions = [];
+                this.strikes = [];
+                this.tradeDate = '';
+                this.sourceNote = '';
             }),
             switchMap(symbol => symbol ? this.volatility.getSymbolDetails({ symbol }).pipe(
                 tap(details => {
