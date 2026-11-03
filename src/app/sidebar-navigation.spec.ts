@@ -80,7 +80,7 @@ describe('opening tools from the sidebar', () => {
     expect(greeks.form.value.sourceMode).toBe('eod');
     expect(greeks.form.value.strike).toBe(22600); // ATM strike pre-filled
     expect(greeks.form.value.ivPrice).toBe(124.4); // Close (EOD) of the 22600 call, not the 132.45 LTP
-    expect(greeks.form.value.expiry).toBe(3); // IST 24 Oct -> 27 Oct
+    expect(greeks.form.value.expiry).toBe(4); // trade date 23 Oct -> 27 Oct (not today, 24 Oct)
 
     // Probability: the list is now cached, so no dd_list request; the details must still load.
     await harness.navigateByUrl('/probability');
@@ -88,11 +88,11 @@ describe('opening tools from the sidebar', () => {
     const probability = component(ProbabilityComponent);
     expect(probability.symbolDetails?.symbol).toBe('NIFTY');
     expect(probability.spotControl.value).toBe(22600);
-    expect(probability.expiryControl.value).toBe(3);
+    expect(probability.expiryControl.value).toBe(4);
     // The volatility is the at-the-money implied volatility of the chain closes (index: spot 22600, 5.5 % / 1 %), never HV-20 (17).
     const atm = atmImpliedVolatility({ underlying: 22600, riskFreeRate: 0.055, dividendYield: 0.01 }, [
       { strike: 22500, callClose: 190.5, putClose: 95.1 }, { strike: 22600, callClose: 124.4, putClose: 150.7 }, { strike: 22700, callClose: 70.2, putClose: 210.9 },
-    ], 3)!;
+    ], 4)!; // 4 days: trade date 23 Oct -> 27 Oct
     expect(probability.volControl.value).toBeCloseTo(atm.averagePct, 1);
     expect(probability.volControl.value).not.toBe(17);
 

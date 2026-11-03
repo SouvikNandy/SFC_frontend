@@ -25,7 +25,7 @@ import { DataTableComponent } from '../../../shared/components/data-table/data-t
 import { DataTableColumn } from '../../../shared/components/data-table/data-table.types';
 import { ToastService } from '../../../core/services/toast.service';
 import { DefaultStock } from '../../../shared/services/constantFile';
-import { daysToExpiry, expiryNote } from '../../../shared/utils/expiry';
+import { daysToExpiry, eodValuationDate, expiryNote } from '../../../shared/utils/expiry';
 import { atmImpliedVolatility, AtmIv } from '../../../shared/pricing/atm-iv';
 import { PricingContextService, describePricingFailure } from '../../../shared/pricing/pricing-context.service';
 import { OptionsChainService } from '../options-chain/options-chain.service';
@@ -405,10 +405,10 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
     this.calculate();
   }
 
-  /** Calendar days from today (IST) to the first listed expiry date (0 on expiry day). */
+  /** Calendar days from the EOD trade date to the first listed expiry date (0 on expiry day). */
   private resolveExpiryDays(details: GreeksSymbolDetails): number {
     const expiry = this.firstExpiryDate(details);
-    const days = expiry ? daysToExpiry(expiry) : Number.NaN;
+    const days = expiry ? daysToExpiry(expiry, eodValuationDate(details.trade_date)) : Number.NaN;
     return Number.isFinite(days) ? days : 0;
   }
 
@@ -451,7 +451,7 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
           this.atmStatus = 'unavailable';
           this.atmNote = describePricingFailure(context.reason);
         } else {
-          const days = daysToExpiry(expiry);
+          const days = daysToExpiry(expiry, eodValuationDate(this.symbolDetails?.trade_date));
           const found = atmImpliedVolatility(context, view.rows.map((row) => ({ strike: row.strike, callClose: row.call.ltp, putClose: row.put.ltp })), days);
           if (found) {
             this.atmIv = found;
@@ -632,6 +632,6 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
   }
 
   get expiryDisplayNote(): string {
-    return expiryNote(this.expiryDate);
+    return expiryNote(this.expiryDate, eodValuationDate(this.symbolDetails?.trade_date));
   }
 }

@@ -24,7 +24,7 @@ import {
 import { DefaultStock } from '../../../shared/services/constantFile';
 import { formatDisplayDate } from '../../../shared/utils/date-format';
 import { CLOSE_EOD_LABEL } from '../../../shared/utils/price-labels';
-import { daysToExpiry, istToday } from '../../../shared/utils/expiry';
+import { daysToExpiry, eodValuationDate, istToday } from '../../../shared/utils/expiry';
 import { addDays, computePayoff } from './payoff-engine';
 import { modelPremium, nearestExpiryAverageIv } from './payoff-pricing';
 import { atmImpliedVolatility } from '../../../shared/pricing/atm-iv';
@@ -129,7 +129,7 @@ export class PayoffComponent implements OnInit {
   readonly spot = signal(Number.NaN);
   readonly lotSize = signal(Number.NaN);
   readonly legs = signal<PayoffLeg[]>([]);
-  /** The date slider starts at T+0 (today). */
+  /** The date slider starts at T+0 (the valuation date). */
   readonly evalDay = signal(0);
   readonly rangePct = signal(6);
   readonly ivMultiplier = signal(100);
@@ -169,7 +169,10 @@ export class PayoffComponent implements OnInit {
     if (listed?.byStrike.size) return deriveStrikeStep([...listed.byStrike.keys()], spot);
     return spot > 0 ? defaultStrikeStep(spot) : 1;
   });
-  /** Valuation date: today in IST (not the EOD trade date). Refreshed whenever a symbol is (re)loaded. */
+  /**
+   * Valuation date: the BhavCopy trade date of the loaded symbol (also used by Custom while that symbol is loaded, so its
+   * legs keep the same expiry day counts); today in IST until a symbol has loaded.
+   */
   readonly valuationDate = signal(istToday());
   readonly baseDate = computed(() => this.parseLocalDate(this.valuationDate()) ?? this.today());
   /** EOD legs whose expiry prices are still being fetched. */
@@ -314,7 +317,7 @@ export class PayoffComponent implements OnInit {
     if (!result) return '–';
     if (result.evalDay >= result.near) return 'At expiration';
     const day = formatDay(addDays(this.baseDate(), result.evalDay));
-    return result.evalDay === 0 ? `${day} · T+0 (today)` : `${day} · T+${result.evalDay}`;
+    return result.evalDay === 0 ? `${day} · T+0 (valuation date)` : `${day} · T+${result.evalDay}`;
   });
   readonly dateCaption = computed(() => {
     const result = this.result();
@@ -322,7 +325,7 @@ export class PayoffComponent implements OnInit {
     const date = addDays(this.baseDate(), result.evalDay);
     return {
       left: `DATE: ${WEEKDAYS[date.getDay()]} ${formatDay(date)} (${result.near - result.evalDay}d left)`,
-      right: result.evalDay >= result.near ? '(At expiration)' : result.evalDay === 0 ? '(T+0 · today)' : '(Pre-expiry estimate)',
+      right: result.evalDay >= result.near ? '(At expiration)' : result.evalDay === 0 ? '(T+0 · valuation date)' : '(Pre-expiry estimate)',
     };
   });
   readonly ivLabel = computed(() => {
@@ -679,6 +682,8 @@ export class PayoffComponent implements OnInit {
     ).subscribe(({ symbol, details, expiries, quotes, pricing }) => {
       this.marketLoading.set(false);
       if (symbol !== this.selectedSymbol()) return;
+      // Expiry day counts, the date slider and the heat map all start from the BhavCopy trade date of these prices.
+      this.valuationDate.set(eodValuationDate(details.trade_date));
       this.details.set(details);
       this.expiries.set(expiries);
       this.quotes.set(quotes);
@@ -696,7 +701,7 @@ export class PayoffComponent implements OnInit {
     if (!(typeof details.underlying === 'number' && details.underlying > 0)) {
       return throwError(() => new MarketDataError(`Underlying price is not available for ${symbol}.`));
     }
-    const expiries = this.parseExpiries(details.expiry_date, this.valuationDate());
+    const expiries = this.parseExpiries(details.expiry_date, eodValuationDate(details.trade_date));
     if (!expiries.length) return throwError(() => new MarketDataError(`No current or upcoming expiries are available for ${symbol}.`));
     const days = expiries.map(expiry => expiry.days);
     const { near, next } = nearAndNextExpiry(days);

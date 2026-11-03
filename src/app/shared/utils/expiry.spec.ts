@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { daysToExpiry, expiryNote, istToday } from './expiry';
+import { daysToExpiry, eodValuationDate, expiryNote, istToday } from './expiry';
 
 describe('istToday', () => {
   it('rolls over to the next day at 00:00 IST (18:30 UTC)', () => {
@@ -71,5 +71,25 @@ describe('expiryNote', () => {
   it('falls back to the valuation date alone when there is no valid expiry', () => {
     expect(expiryNote(null, '2026-10-21')).toBe('Valuation date 21 Oct 2026');
     expect(expiryNote('bad', '2026-10-21')).toBe('Valuation date 21 Oct 2026');
+  });
+});
+
+describe('EOD valuation date (BhavCopy trade date)', () => {
+  const now = new Date('2026-11-02T06:00:00Z'); // 2 Nov 2026, 11:30 IST; the last BhavCopy is from 30 Oct
+
+  it('is the trade date of the EOD data, not today', () => {
+    expect(eodValuationDate('2026-10-30', now)).toBe('2026-10-30');
+    expect(eodValuationDate('2026-10-30T00:00:00', now)).toBe('2026-10-30'); // a timestamp keeps only its date
+  });
+
+  it('counts 30 Oct -> 3 Nov as 4 calendar days and 30 Oct -> 23 Nov as 24', () => {
+    const valuation = eodValuationDate('2026-10-30', now);
+    expect(daysToExpiry('2026-11-03', valuation)).toBe(4); // NIFTY; a today-based count gives 1
+    expect(daysToExpiry('2026-11-23', valuation)).toBe(24); // ICICIBANK; a today-based count gives 21
+    expect(expiryNote('2026-11-03', valuation)).toBe('Expiry 03 Nov 2026 · 4 days to expiry · Valuation date 30 Oct 2026');
+  });
+
+  it('falls back to today in IST only when the trade date is missing or invalid', () => {
+    for (const bad of [undefined, null, '', 'bad', '2026-02-30']) expect(eodValuationDate(bad, now)).toBe('2026-11-02');
   });
 });

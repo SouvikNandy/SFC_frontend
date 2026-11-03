@@ -23,7 +23,7 @@ const view = (strike: number): OptionsChainViewModel => ({
   chart: { callOi: [], putOi: [], callIv: [], putIv: [] },
 });
 const details = (symbol: string): GreeksSymbolDetails => ({
-  symbol, trade_date: '2026-10-16', expiry_date: ['2026-10-29', '2026-11-05'], underlying: 22600, strike: [22600], atm_strike: 22600, hv20: 15,
+  symbol, trade_date: '2026-10-23', expiry_date: ['2026-10-29', '2026-11-05'], underlying: 22600, strike: [22600], atm_strike: 22600, hv20: 15,
 });
 
 const INDEX_CONTEXT: PricingContext = { ok: true, kind: 'index', underlying: 22600, riskFreeRate: 0.055, dividendYield: 0.01, futures: null };
@@ -147,16 +147,20 @@ describe('OptionsChainComponent chain loading', () => {
   describe('days to expiry', () => {
     afterEach(() => vi.useRealTimers());
 
-    it('counts from today in IST, not the EOD trade date, and shows the valuation date', () => {
+    it('counts from the EOD trade date, not today, and shows it as the valuation date', () => {
       vi.useFakeTimers({ toFake: ['Date'] });
-      vi.setSystemTime(new Date('2026-10-21T06:00:00Z')); // 11:30 IST; trade_date in the fixture is 16 Oct
-      component.expiry = '2026-10-27';
-      expect(component.expiryDisplayNote).toBe('Expiry 27 Oct 2026 · 6 days to expiry · Valuation date 21 Oct 2026');
+      vi.setSystemTime(new Date('2026-11-02T06:00:00Z')); // 11:30 IST on 2 Nov; the BhavCopy is from 30 Oct
+      component.details = { ...details('NIFTY'), trade_date: '2026-10-30' };
+      component.expiry = '2026-11-03';
+      expect(component.expiryDisplayNote).toBe('Expiry 03 Nov 2026 · 4 days to expiry · Valuation date 30 Oct 2026');
+      component.expiry = '2026-11-23';
+      expect(component.expiryDisplayNote).toBe('Expiry 23 Nov 2026 · 24 days to expiry · Valuation date 30 Oct 2026');
     });
 
-    it('displays 0 days on expiry day', () => {
+    it('displays 0 days when the trade date is the expiry day', () => {
       vi.useFakeTimers({ toFake: ['Date'] });
-      vi.setSystemTime(new Date('2026-10-27T06:00:00Z'));
+      vi.setSystemTime(new Date('2026-10-28T06:00:00Z'));
+      component.details = { ...details('NIFTY'), trade_date: '2026-10-27' };
       component.expiry = '2026-10-27';
       expect(component.expiryDisplayNote).toContain('0 days to expiry');
     });
@@ -233,7 +237,7 @@ describe('OptionsChainComponent chain loading', () => {
 
     beforeEach(() => {
       vi.useFakeTimers({ toFake: ['Date'] });
-      vi.setSystemTime(new Date('2026-10-23T06:00:00Z')); // 6 days before 29 Oct, IST
+      vi.setSystemTime(new Date('2026-10-26T06:00:00Z')); // today is 26 Oct; the trade date (23 Oct) is 6 days before 29 Oct
       component.expiry = EXPIRY;
       component.loadChain();
     });
@@ -294,12 +298,12 @@ describe('OptionsChainComponent chain loading', () => {
       expect(component.rows[1].call.iv).toBe(0); // below intrinsic
     });
 
-    it('has no IV on expiry day and none for a past expiry', () => {
-      vi.setSystemTime(new Date('2026-10-29T06:00:00Z'));
+    it('has no IV when the trade date is the expiry day, and none for a past expiry', () => {
+      component.details = { ...details('NIFTY'), trade_date: '2026-10-29' };
       component.loadChain();
       respond(chainWith([{ strike: 22600, call: 124.4, put: 150.7 }]));
       expect(component.rows[0].call.iv).toBe(0);
-      vi.setSystemTime(new Date('2026-10-30T06:00:00Z'));
+      component.details = { ...details('NIFTY'), trade_date: '2026-10-30' };
       component.loadChain();
       respond(chainWith([{ strike: 22600, call: 124.4, put: 150.7 }]));
       expect(component.rows[0].put.iv).toBe(0);

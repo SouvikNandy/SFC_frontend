@@ -9,7 +9,7 @@ Status 2026-10-27: the migration is done. Every screen prices through `src/app/s
 | Stock underlying | `FuturesCloseService` → `POST /fo/xx_close` for the option's own expiry |
 | Rate / dividend | `MARKET_PARAMS` by instrument type (index 5.5 % / 1 %; stock 0.01 % / 0 %) |
 | Option price | the contract's own EOD close (`/tools/options-chain` `c_ltp` / `p_ltp`) |
-| Days to expiry | `daysToExpiry` from today's IST date; 0 on expiry day (no IV, intrinsic value) |
+| Days to expiry | EOD: `daysToExpiry(expiry, eodValuationDate(dd_symbol_details.trade_date))`, calendar days from the last BhavCopy trade date (Raja, 2026-11-03; supersedes Change List item 2); Custom/Live: today's IST date; 0 on expiry day (no IV, intrinsic value) |
 | Resolver | `PricingContextService.resolve(symbol, expiry, spot)` → context or a failure reason |
 
 | Screen | What it does |

@@ -1,7 +1,8 @@
 /*
  * Valuation date and days to expiry, shared by every tool that shows or prices an expiry.
  *
- * The valuation date is today's calendar date in India (Asia/Kolkata), NOT the EOD data date. Day counts are
+ * EOD (BhavCopy) mode values on the trade date of the loaded data (`dd_symbol_details.trade_date`, see
+ * `eodValuationDate`); Live and Custom value on today's calendar date in India (Asia/Kolkata). Day counts are
  * pure calendar-date arithmetic (UTC midnights of the two dates), so neither the browser's timezone nor
  * daylight-saving changes can shift the result.
  */
@@ -27,6 +28,15 @@ function utcDay(iso: string): number {
     const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
     const date = new Date(Date.UTC(year, month - 1, day));
     return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day ? date.getTime() : Number.NaN;
+}
+
+/**
+ * EOD valuation date: the last available BhavCopy trade date (YYYY-MM-DD), e.g. 30 Oct for prices of 30 Oct viewed on
+ * 2 Nov. Falls back to today in IST only when the trade date is missing or not a valid date.
+ */
+export function eodValuationDate(tradeDate: string | null | undefined, now: Date = new Date()): string {
+    const iso = typeof tradeDate === 'string' ? ISO_DATE.exec(tradeDate)?.[0] : undefined;
+    return iso && Number.isFinite(utcDay(iso)) ? iso : istToday(now);
 }
 
 /**

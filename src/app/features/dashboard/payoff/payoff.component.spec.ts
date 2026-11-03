@@ -16,7 +16,7 @@ import { nearestExpiryAverageIv } from './payoff-pricing';
 const SPOT = 22630;
 const strikes = Array.from({ length: 41 }, (_, i) => 21600 + i * 50);
 const details: PayoffSymbolDetails = {
-  symbol: 'NIFTY', trade_date: '2026-10-15', expiry_date: ['2026-10-29', '2026-11-05'],
+  symbol: 'NIFTY', trade_date: '2026-10-21', expiry_date: ['2026-10-29', '2026-11-05'],
   underlying: SPOT, strike: strikes, atm_strike: 22650, hv20: 12.5, lot: 75,
 };
 const quotes: ExpiryQuotes = {
@@ -34,14 +34,18 @@ describe('PayoffComponent (EOD)', () => {
   let kind: InstrumentKind | null;
   let futuresByExpiry: Record<string, number>;
   let futuresRequests: Array<{ symbol: string; expiry: string }>;
+  let tradeDate: string;
+  let expiryDates: string[];
 
   beforeEach(async () => {
     kind = 'index';
     futuresByExpiry = {};
     futuresRequests = [];
-    // 21 Oct 2026, 11:30 IST: the valuation date is fixed so days to expiry do not drift with the wall clock.
+    tradeDate = details.trade_date;
+    expiryDates = details.expiry_date as string[];
+    // 24 Oct 2026, 11:30 IST: later than the 21 Oct trade date, so a today-based day count would show up.
     vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date('2026-10-21T06:00:00Z'));
+    vi.setSystemTime(new Date('2026-10-24T06:00:00Z'));
     // jsdom has no matchMedia; the component only needs it to pick the narrow-viewport layout.
     vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: () => undefined, removeEventListener: () => undefined }));
     await TestBed.configureTestingModule({
@@ -52,7 +56,7 @@ describe('PayoffComponent (EOD)', () => {
         { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: { get: () => null } } } },
         { provide: PayoffService, useValue: {
           getSymbols: () => of(['NIFTY']),
-          getSymbolDetails: () => of(details),
+          getSymbolDetails: () => of({ ...details, trade_date: tradeDate, expiry_date: expiryDates }),
           getExpiryQuotes: () => of(quotes),
         } },
         { provide: InstrumentKindService, useValue: { kindOf: () => of(kind) } },
@@ -81,16 +85,34 @@ describe('PayoffComponent (EOD)', () => {
     return created;
   };
 
-  it('counts expiry days from today in IST (not the EOD trade date) and shows the valuation date', () => {
-    // trade_date is 15 Oct; 29 Oct is 8 days from 21 Oct (it would be 14 from the trade date), 5 Nov is 15.
+  it('counts expiry days from the EOD trade date (not today) and shows it as the valuation date', () => {
+    // trade_date is 21 Oct; 29 Oct is 8 days from it (5 from today, 24 Oct), 5 Nov is 15.
     expect(component.expiries().map(e => e.days)).toEqual([8, 15]);
     expect(component.expiryOptionLabel(8)).toBe('29 Oct · 8d');
     expect(component.valuationDate()).toBe('2026-10-21');
     expect(component.sourceNote()).toContain('Valuation date 21 Oct 2026');
   });
 
-  it('offers an expiry that falls today (0 days) and prices it without error', async () => {
-    vi.setSystemTime(new Date('2026-10-29T06:00:00Z')); // 11:30 IST on the first listed expiry
+  it('values a 30 Oct BhavCopy on 30 Oct when opened on 2 Nov: 3 Nov is 4 days, 23 Nov is 24', async () => {
+    vi.setSystemTime(new Date('2026-11-02T06:00:00Z'));
+    tradeDate = '2026-10-30';
+    expiryDates = ['2026-11-03', '2026-11-23'];
+    const page = (await create()).componentInstance;
+    expect(page.expiries().map(e => e.days)).toEqual([4, 24]);
+    expect(page.valuationDate()).toBe('2026-10-30');
+    expect(page.sourceNote()).toContain('Valuation date 30 Oct 2026');
+    expect(page.result()!.near).toBe(4);
+    for (const leg of page.legs()) expect([4, 24]).toContain(leg.expiryDays);
+  });
+
+  it('keeps the trade-date valuation in Custom mode while the symbol stays loaded', () => {
+    component.selectMode('custom');
+    expect(component.valuationDate()).toBe('2026-10-21');
+    expect(component.sourceNote()).toBe('Manual entry · Valuation date 21 Oct 2026');
+  });
+
+  it('offers an expiry that falls on the trade date (0 days) and prices it without error', async () => {
+    tradeDate = '2026-10-29'; // BhavCopy of the first listed expiry day
     const page = (await create()).componentInstance;
     expect(page.expiries().map(e => e.days)).toEqual([0, 7]);
     expect(page.expiryOptionLabel(0)).toBe('29 Oct · 0d');
@@ -100,8 +122,8 @@ describe('PayoffComponent (EOD)', () => {
     expect(page.result()!.near).toBe(0);
   });
 
-  it('drops an expiry that has already passed, keeping today and the future', async () => {
-    vi.setSystemTime(new Date('2026-10-30T06:00:00Z')); // the 29 Oct expiry is one day in the past
+  it('drops an expiry that had already passed on the trade date, keeping the later ones', async () => {
+    tradeDate = '2026-10-30'; // the 29 Oct expiry is one day before the trade date
     expect((await create()).componentInstance.expiries().map(e => e.days)).toEqual([6]);
   });
 
@@ -124,7 +146,7 @@ describe('PayoffComponent (EOD)', () => {
     expect(host.textContent).not.toContain('Base volatility');
   });
 
-  it('starts the date slider at T+0 (today), not at expiration', () => {
+  it('starts the date slider at T+0 (the valuation date), not at expiration', () => {
     expect(component.evalDay()).toBe(0);
     expect(component.result()?.evalDay).toBe(0);
     expect(component.evalLabel()).toContain('T+0');

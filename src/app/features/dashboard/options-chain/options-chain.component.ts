@@ -15,7 +15,7 @@ import { GreeksSymbolDetails } from '../greeks/greeks.model';
 import { DefaultStock } from '../../../shared/services/constantFile';
 import { formatDisplayDate } from '../../../shared/utils/date-format';
 import { CLOSE_EOD_LABEL } from '../../../shared/utils/price-labels';
-import { daysToExpiry, expiryNote } from '../../../shared/utils/expiry';
+import { daysToExpiry, eodValuationDate, expiryNote } from '../../../shared/utils/expiry';
 import { contractGreeks } from '../../../shared/pricing/contract-greeks';
 import { PricingContext, PricingContextService, describePricingFailure } from '../../../shared/pricing/pricing-context.service';
 import { computeMaxPain } from './max-pain.util';
@@ -644,7 +644,11 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
     return this.loading ? null : computeMaxPain(this.rows);
   }
   get expiryDisplayNote(): string {
-    return expiryNote(this.expiry);
+    return expiryNote(this.expiry, this.valuationDate);
+  }
+  /** EOD valuation date: the trade date of the loaded BhavCopy data, never today's date. */
+  private get valuationDate(): string {
+    return eodValuationDate(this.details?.trade_date);
   }
   get highestOiStrikes(): { put: number | null; call: number | null } {
     // While a new expiry loads, `rows` still holds the previous expiry; do not present it as this expiry's value.
@@ -1044,7 +1048,7 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
    */
   private calculateRowGreeks(row: OptionsChainRow, context: PricingContext): OptionsChainRow {
     if (!context.ok) return this.withoutGreeks(row);
-    const days = daysToExpiry(this.expiry);
+    const days = daysToExpiry(this.expiry, this.valuationDate);
     const side = (kind: Side, option: OptionsChainSide): OptionsChainSide => {
       const solved = contractGreeks(context, { side: kind, strike: row.strike, days, close: option.ltp });
       return { ...option, iv: solved.ivPct ?? 0, delta: solved.delta, gamma: solved.gamma, theta: solved.theta, vega: solved.vega };

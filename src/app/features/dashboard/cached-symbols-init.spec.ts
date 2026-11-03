@@ -24,7 +24,7 @@ import { OptionsChainService } from './options-chain/options-chain.service';
  */
 const DETAILS: GreeksSymbolDetails = {
   symbol: 'NIFTY',
-  trade_date: '2026-10-19',
+  trade_date: '2026-10-21',
   expiry_date: ['2026-10-27', '2026-11-03'],
   underlying: 25000,
   strike: [24900, 25000, 25100],
@@ -53,9 +53,9 @@ describe('tools load symbol details when the symbol list is already cached', () 
   beforeEach(() => {
     context = INDEX_CONTEXT;
     resolveCalls = [];
-    // 21 Oct 2026, 11:30 IST. trade_date is 19 Oct, so the old trade-date count would be 8; today-based it is 6.
+    // 23 Oct 2026, 11:30 IST. EOD days count from the trade date (21 Oct): 6 to 27 Oct; a today-based count would be 4.
     vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date('2026-10-21T06:00:00Z'));
+    vi.setSystemTime(new Date('2026-10-23T06:00:00Z'));
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
@@ -159,7 +159,7 @@ describe('tools load symbol details when the symbol list is already cached', () 
     });
 
     it('has no IV on expiry day (zero days), not an IV at an invented one day', () => {
-      vi.setSystemTime(new Date('2026-10-27T06:00:00Z'));
+      vi.mocked(TestBed.inject(GreeksCalculatorService).getSymbolDetails).mockReturnValue(of({ ...DETAILS, trade_date: '2026-10-27' }));
       const component = TestBed.createComponent(ImpliedVolatilityComponent);
       component.detectChanges();
       expect(component.componentInstance.expiryControl.value).toBe(0);
@@ -292,7 +292,7 @@ describe('tools load symbol details when the symbol list is already cached', () 
     });
 
     it('has no IV on expiry day: the side notes say so', () => {
-      vi.setSystemTime(new Date('2026-10-27T06:00:00Z'));
+      vi.mocked(TestBed.inject(GreeksCalculatorService).getSymbolDetails).mockReturnValue(of({ ...DETAILS, trade_date: '2026-10-27' }));
       const component = open().componentInstance;
       expect(component.form.value.expiry).toBe(0);
       expect(component.expiryDisplayNote).toBe('Expiry 27 Oct 2026 · 0 days to expiry · Valuation date 27 Oct 2026');
@@ -400,6 +400,51 @@ describe('tools load symbol details when the symbol list is already cached', () 
       expect(component.expiryDate).toBe('2026-10-27');
       component.clearSymbol();
       expect(component.expiryDate).toBe('');
+    });
+  });
+
+  describe('EOD days to expiry count from the BhavCopy trade date, not today', () => {
+    // Opened on 2 Nov 2026 (11:30 IST) while the last BhavCopy is from 30 Oct.
+    const useThirtyOct = (expiry: string) => {
+      vi.setSystemTime(new Date('2026-11-02T06:00:00Z'));
+      vi.mocked(TestBed.inject(GreeksCalculatorService).getSymbolDetails).mockReturnValue(of({ ...DETAILS, trade_date: '2026-10-30', expiry_date: [expiry] }));
+    };
+
+    for (const [expiry, days, label] of [['2026-11-03', 4, '03 Nov 2026'], ['2026-11-23', 24, '23 Nov 2026']] as const) {
+      it(`Greeks, Implied Volatility and Probability: 30 Oct -> ${label} is ${days} calendar days`, () => {
+        useThirtyOct(expiry);
+        const note = `Expiry ${label} · ${days} days to expiry · Valuation date 30 Oct 2026`;
+        const greeks = TestBed.createComponent(GreeksComponent);
+        greeks.detectChanges();
+        expect(greeks.componentInstance.form.value.expiry).toBe(days);
+        expect(greeks.componentInstance.expiryDisplayNote).toBe(note);
+        const iv = TestBed.createComponent(ImpliedVolatilityComponent);
+        iv.detectChanges();
+        expect(iv.componentInstance.expiryControl.value).toBe(days);
+        expect(iv.componentInstance.expiryDisplayNote).toBe(note);
+        const probability = TestBed.createComponent(ProbabilityComponent);
+        probability.detectChanges();
+        expect(probability.componentInstance.expiryControl.value).toBe(days);
+        expect(probability.componentInstance.expiryDisplayNote).toBe(note);
+      });
+    }
+
+    it('Greeks: returning to EOD from Custom or Live restores the expiry, its trade-date day count and the Close (EOD)', () => {
+      const fixture = TestBed.createComponent(GreeksComponent);
+      fixture.detectChanges();
+      const component = fixture.componentInstance;
+      component.setMode('custom');
+      component.form.patchValue({ expiry: 2 });
+      component.setMode('eod');
+      expect(component.expiryDate).toBe('2026-10-27');
+      expect(component.form.value.expiry).toBe(6);
+      expect(component.form.value.ivPrice).toBe(130);
+      expect(component.results.callIvPct).toBeGreaterThan(0);
+      component.setMode('live');
+      component.setMode('eod');
+      expect(component.form.value.expiry).toBe(6);
+      expect(component.expiryDisplayNote).toBe(NOTE);
+      expect(component.results.callIvPct).toBeGreaterThan(0);
     });
   });
 });

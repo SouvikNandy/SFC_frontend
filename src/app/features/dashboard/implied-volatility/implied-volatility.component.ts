@@ -5,7 +5,7 @@ import { EMPTY, Subject, catchError, combineLatest, finalize, of, switchMap, tak
 import { ToastService } from '../../../core/services/toast.service';
 import { DefaultStock } from '../../../shared/services/constantFile';
 import { formatDisplayDate } from '../../../shared/utils/date-format';
-import { daysToExpiry, expiryNote } from '../../../shared/utils/expiry';
+import { daysToExpiry, eodValuationDate, expiryNote } from '../../../shared/utils/expiry';
 import { CLOSE_EOD_LABEL } from '../../../shared/utils/price-labels';
 import { OptionsChainService } from '../options-chain/options-chain.service';
 import { InstrumentKind, marketParams } from '../../../shared/pricing/option-pricing';
@@ -465,9 +465,9 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
         return point ? [{ label: 'Volatility', value: `${point.volatility.toFixed(2)}%`, tone: 'neutral' }, { label: 'Model price', value: this.formatPrice(point.price), tone: 'neutral' }] : [];
     }
 
-    /** Calendar days from today (IST) to the expiry date: 0 on expiry day (no IV can be solved), never a made-up minimum. */
+    /** Calendar days from the EOD trade date to the expiry date: 0 on expiry day (no IV can be solved), never a made-up minimum. */
     private expiryDays(expiry: string): number {
-        const days = daysToExpiry(expiry);
+        const days = daysToExpiry(expiry, eodValuationDate(this.tradeDate));
         return Number.isFinite(days) ? days : 0;
     }
 
@@ -481,5 +481,5 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
         if (this.closeStatus === 'ready' && this.closePrice() === null) return `No ${this.closeLabel} for this strike`;
         return `${this.closeLabel} · ${this.optionType}, BhavCopy`;
     }
-    get expiryDisplayNote(): string { return expiryNote(this.expiryDate); }
+    get expiryDisplayNote(): string { return expiryNote(this.expiryDate, eodValuationDate(this.tradeDate)); }
 }

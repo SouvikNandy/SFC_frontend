@@ -6,7 +6,7 @@ import { GreeksCalculatorService, GreeksInput } from './greeks-calculator.servic
 import { GreeksSymbolDetails } from './greeks.model';
 import { ToastService } from '../../../core/services/toast.service';
 import { DefaultStock } from '../../../shared/services/constantFile';
-import { daysToExpiry, expiryNote } from '../../../shared/utils/expiry';
+import { daysToExpiry, eodValuationDate, expiryNote } from '../../../shared/utils/expiry';
 import { CLOSE_EOD_LABEL } from '../../../shared/utils/price-labels';
 import { formatDisplayDate } from '../../../shared/utils/date-format';
 import { OptionsChainService } from '../options-chain/options-chain.service';
@@ -84,7 +84,7 @@ export class GreeksComponent implements OnInit, OnDestroy {
         if (this.closeStatus === 'ready' && this.closePrice() === null) return `No ${this.closeLabel} for this strike`;
         return `${this.closeLabel} · ${this.form.get('ivType')!.value === 'put' ? 'put' : 'call'}${where}, BhavCopy`;
     }
-    get expiryDisplayNote(): string { return expiryNote(this.expiryDate); }
+    get expiryDisplayNote(): string { return expiryNote(this.expiryDate, eodValuationDate(this.symbolDetails?.trade_date)); }
     private symbolsRequested = false;
     private readonly chains = inject(OptionsChainService);
     private readonly pricing = inject(PricingContextService);
@@ -191,6 +191,7 @@ export class GreeksComponent implements OnInit, OnDestroy {
     }
 
     setMode(mode: string) {
+        const previous = this.form.value.sourceMode;
         this.form.patchValue({ sourceMode: mode });
         // reset badge text when switching modes
         this.badgeText = '';
@@ -207,6 +208,8 @@ export class GreeksComponent implements OnInit, OnDestroy {
             // EOD APIs run only while the EOD tab is active.
             const symbol = this.form.value.symbol;
             if (!this.symbolsRequested) this.loadSymbols();
+            // Returning from Custom or Live restores the loaded expiry, its trade-date day count and its prices.
+            else if (this.symbolDetails && !this.symbolDetailsLoading && previous !== 'eod') this.applySymbolDetails(this.symbolDetails);
             else if (!this.symbolDetails && !this.symbolDetailsLoading && symbol) this.selectSymbol(symbol);
         } else if (mode === 'live') {
             // Live Data is a separate view; cancel any in-flight EOD request.
@@ -502,11 +505,11 @@ export class GreeksComponent implements OnInit, OnDestroy {
     }
 
     /**
-     * Calendar days from today (IST) to the first listed expiry date (0 on expiry day). The backend's own day counts are not used.
+     * Calendar days from the EOD trade date to the first listed expiry date (0 on expiry day). The backend's own day counts are not used.
      */
     private resolveExpiryDays(details: GreeksSymbolDetails): number {
         const expiry = this.firstExpiryDate(details);
-        const days = expiry ? daysToExpiry(expiry) : Number.NaN;
+        const days = expiry ? daysToExpiry(expiry, eodValuationDate(details.trade_date)) : Number.NaN;
         return Number.isFinite(days) ? days : 0;
     }
 
