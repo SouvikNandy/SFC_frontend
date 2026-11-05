@@ -12,7 +12,6 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { EMPTY, Observable, Subject, catchError, finalize, forkJoin, map, merge, of, switchMap, takeUntil, tap, throwError } from 'rxjs';
-import { ToastService } from '../../../core/services/toast.service';
 import { ChartTooltipComponent, ChartTooltipRow } from '../../../shared/components/chart-tooltip/chart-tooltip.component';
 import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
 import {
@@ -91,7 +90,6 @@ export class PayoffComponent implements OnInit {
   private readonly payoff = inject(PayoffService);
   private readonly kinds = inject(InstrumentKindService);
   private readonly futuresClose = inject(FuturesCloseService);
-  private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly route = inject(ActivatedRoute);
   private readonly liveAccess = inject(LiveDataAccessService);
@@ -110,13 +108,18 @@ export class PayoffComponent implements OnInit {
   readonly symbols = signal<string[]>([]);
   readonly filteredSymbols = signal<string[]>([]);
   readonly symbolsLoading = signal(true);
+  /** The symbol list could not be loaded: a failure that leaves nothing to choose from (inline error with Retry, no toast). */
+  readonly symbolsError = signal('');
   readonly suggestionsOpen = signal(false);
   readonly highlightedSymbolIndex = signal(-1);
   readonly selectedSymbol = signal('');
 
   /* ---------- market data (EOD) ---------- */
   readonly marketLoading = signal(false);
+  /** The payoff data could not be loaded: a failure (inline error with Retry, no toast). */
   readonly marketError = signal('');
+  /** The instrument has no underlying, expiries or BhavCopy prices to price from: a data condition (neutral note). */
+  readonly marketNote = signal('');
   readonly details = signal<PayoffSymbolDetails | null>(null);
   readonly expiries = signal<PayoffExpiry[]>([]);
   /** EOD prices keyed by expiryDays: the real counterpart of the prototype's chainPremium(type, K, days). */
@@ -640,11 +643,18 @@ export class PayoffComponent implements OnInit {
 
   /* ================= internals ================= */
 
+  /** Asks again for the symbol list after a failure. */
+  retrySymbols(): void {
+    this.loadSymbols();
+  }
+
   private loadSymbols(): void {
     this.symbolsRequested = true;
+    this.symbolsLoading.set(true);
+    this.symbolsError.set('');
     this.payoff.getSymbols().pipe(
       catchError(() => {
-        this.toast.error('Unable to load symbols. Please refresh and try again.');
+        this.symbolsError.set('Unable to load the symbol list.');
         return EMPTY;
       }),
       finalize(() => this.symbolsLoading.set(false)),
@@ -673,7 +683,8 @@ export class PayoffComponent implements OnInit {
           switchMap(details => this.loadInitialQuotes(symbol, details)),
           catchError((error: unknown) => {
             this.marketLoading.set(false);
-            this.failMarketData(error instanceof MarketDataError ? error.message : `Unable to load payoff data for ${symbol}. Please try again.`);
+            if (error instanceof MarketDataError) this.marketNote.set(error.message);
+            else this.marketError.set(`Unable to load payoff data for ${symbol}.`);
             return EMPTY;
           }),
         )
@@ -745,7 +756,6 @@ export class PayoffComponent implements OnInit {
     ))).pipe(takeUntil(this.quoteReset$), takeUntilDestroyed(this.destroyRef)).subscribe(({ expiry, quotes }) => {
       if (symbol !== this.selectedSymbol()) return;
       this.quotes.update(current => new Map(current).set(expiry.days, quotes));
-      if (quotes.status === 'error') this.toast.error(`Unable to load BhavCopy prices for ${symbol} ${formatDay(expiry.date)} expiry.`);
       this.refreshPremiums();
     });
   }
@@ -772,6 +782,7 @@ export class PayoffComponent implements OnInit {
     this.quotes.set(new Map());
     this.expiries.set([]);
     this.marketError.set('');
+    this.marketNote.set('');
     this.lotFromFeed.set(false);
     this.hover.set(null);
     if (this.mode() !== 'custom') {
@@ -781,9 +792,10 @@ export class PayoffComponent implements OnInit {
     }
   }
 
-  private failMarketData(message: string): void {
-    this.marketError.set(message);
-    this.toast.error(message);
+  /** Loads the selected instrument again after a failure. */
+  retryMarketData(): void {
+    const symbol = this.selectedSymbol();
+    if (symbol) this.symbolSelection$.next(symbol);
   }
 
   /** EOD: underlying and lot size come from the feed (HV-20 becomes the reference volatility), then the strategy is rebuilt (prototype: loadInstrument). */
@@ -898,7 +910,7 @@ export class PayoffComponent implements OnInit {
     if (mode === 'eod') {
       if (!this.selectedSymbol()) return 'Select an instrument to load strike and Close (EOD) data.';
       if (this.marketLoading() || this.quotesLoading()) return '';
-      if (this.marketError()) return this.marketError();
+      if (this.marketError() || this.marketNote()) return '';   // shown on their own (error with Retry, or a neutral note)
       if (!this.rates()) return describePricingFailure('missing-instrument-type');
       const base = this.underlyingFor(this.expiries()[0]?.iso ?? null);
       if (!base.ok) return describePricingFailure(base.reason);

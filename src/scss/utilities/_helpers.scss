@@ -93,3 +93,47 @@
     animation-duration: 2.4s;
   }
 }
+
+/*
+ * Screen-level messages, shared by every tool (see core/services/toast.service.ts for toasts).
+ *  - .inline-error  a genuine failure that stays visible until resolved (role="alert"), usually with a Retry button (.inline-retry);
+ *  - .inline-note   a normal data condition or persistent guidance (role="status"): neutral, never red.
+ * Field validation keeps each screen's own .input-error styling.
+ */
+.inline-error,
+.inline-note {
+  margin: 12px 0 0;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.inline-error {
+  border-color: var(--red);
+  background: var(--red-tint);
+  color: var(--red);
+}
+
+.inline-note {
+  background: var(--bg);
+  color: var(--ink-soft);
+}
+
+.inline-retry {
+  margin-left: 8px;
+  padding: 3px 10px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.inline-retry:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}

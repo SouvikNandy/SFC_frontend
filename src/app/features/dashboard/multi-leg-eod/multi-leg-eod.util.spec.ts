@@ -10,6 +10,7 @@ import {
   csvCell,
   csvFilename,
   isLegComplete,
+  reconcileLegExpiry,
   legLabel,
   pageSlice,
   resolveRange,
@@ -211,5 +212,47 @@ describe('sparse ATM warning helpers', () => {
     expect(isSparseAtm(100, 0)).toBe(false);
     expect(isSparseAtm(103, 100, 5)).toBe(false);
     expect(isSparseAtm(106, 100, 5)).toBe(true);
+  });
+});
+
+describe('reconcileLegExpiry: verified expiry list to the expiry of a leg', () => {
+  const range = { from: '2026-10-01', till: '2026-10-28' };
+  const listed = ['2026-10-14', '2026-10-21', '2026-11-03', '2026-11-26'];
+
+  it('keeps a hand-picked expiry that is still listed', () => {
+    expect(reconcileLegExpiry('2026-10-14', true, listed, range)).toBe('2026-10-14');
+    expect(reconcileLegExpiry('2026-11-26', true, listed, range)).toBe('2026-11-26');
+  });
+
+  it('replaces a hand-picked expiry that is no longer listed by the nearest expiry on or after To', () => {
+    expect(reconcileLegExpiry('2026-10-22', true, listed, range)).toBe('2026-11-03');
+  });
+
+  it('an untouched leg always takes the nearest expiry on or after To, even when its own is still listed', () => {
+    expect(reconcileLegExpiry('2026-10-14', false, listed, range)).toBe('2026-11-03');
+    expect(reconcileLegExpiry('', false, listed, range)).toBe('2026-11-03');
+  });
+
+  it('an expiry on the To date counts as on or after it', () => {
+    expect(reconcileLegExpiry('', false, [...listed, '2026-10-28'], range)).toBe('2026-10-28');
+  });
+
+  it('with none on or after To it takes the latest expiry within From..To', () => {
+    expect(reconcileLegExpiry('2026-09-01', true, ['2026-10-14', '2026-10-21'], range)).toBe('2026-10-21');
+    expect(reconcileLegExpiry('', false, ['2026-10-21', '2026-10-14'], range)).toBe('2026-10-21');   // order of the list does not matter
+  });
+
+  it('an empty range takes the next expiry on or after From (which is after To)', () => {
+    expect(reconcileLegExpiry('', false, ['2026-11-26', '2026-11-03'], range)).toBe('2026-11-03');
+  });
+
+  it('never returns an expiry before From, even a listed pick, and returns null when no valid expiry exists', () => {
+    expect(reconcileLegExpiry('2026-09-24', true, ['2026-09-24', '2026-10-14'], range)).toBe('2026-10-14');
+    expect(reconcileLegExpiry('2026-09-24', true, ['2026-09-24', '2026-09-30'], range)).toBeNull();
+    expect(reconcileLegExpiry('2026-10-14', true, [], range)).toBeNull();
+  });
+
+  it('ignores malformed dates and duplicates', () => {
+    expect(reconcileLegExpiry('', false, ['2026-13-01', 'bad', '2026-11-03', '2026-11-03'], range)).toBe('2026-11-03');
   });
 });

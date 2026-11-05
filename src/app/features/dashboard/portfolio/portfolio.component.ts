@@ -112,7 +112,10 @@ export class PortfolioComponent implements OnInit {
   });
   readonly catalog = signal<ContractCatalog | null>(null);
   readonly catalogLoading = signal(false);
+  /** The contracts could not be loaded: a failure (inline error). */
   readonly catalogError = signal('');
+  /** The underlying lists no expiries: a data condition (neutral note). */
+  readonly catalogNote = signal('');
 
   /* ---------- paper-fill form ---------- */
   readonly segment = signal<Segment>('FUT');
@@ -868,21 +871,21 @@ export class PortfolioComponent implements OnInit {
       tap(() => {
         this.catalogLoading.set(true);
         this.catalogError.set('');
+        this.catalogNote.set('');
         this.catalog.set(null);
         this.strike.set(null);
         this.expiry.set('');
       }),
       switchMap(symbol => this.market.getCatalog(symbol).pipe(
         catchError(() => {
-          this.catalogError.set(`Unable to load contracts for ${symbol}. Please try again.`);
-          this.toast.error(this.catalogError());
+          this.catalogError.set(`Unable to load contracts for ${symbol}. Please try again.`);   // shown inline; no toast as well
           return of(null);
         }))),
       takeUntilDestroyed(this.destroyRef),
     ).subscribe(catalog => {
       this.catalogLoading.set(false);
       if (!catalog) return;
-      if (!catalog.expiries.length) this.catalogError.set(`No listed expiries are available for ${catalog.symbol}.`);
+      if (!catalog.expiries.length) this.catalogNote.set(`No listed expiries are available for ${catalog.symbol}.`);   // a data condition, not a failure
       this.catalog.set(catalog);
       this.expiry.set(catalog.expiries[0] ?? '');
       if (this.segment() === 'FUT') this.expiry.set(this.futuresExpiry(this.expiry()));

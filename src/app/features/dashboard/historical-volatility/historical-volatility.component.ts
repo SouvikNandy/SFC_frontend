@@ -3,7 +3,6 @@ import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angula
 import { Subject, Subscription, catchError, finalize, of, takeUntil } from 'rxjs';
 import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
 import { DataTableColumn } from '../../../shared/components/data-table/data-table.types';
-import { ToastService } from '../../../core/services/toast.service';
 import { DefaultStock } from '../../../shared/services/constantFile';
 import { HistoricalVolatilityService } from './historical-volatility.service';
 import { formatHistoricalVolatilityDate } from './historical-volatility-date.util';
@@ -22,7 +21,6 @@ import { LiveDataAccessService } from '../live-data/live-data-access.service';
 })
 export class HistoricalVolatilityComponent implements OnInit, OnDestroy {
     private readonly volatility = inject(HistoricalVolatilityService);
-    private readonly toast = inject(ToastService);
     private readonly changeDetector = inject(ChangeDetectorRef);
     private readonly route = inject(ActivatedRoute);
     private readonly liveAccess = inject(LiveDataAccessService);
@@ -50,6 +48,10 @@ export class HistoricalVolatilityComponent implements OnInit, OnDestroy {
     error = '';
     chartTooltip: { index: number; left: number; top: number } | null = null;
     symbolsLoading = true;
+    /** The symbol list could not be loaded: a failure that leaves nothing to choose from (inline error with Retry, no toast). */
+    symbolsError = '';
+    /** No historical volatility exists for the symbol and date: a data condition (neutral note), not an error. */
+    dataNote = '';
     calculating = false;
     suggestionsOpen = false;
     private symbolsRequested = false;
@@ -112,6 +114,7 @@ export class HistoricalVolatilityComponent implements OnInit, OnDestroy {
         this.rows = [];
         this.chart = this.buildChart();
         this.error = '';
+        this.dataNote = '';
     }
 
     onDateChange(): void {
@@ -127,6 +130,7 @@ export class HistoricalVolatilityComponent implements OnInit, OnDestroy {
 
     calculate(): void {
         this.error = '';
+        this.dataNote = '';
         this.form.markAllAsTouched();
         const symbol = this.symbolControl.value.trim();
         const date = formatHistoricalVolatilityDate(this.dateControl.value);
@@ -138,8 +142,7 @@ export class HistoricalVolatilityComponent implements OnInit, OnDestroy {
         this.calculation = this.volatility.calculate({ symbol, date }).pipe(
             takeUntil(this.destroy$),
             catchError(() => {
-                this.error = 'Unable to calculate historical volatility. Please try again.';
-                this.toast.error(this.error);
+                this.error = 'Unable to calculate historical volatility.';   // shown with Retry; no toast as well
                 return of([] as HistoricalVolatilityApiRow[]);
             }),
             finalize(() => {
@@ -148,8 +151,7 @@ export class HistoricalVolatilityComponent implements OnInit, OnDestroy {
             })
         ).subscribe(series => {
             if (!series.length) {
-                this.error = 'No historical volatility data is available for the selected symbol and date.';
-                this.toast.error(this.error);
+                this.dataNote = 'No historical volatility data is available for the selected symbol and date.';
                 return;
             }
             this.series = series;
@@ -172,13 +174,19 @@ export class HistoricalVolatilityComponent implements OnInit, OnDestroy {
         if (this.symbols.some(option => option === symbol) && date && !this.calculating) this.calculate();
     }
 
+    /** Asks again for the symbol list after a failure. */
+    retrySymbols(): void {
+        this.loadSymbols();
+    }
+
     private loadSymbols(): void {
         this.symbolsRequested = true;
+        this.symbolsLoading = true;
+        this.symbolsError = '';
         this.volatility.getSymbols().pipe(
             takeUntil(this.destroy$),
             catchError(() => {
-                this.error = 'Unable to load symbols. Please refresh and try again.';
-                this.toast.error(this.error);
+                this.symbolsError = 'Unable to load the symbol list.';
                 return of([] as string[]);
             }),
             finalize(() => {

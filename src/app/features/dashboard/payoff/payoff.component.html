@@ -242,6 +242,7 @@
                 }
                 <span class="field-hint">{{ symbolsLoading() ? 'Loading symbol list…' : marketLoading() ? 'Loading
                     payoff data…' : '' }}</span>
+                @if (symbolsError()) { <p class="inline-error" role="alert">{{ symbolsError() }} <button type="button" class="inline-retry" (click)="retrySymbols()">Retry</button></p> }
             </div>
             }
             <div class="field-block">
@@ -285,6 +286,8 @@
             }
             @if (expiryPill(); as pill) { <span class="pill" [class.calendar]="pill.calendar">{{ pill.text }}</span> }
         </div>
+        @if (marketError()) { <p class="inline-error" role="alert">{{ marketError() }} <button type="button" class="inline-retry" (click)="retryMarketData()">Retry</button></p> }
+        @if (marketNote()) { <p class="inline-note" role="status">{{ marketNote() }}</p> }
         @if (validationError()) { <p class="input-error" role="alert">{{ validationError() }}</p> }
         }
     </div>

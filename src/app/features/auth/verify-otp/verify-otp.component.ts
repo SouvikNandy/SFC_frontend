@@ -4,7 +4,6 @@ import { Router, RouterLink } from '@angular/router';
 
 import { AuthService } from '../../../core/services/auth.service';
 import { DEFAULT_OTP } from '../../../core/models/auth.model';
-import { ToastService } from '../../../core/services/toast.service';
 
 @Component({
   selector: 'app-verify-otp',
@@ -17,7 +16,6 @@ import { ToastService } from '../../../core/services/toast.service';
 export class VerifyOtpComponent {
   private readonly router = inject(Router);
   private readonly authService = inject(AuthService);
-  private readonly toast = inject(ToastService);
 
   readonly registrationContext = this.authService.getRegistrationContext();
   readonly registerEmail = this.registrationContext?.email ?? 'your email';
@@ -63,7 +61,7 @@ export class VerifyOtpComponent {
 
     this.authService.verifyOtp({ phone: this.registeredPhone, otp }).subscribe({
       next: () => { this.isSubmitting.set(false); this.isSuccess.set(true); void this.router.navigateByUrl(this.authService.isAuthenticated() ? '/' : '/login'); },
-      error: () => { this.isSubmitting.set(false); this.otpError.set('Unable to verify the OTP. Please try again.'); this.toast.error('Unable to verify the OTP. Please try again.'); }
+      error: () => { this.isSubmitting.set(false); this.otpError.set('Unable to verify the OTP. Please try again.'); }   // shown under the OTP field; no toast as well
     });
   }
 

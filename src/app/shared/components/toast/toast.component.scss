@@ -29,6 +29,12 @@
     border-left-color: var(--red);
 }
 
+/* Information: neutral, from the existing tokens (no extra colour). */
+.toast--info {
+    border-left-color: var(--muted-2);
+    background: var(--head-bg);
+}
+
 .toast button {
     flex: 0 0 auto;
     padding: 0;

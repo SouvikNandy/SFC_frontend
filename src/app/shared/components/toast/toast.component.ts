@@ -5,9 +5,11 @@ import { ToastService } from '../../../core/services/toast.service';
     selector: 'app-toast',
     standalone: true,
     template: `
-        <div class="toast-stack" aria-live="polite" aria-atomic="true">
+        <!-- Each toast announces itself: an error as an alert (assertive), success and info as a status (polite). -->
+        <div class="toast-stack">
             @for (toast of toastService.messages(); track toast.id) {
-                <div class="toast" [class.toast--error]="toast.type === 'error'" [class.toast--success]="toast.type === 'success'" role="status">
+                <div class="toast" [class.toast--error]="toast.type === 'error'" [class.toast--success]="toast.type === 'success'"
+                    [class.toast--info]="toast.type === 'info'" [attr.role]="toast.type === 'error' ? 'alert' : 'status'" aria-atomic="true">
                     <span>{{ toast.message }}</span>
                     <button type="button" aria-label="Dismiss notification" (click)="toastService.dismiss(toast.id)">×</button>
                 </div>

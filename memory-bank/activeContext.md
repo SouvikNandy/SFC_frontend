@@ -18,7 +18,11 @@ Client feedback round (QuantSFC_Change_Instructions.pdf): C1 EOD Close, C2 EOD C
 
 **Decisions (recent)**:
 
-- Bug-closure review (2026-11-03, uncommitted): stale-state and dropdown fixes on Greeks, IV, Probability and Options Chain plus the Tabler icon CDN (see progress.md). Greeks/Probability editable EOD day count left as is pending PO (it is the existing expiry behaviour Raja asked to keep).
+- Notification UX (2026-11-05, user decisions): ToastService gains info() (neutral, existing tokens), errors 7 s with role="alert", duplicates suppressed; failures that block the screen are inline errors with Retry and no toast (symbol list on all 8 tools); data conditions are neutral notes; replaced user picks raise an info toast, routine updates stay silent; Multi-Leg fallback note removed; CSV export success toast kept. Rules: docs/notification-guidelines.md.
+
+- Multi-Leg expiry dropdown (2026-11-05, user decisions): only listed expiries; manual picks kept while listed, else nearest on or after To, else latest within From..To, never before From, else cleared with an empty state; untouched legs keep following the nearest on or after To; dd_expiry failure keeps selections with Retry and requests nothing; unlisted picked strikes reset to ATM; invalid Custom dates disable expiry selection without touching the dates.
+
+- Bug-closure review (2026-11-03, commit 2add6b9): stale-state and dropdown fixes on Greeks, IV, Probability and Options Chain plus the Tabler icon CDN (see progress.md). Greeks/Probability editable EOD day count left as is pending PO (it is the existing expiry behaviour Raja asked to keep).
 
 - EOD valuation date (2026-11-03, Raja): in EOD mode days to expiry count from the last BhavCopy trade date (`dd_symbol_details.trade_date`, `eodValuationDate`), not today; Custom/Live keep today IST (Payoff Custom keeps the loaded symbol's trade date). Supersedes Change List item 2. No expiry selectors on Greeks/Probability (Raja). `/tools/options-chain` returns no trade date, and `xx_close.trade_date` is not cross-checked against it (open).
 

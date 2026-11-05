@@ -2,7 +2,6 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnIni
 import { CommonModule } from '@angular/common';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { EMPTY, Subject, catchError, combineLatest, finalize, of, switchMap, takeUntil, tap } from 'rxjs';
-import { ToastService } from '../../../core/services/toast.service';
 import { DefaultStock } from '../../../shared/services/constantFile';
 import { formatDisplayDate } from '../../../shared/utils/date-format';
 import { daysToExpiry, eodValuationDate, expiryNote } from '../../../shared/utils/expiry';
@@ -30,7 +29,6 @@ import { LiveDataAccessService } from '../live-data/live-data-access.service';
 })
 export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
     private readonly volatility = inject(ImpliedVolatilityService);
-    private readonly toast = inject(ToastService);
     private readonly changeDetector = inject(ChangeDetectorRef);
     private readonly route = inject(ActivatedRoute);
     private readonly liveAccess = inject(LiveDataAccessService);
@@ -64,6 +62,8 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
     highlightedSymbolIndex = -1;
     suggestionsOpen = false;
     symbolsLoading = true;
+    /** The symbol list could not be loaded: a failure that leaves nothing to choose from (inline error with Retry, no toast). */
+    symbolsError = '';
     detailsLoading = false;
     optionType: ImpliedVolatilityOptionType = 'call';
     priceSource: ImpliedVolatilityPriceSource = 'auto';
@@ -275,12 +275,19 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
     residualHint(): string { return this.result?.residual === undefined ? '' : `Residual ${this.result.residual.toExponential(2)}`; }
     vegaHint(): string { return this.result?.vega === undefined ? '' : `IV move per ₹0.05 tick · vega ${(this.result.vega / 100).toFixed(3)}`; }
 
+    /** Asks again for the symbol list after a failure. */
+    retrySymbols(): void {
+        this.loadSymbols();
+    }
+
     private loadSymbols(): void {
         this.symbolsRequested = true;
+        this.symbolsLoading = true;
+        this.symbolsError = '';
         this.volatility.getSymbols().pipe(
             takeUntil(this.destroy$),
             catchError(() => {
-                this.toast.error('Unable to load symbols. Please refresh and try again.');
+                this.symbolsError = 'Unable to load the symbol list.';
                 return of([] as string[]);
             }),
             finalize(() => {
@@ -320,8 +327,7 @@ export class ImpliedVolatilityComponent implements OnInit, OnDestroy {
                 }),
                 catchError(() => {
                     this.detailsLoading = false;
-                    this.error = 'Unable to load symbol details. Please try again.';
-                    this.toast.error(this.error);
+                    this.error = 'Unable to load symbol details. Please try again.';   // shown inline; no toast as well
                     return EMPTY;
                 })
             ) : EMPTY)

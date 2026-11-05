@@ -104,6 +104,7 @@
           </button>
         </div>
         <span *ngIf="symbolsLoading" class="field-status">Loading symbol list...</span>
+        <p class="inline-error" role="alert" *ngIf="symbolsError">{{ symbolsError }} <button type="button" class="inline-retry" (click)="retrySymbols()">Retry</button></p>
         <span *ngIf="symbolDetailsLoading" class="field-status">Loading symbol details...</span>
         <span
           *ngIf="form.get('symbol')?.touched && form.get('symbol')?.invalid && !symbolsLoading"

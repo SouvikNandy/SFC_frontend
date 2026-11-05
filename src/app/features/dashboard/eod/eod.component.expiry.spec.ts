@@ -20,6 +20,7 @@ describe('EodComponent expiry list (selected dates, not today)', () => {
     let calls: DdExpiryRequest[];
     let expiryFor: (req: DdExpiryRequest) => Observable<DdExpiryResponse>;
     const toastError = vi.fn();
+    const toastInfo = vi.fn();
     const getEodChart = vi.fn((_: unknown) => of({ success: true, data: [] }));
     const getEod = vi.fn((_: EodRequest) => of({ success: true, data: { results: [row], page: 1, has_next: false, has_previous: false } }));
     const reply = (dates: string[]) => (req: DdExpiryRequest) => of({ success: true, data: { symbol: req.symbol, trade_from: req.trade_from, trade_till: req.trade_till, expiry_date: dates } });
@@ -32,6 +33,7 @@ describe('EodComponent expiry list (selected dates, not today)', () => {
         getEod.mockClear();
         getEodChart.mockClear();
         toastError.mockClear();
+        toastInfo.mockClear();
         vi.useFakeTimers({ toFake: ['Date'] });
         vi.setSystemTime(new Date(2026, 9, 18, 12, 0));
         await TestBed.configureTestingModule({
@@ -39,7 +41,7 @@ describe('EodComponent expiry list (selected dates, not today)', () => {
             providers: [
                 { provide: HistoricalUnderlyingService, useValue: { resolve: () => of({ ok: true, session: '2026-10-16', underlying: 22630, strikes: [22600], atm: 22600 }) } },
                 { provide: ExpiryStrikesService, useValue: { resolve: () => of({ ok: true, strikes: [22600] }) } },
-                { provide: ToastService, useValue: { error: toastError, success: vi.fn(), info: vi.fn() } },
+                { provide: ToastService, useValue: { error: toastError, success: vi.fn(), info: toastInfo } },
                 {
                     provide: EodService,
                     useValue: {
@@ -194,17 +196,26 @@ describe('EodComponent expiry list (selected dates, not today)', () => {
         expect(toastError).not.toHaveBeenCalled();
     });
 
-    it('any other failure (including another 422) is an error: note and toast, no invented dates', async () => {
+    it('any other failure (including another 422) is an error shown once, inline with Retry (no toast as well), no invented dates', async () => {
         await create();
+        component.onInstrument('CE');
         expiryFor = () => throwError(() => new HttpErrorResponse({ status: 422, error: { errors: { trade_from: ['Invalid.'] } } }));
         await setRange('2026-01-01', '2026-01-31');
         expect(component.expiryOptions).toEqual([]);
-        expect(component.expiryNote).toBe('Unable to load expiries for these dates.');
-        expect(toastError).toHaveBeenCalled();
+        expect(component.expiryError).toBe('Unable to load expiries for these dates.');
+        expect(component.expiryNote).toBe('');
+        const error = Array.from(host.querySelectorAll('.range-error')).find(el => el.textContent?.includes('Unable to load expiries'));
+        expect(error?.getAttribute('role')).toBe('alert');
+        expect(toastError).not.toHaveBeenCalled();
         expiryFor = () => throwError(() => new HttpErrorResponse({ status: 500 }));
         component.onCustomTillChange('2026-01-30');
         await settle();
-        expect(component.expiryNote).toBe('Unable to load expiries for these dates.');
+        expect(component.expiryError).toBe('Unable to load expiries for these dates.');
+        expiryFor = reply(['2026-01-27']);
+        (error?.querySelector('.inline-retry') as HTMLButtonElement | null ?? host.querySelector<HTMLButtonElement>('.range-error .inline-retry'))!.click();
+        await settle();
+        expect(component.expiryError).toBe('');
+        expect(component.expiryOptions).toEqual(['2026-01-27']);
     });
 
     it('an empty or malformed response is safe', async () => {
@@ -337,7 +348,7 @@ describe('EodComponent expiry list (selected dates, not today)', () => {
             await settle();
             expect(getEod.mock.calls.every(call => call[0].expiry === undefined)).toBe(true);
             expect(component.loading).toBe(false);
-            expect(component.expiryNote).toBe('Unable to load expiries for these dates.');
+            expect(component.expiryError).toBe('Unable to load expiries for these dates.');
         });
 
         it('dates that become invalid while the list loads do not leave the table loading', async () => {
@@ -395,14 +406,106 @@ describe('EodComponent expiry list (selected dates, not today)', () => {
             expect(select.disabled).toBe(false);
         });
 
-        it('a failed list removes the spinner and keeps the note and toast', async () => {
+        it('a failed list removes the spinner and keeps the error visible, without a duplicate toast', async () => {
             await create();
             component.onInstrument('CE');
             expiryFor = () => throwError(() => new HttpErrorResponse({ status: 500 }));
             await setRange('2026-01-01', '2026-01-31');
             expect(host.querySelector('.select-spinner')).toBeNull();
             expect(host.textContent).toContain('Unable to load expiries for these dates.');
-            expect(toastError).toHaveBeenCalled();
+            expect(toastError).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('notifications', () => {
+        const WITHOUT_13 = JAN_2026.filter(date => date !== '2026-01-13');
+
+        it('a user-picked expiry that new dates no longer list is replaced and announced once as an info toast', async () => {
+            await create();
+            component.onInstrument('CE');
+            await setRange('2026-01-01', '2026-01-31');
+            component.onExpiry('2026-01-13');                                   // the user's choice
+            await settle();
+            toastInfo.mockClear();
+            expiryFor = reply(WITHOUT_13);
+            component.onCustomFromChange('2026-01-02');
+            await settle();
+            expect(component.expiry).not.toBe('2026-01-13');
+            expect(toastInfo).toHaveBeenCalledTimes(1);
+            expect(toastInfo.mock.calls[0][0]).toBe(`The 2026-01-13 expiry is not listed for these dates, so ${component.expiry} is selected.`);
+            expect(toastError).not.toHaveBeenCalled();
+            component.onCustomFromChange('2026-01-03');                          // the replacement is a default now: a later change is silent
+            await settle();
+            expect(toastInfo).toHaveBeenCalledTimes(1);
+        });
+
+        it('a default expiry following the dates, or a picked one that is still listed, raises no toast', async () => {
+            await create();
+            component.onInstrument('CE');
+            toastInfo.mockClear();
+            await setRange('2026-01-01', '2026-01-31');
+            component.onCustomFromChange('2026-01-02');
+            await settle();
+            component.onExpiry('2026-01-13');
+            await settle();
+            component.onCustomFromChange('2026-01-05');
+            await settle();
+            expect(component.expiry).toBe('2026-01-13');
+            expect(toastInfo).not.toHaveBeenCalled();
+            expect(toastError).not.toHaveBeenCalled();
+        });
+
+        it('a failed symbol list stays on screen as an error with Retry, not a toast; Retry loads it', async () => {
+            await create();
+            const svc = TestBed.inject(EodService) as unknown as { getSymbols: () => Observable<string[]> };
+            svc.getSymbols = () => throwError(() => new Error('boom'));
+            component.loadSymbols();
+            await settle();
+            const error = host.querySelector('.inline-error');
+            expect(error?.textContent).toContain('Unable to load the symbol list.');
+            expect(error?.getAttribute('role')).toBe('alert');
+            expect(toastError).not.toHaveBeenCalled();
+            svc.getSymbols = () => of(['NIFTY', 'BANKNIFTY']);
+            error!.querySelector<HTMLButtonElement>('.inline-retry')!.click();
+            await settle();
+            expect(component.symbolsError).toBe('');
+            expect(host.querySelector('.inline-error')).toBeNull();
+        });
+
+        it('a failed data load is an error above the table with Retry, in every range mode, without a toast', async () => {
+            await create();
+            getEod.mockImplementationOnce(() => throwError(() => new HttpErrorResponse({ status: 500 })));
+            component.onRange('1M');
+            await settle();
+            const error = Array.from(host.querySelectorAll('.inline-error')).find(el => el.textContent?.includes('Unable to load the EOD data.'));
+            expect(error?.getAttribute('role')).toBe('alert');                   // a preset too, not only Custom
+            expect(toastError).not.toHaveBeenCalled();
+            getEod.mockClear();
+            error!.querySelector<HTMLButtonElement>('.inline-retry')!.click();
+            await settle();
+            expect(getEod).toHaveBeenCalled();
+            expect(component.loadError).toBe('');
+        });
+
+        it('a list with no expiries is a neutral note, not an error', async () => {
+            await create();
+            component.onInstrument('CE');
+            expiryFor = noData;
+            await setRange('2026-01-01', '2026-01-31');
+            const note = Array.from(host.querySelectorAll('.range-info')).find(el => el.textContent?.includes('No expiries are listed for these dates.'));
+            expect(note?.getAttribute('role')).toBe('status');
+            expect(Array.from(host.querySelectorAll('.range-error')).some(el => el.textContent?.includes('No expiries'))).toBe(false);
+        });
+
+        it('asking to download with no data is information, not an error', async () => {
+            await create();
+            getEod.mockImplementation(() => of({ success: true, data: { results: [], page: 1, has_next: false, has_previous: false } }));
+            component.onRange('1M');
+            await settle();
+            component.downloadCsv();
+            expect(toastInfo).toHaveBeenCalledWith('There is no EOD data to download for these filters.');
+            expect(toastError).not.toHaveBeenCalled();
+            getEod.mockImplementation((_: EodRequest) => of({ success: true, data: { results: [row], page: 1, has_next: false, has_previous: false } }));
         });
     });
 });

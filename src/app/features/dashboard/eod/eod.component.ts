@@ -68,12 +68,20 @@ export class EodComponent implements OnInit, OnDestroy {
   /** Strikes listed for the selected expiry (`dd_strikes`); empty until they have loaded. */
   strikeOptions: number[] = [];
   strikesLoading = false;
-  /** Why the strike list is empty or could not be loaded; shown under the Strike control. */
+  /** The expiry lists no strikes: a data condition, shown as neutral information under the Strike control. */
   strikeNote = '';
-  /** Why no default strike could be set from the To date's closing price; empty when it could. */
+  /** The strike list could not be loaded: a failure, shown as an error with Retry under the Strike control (no toast as well). */
+  strikeError = '';
+  /** The To date's closing price could not be loaded, so no default strike was set: a failure (error, Retry, no toast). */
   underlyingNote = '';
-  /** The closing price is not in the backend's history for the To date: information (no error, no toast); the strike is chosen by hand. */
+  /** No closing price exists for the To date (history gap, or no trading session on or before it): information; the strike is chosen by hand. */
   underlyingInfo = '';
+  /** The symbol list could not be loaded: a failure that leaves nothing to choose from (error, Retry). */
+  symbolsError = '';
+  /** The EOD data or metadata request failed: a failure shown above the table with Retry (date validation stays in `error`). */
+  loadError = '';
+  /** The user chose the expiry: when new dates no longer list it, the replacement is announced (an automatic default is not). */
+  private expiryPicked = false;
   /** True once the strikes of the selected expiry have loaded, so a strike missing from them can be flagged. */
   strikesLoaded = false;
   /** The underlying close of the To date (or the previous session) is being fetched. */
@@ -91,8 +99,10 @@ export class EodComponent implements OnInit, OnDestroy {
   /** Every expiry `dd_expiry` returns for the selected dates, including those after To (see selectExpiries); never derived from today's date. */
   expiryOptions: string[] = [];
   expiryLoading = false;
-  /** Why the expiry list is empty or could not be loaded; shown under the Expiry control. */
+  /** No expiries are listed for the dates: a data condition, shown as neutral information under the Expiry control. */
   expiryNote = '';
+  /** The expiry list could not be loaded: a failure, shown as an error with Retry under the Expiry control (no toast as well). */
+  expiryError = '';
   /** Symbol and dates the current expiry list was asked for; an answer for any other key is stale. */
   private expiryKey = '';
   ddGreeksData: DdGreeksData | null = null;
@@ -189,13 +199,16 @@ export class EodComponent implements OnInit, OnDestroy {
     this.refresh$.next({ loadMetadata: true });
   }
 
-  private loadSymbols(): void {
+  /** The symbol list; a failure stays on screen as an error with Retry. */
+  loadSymbols(): void {
+    this.symbolsLoading = true;
+    this.symbolsError = '';
     this.svc
       .getSymbols()
       .pipe(
         takeUntil(this.destroy$),
         catchError(() => {
-          this.toast.error('Unable to load symbols. Please refresh and try again.');
+          this.symbolsError = 'Unable to load the symbol list.';
           return of([] as string[]);
         }),
         finalize(() => {
@@ -219,6 +232,7 @@ export class EodComponent implements OnInit, OnDestroy {
           this.isMetadataLoading = loadMetadata;
           this.isEodLoading = !loadMetadata;
           this.error = '';
+          this.loadError = '';
           if (loadMetadata) {
             this.cancelChart();
             this.setRows([]);
@@ -227,8 +241,10 @@ export class EodComponent implements OnInit, OnDestroy {
             this.strikeOptions = [];
             this.strikePicked = false;
             this.strikeNote = '';
+            this.strikeError = '';
             this.underlyingNote = '';
             this.underlyingInfo = '';
+            this.expiryPicked = false;
             this.strikesLoaded = false;
             this.underlyingClose = null;
             this.underlyingSession = '';
@@ -273,8 +289,7 @@ export class EodComponent implements OnInit, OnDestroy {
               this.isMetadataLoading = false;
               this.isEodLoading = false;
               this.loading = false;
-              this.error = loadMetadata ? 'Failed to load EOD metadata' : 'Failed to load EOD data';
-              this.toast.error(this.error);
+              this.loadError = loadMetadata ? 'Unable to load the EOD metadata.' : 'Unable to load the EOD data.';
               return EMPTY;
             }),
           );
@@ -359,6 +374,29 @@ export class EodComponent implements OnInit, OnDestroy {
     if (!force && key === this.chartKey) return;
     this.chartKey = key;
     this.chartRequest$.next(body);
+  }
+
+  /** Asks again for the expiry list of the current dates after a failure. */
+  retryExpiries(): void {
+    this.expiryKey = '';
+    this.syncExpiries();
+  }
+
+  /** Asks again for the strikes of the selected expiry after a failure. */
+  retryStrikes(): void {
+    this.strikesKey = '';
+    this.syncStrikes();
+  }
+
+  /** Asks again for the closing price of the To date after a failure. */
+  retryUnderlying(): void {
+    this.underlyingKey = '';
+    this.syncUnderlying();
+  }
+
+  /** Requests the table (and chart) again after a load failure. */
+  retryLoad(): void {
+    this.resetPageAndRefresh();
   }
 
   retryChart(): void {
@@ -497,6 +535,7 @@ export class EodComponent implements OnInit, OnDestroy {
     this.expiryKey = key;
     this.expiryLoading = true;
     this.expiryNote = '';
+    this.expiryError = '';
     this.expiryRequest$.next({ symbol: this.symbol, ...window });
     this.changeDetector.markForCheck();
   }
@@ -520,12 +559,17 @@ export class EodComponent implements OnInit, OnDestroy {
         const { from, till } = result.request;
         const previous = this.expiry;
         this.expiryOptions = result.failed ? [] : selectExpiries(Array.isArray(result.dates) ? result.dates : []);
-        this.expiryNote = result.failed
-          ? 'Unable to load expiries for these dates.'
-          : this.expiryOptions.length ? '' : 'No expiries are listed for these dates.';
-        if (result.failed) this.toast.error(this.expiryNote);
+        this.expiryError = result.failed ? 'Unable to load expiries for these dates.' : '';
+        this.expiryNote = !result.failed && !this.expiryOptions.length ? 'No expiries are listed for these dates.' : '';
         // Keep the user's expiry when it is still offered; otherwise the most recent one inside the dates.
         this.expiry = previous && this.expiryOptions.includes(previous) ? previous : defaultExpiry(this.expiryOptions, from, till);
+        // A replaced expiry the user chose is news (info toast); a default following the dates is routine and silent.
+        if (this.expiryPicked && previous && this.expiry !== previous && !result.failed) {
+          this.toast.info(this.expiry
+            ? `The ${previous} expiry is not listed for these dates, so ${this.expiry} is selected.`
+            : `The ${previous} expiry is not listed for these dates.`);
+          this.expiryPicked = false;
+        }
         // The table and chart were held back while the list loaded: send them now, with the expiry that is valid for these dates.
         if (this.instrument !== 'FUT') this.resetPageAndRefresh();
         this.syncStrikes();
@@ -571,6 +615,7 @@ export class EodComponent implements OnInit, OnDestroy {
     this.strikeOptions = [];
     this.strikesLoaded = false;
     this.strikeNote = '';
+    this.strikeError = '';
     this.strikesLoading = true;
     this.strikesRequest$.next({ symbol: this.symbol, expiry: this.expiry });
     this.applyDefaultStrike();
@@ -594,13 +639,11 @@ export class EodComponent implements OnInit, OnDestroy {
       .subscribe((answer) => {
         if (!answer || answer.key !== this.strikesKey) return;
         this.strikesLoading = false;
-        const { result, expiry } = answer;
+        const { result } = answer;
         this.strikeOptions = result.ok ? result.strikes : [];
         this.strikesLoaded = result.ok;
-        this.strikeNote = result.ok ? '' : result.reason === 'none'
-          ? 'No strikes are listed for this expiry.'
-          : 'Unable to load the strikes for this expiry.';
-        if (!result.ok && result.reason === 'unavailable') this.toast.error(`Unable to load the strikes for the ${expiry} expiry.`);
+        this.strikeNote = !result.ok && result.reason === 'none' ? 'No strikes are listed for this expiry.' : '';
+        this.strikeError = !result.ok && result.reason === 'unavailable' ? 'Unable to load the strikes for this expiry.' : '';
         this.applyDefaultStrike();
         this.changeDetector.markForCheck();
       });
@@ -624,11 +667,11 @@ export class EodComponent implements OnInit, OnDestroy {
           this.underlyingSession = '';
           if (answer.result.reason === 'no-data') {
             this.underlyingInfo = UNDERLYING_UNAVAILABLE_MESSAGE;
+          } else if (answer.result.reason === 'no-session') {
+            // A data condition (no session to price from): guidance, not an error.
+            this.underlyingInfo = `No trading session was found on or before ${answer.till}, so the ATM strike could not be set. Select a strike.`;
           } else {
-            this.underlyingNote = answer.result.reason === 'no-session'
-              ? `No trading session was found on or before ${answer.till}, so the ATM strike could not be set. Select a strike.`
-              : `Unable to load the closing price for ${answer.till}, so the ATM strike could not be set. Select a strike.`;
-            this.toast.error(this.underlyingNote);
+            this.underlyingNote = `Unable to load the closing price for ${answer.till}, so the ATM strike could not be set. Select a strike or try again.`;
           }
         }
         this.applyDefaultStrike();
@@ -766,6 +809,7 @@ export class EodComponent implements OnInit, OnDestroy {
   }
   onExpiry(e: string) {
     this.expiry = e;
+    this.expiryPicked = true;
     this.resetPageAndRefresh();
   }
   onRange(r: '1W' | '1M' | '3M' | 'Custom') {
@@ -943,7 +987,7 @@ export class EodComponent implements OnInit, OnDestroy {
 
   downloadCsv() {
     if (!this.rows || this.rows.length === 0) {
-      this.toast.error('There is no EOD data available to download.');
+      this.toast.info('There is no EOD data to download for these filters.');   // nothing failed: there is simply no data
       return;
     }
     try {

@@ -74,6 +74,22 @@ export function resolveRange(preset: RangePreset, today: string, customFrom: str
 }
 
 /**
+ * The expiry a leg gets from a VERIFIED expiry list (the `dd_expiry` answer for `range`, plus the upcoming expiries):
+ *  - a hand-picked expiry that is still listed is kept;
+ *  - otherwise (an untouched leg, or a pick that is no longer listed) the nearest listed expiry on or after To;
+ *  - with none on or after To, the latest listed expiry within From..To;
+ *  - never one before From; null when no valid expiry exists (the leg is then cleared).
+ */
+export function reconcileLegExpiry(current: string, picked: boolean, listed: readonly string[], range: DateRange): string | null {
+    const valid = [...new Set(listed.filter(expiry => isIsoDate(expiry) && expiry >= range.from))].sort();
+    if (picked && valid.includes(current)) return current;
+    const forward = valid.find(expiry => expiry >= range.till);
+    if (forward) return forward;
+    const inRange = valid.filter(expiry => expiry <= range.till);
+    return inRange.length ? inRange[inRange.length - 1] : null;
+}
+
+/**
  * A calculated ATM further than this many percent from the underlying close is flagged: the expiry lists too few strikes near the money
  * (far expiries are sparse). Change it here; it only drives the warning, never the ATM or a selection.
  */

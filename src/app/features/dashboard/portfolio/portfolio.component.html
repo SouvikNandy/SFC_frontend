@@ -105,6 +105,7 @@
             </div>
         </div>
         @if (catalogError()) { <p class="input-error" role="alert">{{ catalogError() }}</p> }
+        @if (catalogNote()) { <p class="inline-note" role="status">{{ catalogNote() }}</p> }
 
         <div class="form-grid basket">
             <div class="field">

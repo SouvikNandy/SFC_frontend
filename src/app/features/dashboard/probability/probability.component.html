@@ -38,7 +38,8 @@
                         type="button" role="option" [class.highlighted]="index === highlightedSymbolIndex"
                         (mousedown)="$event.preventDefault()" (click)="selectSymbol(symbol)">{{ symbol }}</button> }
                     @empty { <div class="combo-empty">No script matches</div> }</div> }
-                @if (symbolsLoading) { <span class="field-hint">Loading symbol list…</span> } @if (detailsLoading) {
+                @if (symbolsLoading) { <span class="field-hint">Loading symbol list…</span> }
+                @if (symbolsError) { <p class="inline-error" role="alert">{{ symbolsError }} <button type="button" class="inline-retry" (click)="retrySymbols()">Retry</button></p> } @if (detailsLoading) {
                 <span class="field-hint">Loading symbol details…</span> }
             </div>
             <div class="badge">{{ sourceNote || 'Values below refresh from your selection' }}</div>

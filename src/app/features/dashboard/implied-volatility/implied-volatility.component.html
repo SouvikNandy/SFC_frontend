@@ -57,6 +57,7 @@
                     </div>
                     }
                     @if (symbolsLoading) { <span class="field-hint">Loading symbol list…</span> }
+                    @if (symbolsError) { <p class="inline-error" role="alert">{{ symbolsError }} <button type="button" class="inline-retry" (click)="retrySymbols()">Retry</button></p> }
                     @if (detailsLoading) { <span class="field-hint">Loading symbol details…</span> }
                 </div>
                 }

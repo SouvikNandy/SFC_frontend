@@ -30,6 +30,7 @@ const INDEX_CONTEXT: PricingContext = { ok: true, kind: 'index', underlying: 226
 
 describe('OptionsChainComponent chain loading', () => {
   let component: OptionsChainComponent;
+  let fixture: ReturnType<typeof TestBed.createComponent<OptionsChainComponent>>;
   let context: PricingContext;
   let resolveCalls: Array<{ symbol: string; expiry: string; spot: number | null | undefined }>;
   let chainCalls: Subject<OptionsChainViewModel>[];
@@ -75,7 +76,7 @@ describe('OptionsChainComponent chain loading', () => {
         { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({}) } } },
       ],
     }).compileComponents();
-    const fixture = TestBed.createComponent(OptionsChainComponent);
+    fixture = TestBed.createComponent(OptionsChainComponent);
     component = fixture.componentInstance;
     fixture.detectChanges(); // loads symbols, selects NIFTY, loads details, requests the first chain
   });
@@ -91,12 +92,18 @@ describe('OptionsChainComponent chain loading', () => {
     expect(component.error).toBe('');
   });
 
-  it('clears the loading state and reports an error when the chain request fails', () => {
+  it('clears the loading state and reports an error when the chain request fails: once, inline as an alert with Retry', () => {
     chainCalls[0].error(new Error('500'));
     expect(component.loading).toBe(false);
     expect(component.error).not.toBe('');
-    expect(toastError).toHaveBeenCalledTimes(1);
+    expect(toastError).not.toHaveBeenCalled();                                   // not repeated as a toast
     expect(component.rows).toEqual([]);
+    fixture.detectChanges();
+    const error = (fixture.nativeElement as HTMLElement).querySelector('.inline-error');
+    expect(error?.getAttribute('role')).toBe('alert');
+    expect(error?.textContent).toContain('Unable to load the option chain.');
+    error!.querySelector<HTMLButtonElement>('.inline-retry')!.click();
+    expect(chainCalls.length).toBe(2);                                          // Retry asks for the chain again
   });
 
   it('keeps the latest expiry when an earlier chain response arrives late', () => {

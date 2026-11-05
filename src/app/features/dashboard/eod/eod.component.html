@@ -80,7 +80,8 @@
           <span class="select-spinner" *ngIf="strikeBusy" aria-hidden="true"></span>
           <span class="visually-hidden" *ngIf="strikesLoading || underlyingLoading" role="status">Loading strikes for this expiry…</span>
         </div>
-        <div class="range-error" *ngIf="!strikesLoading && !underlyingLoading && strikeNote" role="status">{{ strikeNote }}</div>
+        <div class="range-error" *ngIf="!strikesLoading && !underlyingLoading && strikeError" role="alert">{{ strikeError }} <button type="button" class="inline-retry" (click)="retryStrikes()">Retry</button></div>
+        <div class="range-info" *ngIf="!strikesLoading && !underlyingLoading && strikeNote" role="status">{{ strikeNote }}</div>
       </div>
 
       <div class="control" *ngIf="instrument !== 'FUT'">
@@ -99,7 +100,8 @@
           <span class="select-spinner" *ngIf="expiryBusy" aria-hidden="true"></span>
           <span class="visually-hidden" *ngIf="expiryLoading" role="status">Loading expiries for these dates…</span>
         </div>
-        <div class="range-error" *ngIf="!expiryLoading && expiryNote" role="status">{{ expiryNote }}</div>
+        <div class="range-error" *ngIf="!expiryLoading && expiryError" role="alert">{{ expiryError }} <button type="button" class="inline-retry" (click)="retryExpiries()">Retry</button></div>
+        <div class="range-info" *ngIf="!expiryLoading && expiryNote" role="status">{{ expiryNote }}</div>
       </div>
 
       <div class="control">
@@ -128,10 +130,13 @@
     </div>
     <!-- The slot keeps its height whether or not a message is shown, so the page does not move when the closing-price lookup answers. -->
     <div class="range-slot" *ngIf="instrument !== 'FUT'">
-      <div class="range-error" *ngIf="!strikesLoading && !underlyingLoading && underlyingNote" role="status">{{ underlyingNote }}</div>
+      <div class="range-error" *ngIf="!strikesLoading && !underlyingLoading && underlyingNote" role="alert">{{ underlyingNote }} <button type="button" class="inline-retry" (click)="retryUnderlying()">Retry</button></div>
       <div class="range-info" *ngIf="!strikesLoading && !underlyingLoading && underlyingInfo" role="status">{{ underlyingInfo }}</div>
     </div>
     <p class="range-error" role="alert" *ngIf="range === 'Custom' && error">{{ error }}</p>
+    <!-- Screen-level failures stay visible with Retry and are not repeated as toasts. -->
+    <p class="inline-error" role="alert" *ngIf="symbolsError">{{ symbolsError }} <button type="button" class="inline-retry" (click)="loadSymbols()">Retry</button></p>
+    <p class="inline-error" role="alert" *ngIf="loadError">{{ loadError }} <button type="button" class="inline-retry" (click)="retryLoad()">Retry</button></p>
   </div>
 
   <div class="card chart-card">

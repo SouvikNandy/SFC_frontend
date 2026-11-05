@@ -40,6 +40,7 @@
                 </div>
                 }
                 @if (symbolsLoading) { <span class="field-status">Loading symbol list...</span> }
+                @if (symbolsError) { <p class="inline-error" role="alert">{{ symbolsError }} <button type="button" class="inline-retry" (click)="retrySymbols()">Retry</button></p> }
                 @if (symbolControl.touched && symbolControl.invalid && !symbolsLoading) { <span
                     class="field-error">Select a symbol from the list.</span> }
             </div>
@@ -64,7 +65,10 @@
             </div>
         </div>
         @if (error) {
-        <p class="input-error" role="alert">{{ error }}</p>
+        <p class="inline-error" role="alert">{{ error }} <button type="button" class="inline-retry" (click)="calculate()">Retry</button></p>
+        }
+        @if (dataNote) {
+        <p class="inline-note" role="status">{{ dataNote }}</p>
         }
     </div>
 

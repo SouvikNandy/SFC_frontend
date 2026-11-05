@@ -47,6 +47,8 @@ export class GreeksComponent implements OnInit, OnDestroy {
     symbols: string[] = [];
     filteredSymbols: string[] = [];
     symbolsLoading = true;
+    /** The symbol list could not be loaded: a failure that leaves nothing to choose from (inline error with Retry, no toast). */
+    symbolsError = '';
     symbolDetailsLoading = false;
     suggestionsOpen = false;
     highlightedSymbolIndex = -1;
@@ -440,12 +442,19 @@ export class GreeksComponent implements OnInit, OnDestroy {
         }, 150);
     }
 
+    /** Asks again for the symbol list after a failure. */
+    retrySymbols(): void {
+        this.loadSymbols();
+    }
+
     private loadSymbols(): void {
         this.symbolsRequested = true;
+        this.symbolsLoading = true;
+        this.symbolsError = '';
         this.svc.getSymbols().pipe(
             takeUntil(this.destroy$),
             catchError(() => {
-                this.toast.error('Unable to load symbols. Please refresh and try again.');
+                this.symbolsError = 'Unable to load the symbol list.';
                 return EMPTY;
             }),
             finalize(() => {

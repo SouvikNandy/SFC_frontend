@@ -3,14 +3,34 @@
 Technical notes for the Multi-Leg EOD screen (`src/app/features/dashboard/multi-leg-eod`). Scope: how the default expiry and ATM strike are
 chosen, what each backend call can and cannot tell us, and the known limitation of the strike data.
 
-## Default expiry
-- Untouched legs take the **nearest listed expiry on or after the selected To date** (the To date of the range, never the system date).
-  An expiry on the To date itself counts.
-- Candidates are the expiries `POST /fo/dd_expiry` returns for the selected From and To (the backend also returns later ones, out to the far
-  future) together with the upcoming expiries from `POST /fo/dd_symbol_details`.
-- When no expiry is listed on or after the To date the legs keep their expiries and the screen says so (`forwardExpiryNote`).
-- A leg whose expiry the user chose is never replaced by a default. A leg whose expiry is before the From date is not requested (the contract
-  has no data in the range and the backend answers HTTP 422); a message explains it.
+## Expiry list and selection (all modes: 1W, 1M, 3M, Custom)
+- The dropdown offers **only the verified list** for the active dates: the expiries `POST /fo/dd_expiry` returns for the resolved From and To
+  (the presets ask for a window wider than the sessions shown: 1W from today - 15 days, 1M - 41, 3M - 108; the backend also returns later
+  expiries, out to the far future) together with the upcoming expiries from `POST /fo/dd_symbol_details`; never one before From. An expiry
+  that is not listed is never added back as an option.
+- Every time a list for the current dates arrives each leg is reconciled (`reconcileLegExpiry` in `multi-leg-eod.util.ts`):
+  1. a **hand-picked** expiry that is still listed is kept;
+  2. any other leg (untouched, or a pick that is no longer listed) takes the **nearest listed expiry on or after the selected To date**
+     (never the system date; the To date itself counts). With no expiry inside the dates this is the next one on or after From;
+  3. with none on or after To, the **latest listed expiry within From..To**;
+  4. with no valid expiry at all the leg's expiry and strike are cleared, nothing is requested and the screen shows the empty state.
+  A replaced pick follows the default from then on and the user is told by an info toast; the in-range fallback for untouched legs is
+  routine and silent (see notification-guidelines.md).
+- The date range, the preset and the From/To dates are never changed by this. (Custom keeps its own date validation: a From or To that no
+  longer fits the other date is cleared, as before.)
+- **API failure:** the legs keep their selections, the error offers Retry, the expiry dropdowns and Add leg are disabled, nothing is reconciled
+  against the upcoming-only standard list and no leg data is requested until a list for the dates arrives. `422 "No data available."` is an
+  empty (verified) range, not a failure. While the list is unverified the chart and tables say "Leg data loads once the expiry list for
+  these dates is available." instead of the empty-data messages.
+- **Invalid Custom dates:** the selections are kept, expiry selection is disabled, nothing is requested and the dates are not corrected.
+- Answers for superseded dates or symbols are dropped (request key), so a late list never reconciles the legs.
+
+## Strike of a leg
+- A strike the user picked is kept while its expiry lists it. When the expiry's list is known and does not contain it (or the expiry lists no
+  strikes) it is reset to that expiry's ATM, is no longer a pick, and an info toast says so; it is never shown as an extra option. A list that could not be loaded proves
+  nothing: the pick is kept and flagged "(could not be checked for this expiry)".
+- A leg is requested only once its expiry's strikes have answered, so leg data never uses a strike from another expiry. After a date change the
+  reload waits for the expiry list, the To-date close and the strike lists of the legs.
 
 ## ATM strike
 - ATM = the strike nearest the **underlying close of the To date** (the previous trading session when the To date is a weekend or holiday),

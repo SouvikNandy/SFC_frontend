@@ -9,7 +9,6 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EMPTY, Subject, Subscription, catchError, combineLatest, finalize, of, switchMap, takeUntil, tap } from 'rxjs';
-import { ToastService } from '../../../core/services/toast.service';
 import { GreeksCalculatorService } from '../greeks/greeks-calculator.service';
 import { GreeksSymbolDetails } from '../greeks/greeks.model';
 import { DefaultStock } from '../../../shared/services/constantFile';
@@ -145,6 +144,9 @@ interface ChartTooltipState {
                 <div class="combo-empty">No script matches</div>
               }
             </div>
+          }
+          @if (symbolsError) {
+            <p class="inline-error" role="alert">{{ symbolsError }} <button type="button" class="inline-retry" (click)="retrySymbols()">Retry</button></p>
           }
         </div>
         <div class="field-block">
@@ -303,7 +305,7 @@ interface ChartTooltipState {
         </button>
       </div>
       @if (error) {
-        <p class="input-error">{{ error }}</p>
+        <p class="inline-error" role="alert">{{ error }} <button type="button" class="inline-retry" (click)="retryChain()">Retry</button></p>
       }
       @if (loading) {
         <div class="empty chain-loading" [style.--chain-rows]="strikeFilter ? strikeFilter * 2 + 1 : 100">
@@ -481,7 +483,6 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
   private readonly api = inject(GreeksCalculatorService);
   private readonly pricing = inject(PricingContextService);
   private readonly chainApi = inject(OptionsChainService);
-  private readonly toast = inject(ToastService);
   private readonly cd = inject(ChangeDetectorRef);
   private readonly route = inject(ActivatedRoute);
   private readonly liveAccess = inject(LiveDataAccessService);
@@ -538,6 +539,8 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
   live = false;
   loading = false;
   symbolsLoading = true;
+  /** The symbol list could not be loaded: a failure that leaves nothing to choose from (inline error with Retry, no toast). */
+  symbolsError = '';
   detailsLoading = false;
   suggestionsOpen = false;
   highlightedIndex = -1;
@@ -730,8 +733,7 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
           this.rows = [];
           this.pricingContext = null;
           this.loading = false;
-          this.error = 'Unable to load the option chain. Please try again.';
-          this.toast.error(this.error);
+          this.error = 'Unable to load the option chain.';   // shown with Retry; no toast as well
           this.cd.markForCheck();
         },
       });
@@ -1063,14 +1065,27 @@ export class OptionsChainComponent implements OnInit, OnDestroy {
     const clear = (option: OptionsChainSide): OptionsChainSide => ({ ...option, iv: 0, delta: null, gamma: null, theta: null, vega: null });
     return { ...row, call: clear(row.call), put: clear(row.put) };
   }
+  /** Asks again for the symbol list after a failure. */
+  retrySymbols(): void {
+    this.loadSymbols();
+  }
+
+  /** After a failure: the symbol's details when they did not load, otherwise the chain of the selected expiry. */
+  retryChain(): void {
+    if (!this.details && this.symbol) this.selectSymbol(this.symbol);
+    else this.loadChain();
+  }
+
   private loadSymbols(): void {
     this.symbolsRequested = true;
+    this.symbolsLoading = true;
+    this.symbolsError = '';
     this.api
       .getSymbols()
       .pipe(
         takeUntil(this.destroy$),
         catchError(() => {
-          this.toast.error('Unable to load symbols. Please try again.');
+          this.symbolsError = 'Unable to load the symbol list.';
           return of([] as string[]);
         }),
         finalize(() => {

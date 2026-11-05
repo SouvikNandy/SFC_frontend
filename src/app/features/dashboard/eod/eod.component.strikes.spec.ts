@@ -189,7 +189,7 @@ describe('EodComponent strikes of the selected expiry (dd_strikes)', () => {
         expect(component.strike).toBeUndefined();
         expect(component.strikeOptions).toEqual(GRID);
         expect(host.textContent).toContain('Unable to load the closing price for 2026-01-31');
-        expect(toastError).toHaveBeenCalled();
+        expect(toastError).not.toHaveBeenCalled();                                         // shown once, inline with Retry
         expect(getEod.mock.calls.every(call => call[0].strike === undefined)).toBe(true);   // not even the current ATM was used
         component.onStrike(25200);
         await settle();
@@ -205,23 +205,32 @@ describe('EodComponent strikes of the selected expiry (dd_strikes)', () => {
         await settle();
         expect(host.textContent).toContain('No trading session was found on or before 2026-01-31');
         expect(component.strike).toBeUndefined();
+        expect(host.querySelector('.range-info')?.getAttribute('role')).toBe('status');     // a data condition: neutral, not an error
+        expect(host.querySelector('.range-error')).toBeNull();
+        expect(toastError).not.toHaveBeenCalled();
     });
 
-    it('a strike list that cannot be loaded shows an error and toast; one the backend does not list shows a note only', async () => {
+    it('a strike list that cannot be loaded is an error with Retry (no toast); one the backend does not list is a neutral note', async () => {
         await create();
         strikesFor = () => of({ ok: false, reason: 'unavailable' });
         await setRange('2026-01-01', '2026-01-31');
         component.onExpiry('2026-01-27');
         component.onInstrument('CE');
         await settle();
-        expect(host.textContent).toContain('Unable to load the strikes for this expiry.');
-        expect(toastError).toHaveBeenCalledTimes(1);
+        const error = Array.from(host.querySelectorAll('.range-error')).find(el => el.textContent?.includes('Unable to load the strikes for this expiry.'));
+        expect(error?.getAttribute('role')).toBe('alert');
+        expect(toastError).not.toHaveBeenCalled();
         expect(component.strike).toBeUndefined();
-        toastError.mockClear();
+        strikesFor = () => of({ ok: true, strikes: GRID });
+        error!.querySelector<HTMLButtonElement>('.inline-retry')!.click();
+        await settle();
+        expect(component.strikeOptions).toEqual(GRID);
+        expect(component.strikeError).toBe('');
         strikesFor = () => of({ ok: false, reason: 'none' });
         component.onExpiry('2026-01-13');
         await settle();
-        expect(host.textContent).toContain('No strikes are listed for this expiry.');
+        const note = Array.from(host.querySelectorAll('.range-info')).find(el => el.textContent?.includes('No strikes are listed for this expiry.'));
+        expect(note?.getAttribute('role')).toBe('status');
         expect(toastError).not.toHaveBeenCalled();
     });
 
@@ -419,7 +428,7 @@ describe('EodComponent strikes of the selected expiry (dd_strikes)', () => {
             expect(texts().some(text => /ATM/.test(text ?? ''))).toBe(false);
         });
 
-        it('a genuine failure is still an error line with a toast, and shows no information message', async () => {
+        it('a genuine failure is still an error line (role alert, Retry) without a duplicate toast, and shows no information message', async () => {
             await create();
             underlyingFor = () => of({ ok: false, reason: 'unavailable' });
             await setRange('2026-01-01', '2026-01-31');
@@ -427,8 +436,14 @@ describe('EodComponent strikes of the selected expiry (dd_strikes)', () => {
             component.onInstrument('CE');
             await settle();
             expect(host.querySelector('.range-error')?.textContent).toContain('Unable to load the closing price');
+            expect(host.querySelector('.range-error')?.getAttribute('role')).toBe('alert');
             expect(host.querySelector('.range-info')).toBeNull();
-            expect(toastError).toHaveBeenCalled();
+            expect(toastError).not.toHaveBeenCalled();
+            underlyingFor = () => closeOn('2026-01-30', 25310);
+            host.querySelector<HTMLButtonElement>('.range-error .inline-retry')!.click();
+            await settle();
+            expect(host.querySelector('.range-error')).toBeNull();
+            expect(component.underlyingClose).toBe(25310);
         });
 
         it('moving the To date to one with a close clears the message and brings the ATM back', async () => {

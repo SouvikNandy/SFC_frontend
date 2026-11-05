@@ -23,7 +23,6 @@ import {
 } from 'rxjs';
 import { DataTableComponent } from '../../../shared/components/data-table/data-table.component';
 import { DataTableColumn } from '../../../shared/components/data-table/data-table.types';
-import { ToastService } from '../../../core/services/toast.service';
 import { DefaultStock } from '../../../shared/services/constantFile';
 import { daysToExpiry, eodValuationDate, expiryNote } from '../../../shared/utils/expiry';
 import { atmImpliedVolatility, AtmIv } from '../../../shared/pricing/atm-iv';
@@ -59,7 +58,6 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
   private readonly pricing = inject(PricingContextService);
   /** Request for the at-the-money implied volatility of one expiry; null cancels and clears. */
   private readonly atmRequest$ = new Subject<{ symbol: string; expiry: string } | null>();
-  private readonly toast = inject(ToastService);
   private readonly changeDetector = inject(ChangeDetectorRef);
   private readonly route = inject(ActivatedRoute);
   private readonly liveAccess = inject(LiveDataAccessService);
@@ -103,6 +101,8 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
   filteredSymbols: string[] = [];
   symbolDetails: ProbabilitySymbolDetails | null = null;
   symbolsLoading = true;
+  /** The symbol list could not be loaded: a failure that leaves nothing to choose from (inline error with Retry, no toast). */
+  symbolsError = '';
   detailsLoading = false;
   calculating = false;
   suggestionsOpen = false;
@@ -283,14 +283,21 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
       : `₹${value.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
   }
 
+  /** Asks again for the symbol list after a failure. */
+  retrySymbols(): void {
+    this.loadSymbols();
+  }
+
   private loadSymbols(): void {
     this.symbolsRequested = true;
+    this.symbolsLoading = true;
+    this.symbolsError = '';
     this.probability
       .getSymbols()
       .pipe(
         takeUntil(this.destroy$),
         catchError(() => {
-          this.toast.error('Unable to load symbols. Please refresh and try again.');
+          this.symbolsError = 'Unable to load the symbol list.';
           return of([] as string[]);
         }),
         finalize(() => {
@@ -329,8 +336,7 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
             ? this.probability.getSymbolDetails({ symbol }).pipe(
                 catchError(() => {
                   this.detailsLoading = false;
-                  this.error = 'Unable to load symbol details. Please try again.';
-                  this.toast.error(this.error);
+                  this.error = 'Unable to load symbol details. Please try again.';   // shown inline; no toast as well
                   return EMPTY;
                 }),
               )
@@ -373,8 +379,7 @@ export class ProbabilityComponent implements OnInit, OnDestroy {
           return of(null).pipe(
             map(() => this.probability.calculate(request)),
             catchError(() => {
-              this.error = 'Unable to calculate probability. Please try again.';
-              this.toast.error(this.error);
+              this.error = 'Unable to calculate probability. Please try again.';   // shown inline; no toast as well
               return EMPTY;
             }),
             finalize(() => {

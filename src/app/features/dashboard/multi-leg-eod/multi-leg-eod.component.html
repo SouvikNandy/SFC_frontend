@@ -66,22 +66,26 @@
         @if (symbolsLoading() || metaLoading()) {
         <p class="hint-line" role="status">{{ symbolsLoading() ? 'Loading symbol list…' : 'Loading strikes and expiries…' }}</p>
         }
+        <!-- Field validation (input-error), genuine failures (inline-error, role="alert", with Retry) and data conditions or guidance
+             (inline-note, role="status"). A failure shown here is not repeated as a toast. -->
         @if (rangeError()) { <p class="input-error" role="alert">{{ clearedNote() || rangeError() }}</p> }
-        @if (emptyRangeMessage()) { <p class="input-error" role="status">{{ emptyRangeMessage() }}</p> }
-        @if (atmError()) { <p class="input-error" role="alert">{{ atmError() }}</p> }
-        @for (message of strikeIssueMessages(); track message) { <p class="input-error" role="alert">{{ message }}</p> }
-        @if (expiryError()) { <p class="input-error" role="alert">{{ expiryError() }}</p> }
-        @if (expiredLegMessage() && !forwardExpiryNote()) { <p class="input-error" role="alert">{{ expiredLegMessage() }}</p> }
-        @if (forwardExpiryNote()) { <p class="input-error" role="status">{{ forwardExpiryNote() }}</p> }
-        @if (unlistedExpiries().length && !forwardExpiryNote()) { <p class="input-error" role="status">{{ unlistedExpiries().length === 1 ? 'Expiry' : 'Expiries' }} {{ unlistedExpiriesLabel() }} not listed for these dates. The selection is kept; choose a listed expiry to change it.</p> }
-        @if (metaError()) { <p class="input-error" role="alert">{{ metaError() }}</p> }
+        @if (symbolsError()) { <p class="inline-error" role="alert">{{ symbolsError() }} <button type="button" class="inline-retry" (click)="loadSymbols()">Retry</button></p> }
+        @if (metaError()) { <p class="inline-error" role="alert">{{ metaError() }} <button type="button" class="inline-retry" (click)="retryMeta()">Retry</button></p> }
+        @if (expiryError()) { <p class="inline-error" role="alert">{{ expiryError() }} <button type="button" class="inline-retry" (click)="retryExpiries()">Retry</button></p> }
+        @if (atmError()) { <p class="inline-error" role="alert">{{ atmError() }} <button type="button" class="inline-retry" (click)="retryAtm()">Retry</button></p> }
+        @for (message of strikeIssueErrors(); track message) { <p class="inline-error" role="alert">{{ message }} <button type="button" class="inline-retry" (click)="retryStrikes()">Retry</button></p> }
+        @if (metaNote()) { <p class="inline-note" role="status">{{ metaNote() }}</p> }
+        @if (emptyRangeMessage()) { <p class="inline-note" role="status">{{ emptyRangeMessage() }}</p> }
+        @if (noExpiryMessage()) { <p class="inline-note" role="status">{{ noExpiryMessage() }}</p> }
+        @if (atmNote()) { <p class="inline-note" role="status">{{ atmNote() }}</p> }
+        @for (message of strikeIssueNotes(); track message) { <p class="inline-note" role="status">{{ message }}</p> }
     </div>
 
     <!-- ===== option legs ===== -->
     <div class="panel">
         <div class="legs-head">
             <p class="sect-label">Option legs</p>
-            <button type="button" class="ghost" [disabled]="legs().length >= maxLegs || !expiries().length || expiryLoading() || atmLoading()" (click)="addLeg()">+ Add leg</button>
+            <button type="button" class="ghost" [disabled]="legs().length >= maxLegs || !canAddLeg() || atmLoading()" (click)="addLeg()">+ Add leg</button>
         </div>
         @if (!legs().length) {
         <div class="empty">{{ metaLoading() ? 'Loading…' : 'No legs yet. Add a leg.' }}</div>
@@ -98,7 +102,9 @@
                 <label [for]="'ml-strike-' + leg.id">Strike</label>
                 <div class="select-wrap">
                 <select [id]="'ml-strike-' + leg.id" [disabled]="strikeBusy(leg.expiry)" [attr.aria-busy]="strikeBusy(leg.expiry)" (change)="setLegStrike(leg.id, $any($event.target).value)">
-                    @if (leg.strike === null) {
+                    <!-- A strike the expiry is known not to list is never offered (it is reset to the ATM); one whose list is loading or could
+                         not be loaded is shown as kept, flagged when it could not be checked. -->
+                    @if (leg.strike === null || isStrikeUnlisted(leg)) {
                     <option value="" selected disabled>Select strike</option>
                     } @else if (!strikesFor(leg.expiry).includes(leg.strike)) {
                     <option [value]="leg.strike" selected>{{ leg.strike }}{{ strikeFlag(leg) }}</option>
@@ -116,12 +122,18 @@
             <div class="inline-field">
                 <label [for]="'ml-expiry-' + leg.id">Expiry</label>
                 <div class="select-wrap">
-                <select [id]="'ml-expiry-' + leg.id" [disabled]="expiryLoading()" [attr.aria-busy]="expiryLoading()" (change)="setLegExpiry(leg.id, $any($event.target).value)">
+                <!-- Only the verified list for these dates is offered. While it loads, after it failed or while the dates are invalid the
+                     control is disabled and shows the kept selection alone; an expiry that is not listed is never added as an option. -->
+                <select [id]="'ml-expiry-' + leg.id" [disabled]="!expiryListReady()" [attr.aria-busy]="expiryLoading()" (change)="setLegExpiry(leg.id, $any($event.target).value)">
+                    @if (!expiryListReady()) {
+                    <option [value]="leg.expiry" selected>{{ leg.expiry ? longDate(leg.expiry) : 'No expiry' }}</option>
+                    } @else {
                     @if (!expiries().includes(leg.expiry)) {
-                    <option [value]="leg.expiry" selected>{{ longDate(leg.expiry) }} (not in the current expiry list)</option>
+                    <option value="" selected disabled>{{ expiries().length ? 'Select an expiry' : 'No expiry available' }}</option>
                     }
                     @for (e of expiries(); track e) {
                     <option [value]="e" [selected]="e === leg.expiry">{{ longDate(e) }}</option>
+                    }
                     }
                 </select>
                 @if (expiryLoading()) {
@@ -146,7 +158,7 @@
         <p class="legnote">ATM is the strike nearest the underlying close of {{ underlying() }} on {{ longDate(tradeDate()) }}, from the strikes listed for each leg's expiry.</p>
         } @else if (atmInfo()) {
         <p class="legnote" role="status">{{ atmInfo() }}</p>
-        } @else if (atmError()) {
+        } @else if (atmError() || atmNote()) {
         <p class="legnote-spacer" aria-hidden="true"></p>
         }
     </div>
@@ -159,13 +171,16 @@
         </div>
         @if (!legs().length) {
         <div class="empty">Add at least one leg to see its EOD history.</div>
+        } @else if (legDataPending()) {
+        <div class="empty" role="status">{{ legDataPendingMessage }}</div>
         } @else if (loading()) {
         <div class="empty" role="status">Loading EOD history…</div>
         } @else if (failedLegs().length && !chart()) {
-        <div class="empty" role="alert">EOD data could not be loaded for {{ failedLegs().length === 1 ? 'a leg' : 'some legs' }}. Change a selection to retry.</div>
+        <div class="empty" role="alert">EOD data could not be loaded for {{ failedLegs().length === 1 ? 'a leg' : 'some legs' }}. <button type="button" class="inline-retry" (click)="retryLegs()">Retry</button></div>
         } @else if (!chart()) {
         <div class="empty">No sessions in this range (options list a few months before expiry and stop at expiry).</div>
         } @else {
+        @if (loadError()) { <p class="inline-error" role="alert">{{ loadError() }} <button type="button" class="inline-retry" (click)="retryLegs()">Retry</button></p> }
         @if (chart(); as c) {
         <div class="legend">
             @for (s of series(); track s.leg.id; let index = $index) {
@@ -200,7 +215,7 @@
         </div>
         }
         }
-        @if (missingLegs().length) {
+        @if (missingLegs().length && !legDataPending()) {
         <p class="note-box" role="status">No EOD bars were returned for {{ missingLegs().length === 1 ? 'this leg' : 'these legs' }} in the selected range:
             {{ missingLegsLabel() }}. {{ missingLegs().length === 1 ? 'It was' : 'They were' }} not listed, already expired or has no data for these dates.</p>
         }
@@ -228,9 +243,9 @@
             <button type="button" class="ghost" [disabled]="pageInfo().page >= pageInfo().pages - 1" (click)="nextPage()">Next</button>
         </div>
         @if (activeLegIndex() >= 0) {
-        <app-data-table [columns]="singleColumns" [data]="singlePage()" [loading]="loading()" emptyMessage="No sessions to show."></app-data-table>
+        <app-data-table [columns]="singleColumns" [data]="singlePage()" [loading]="loading()" [emptyMessage]="legDataPending() ? legDataPendingMessage : 'No sessions to show.'"></app-data-table>
         } @else {
-        <app-data-table [columns]="combinedColumns()" [data]="combinedPage()" [loading]="loading()" emptyMessage="No sessions to show."></app-data-table>
+        <app-data-table [columns]="combinedColumns()" [data]="combinedPage()" [loading]="loading()" [emptyMessage]="legDataPending() ? legDataPendingMessage : 'No sessions to show.'"></app-data-table>
         }
         <p class="note">The chart plots each leg's own EOD close; the table shows all legs' closes side by side, or one leg's
             full OHLC, volume and open interest. A dash means the leg had no bar that day: not listed, already expired, or it did not trade (the feed then reports zero prices and volume, which are left blank rather than drawn as zero).</p>
