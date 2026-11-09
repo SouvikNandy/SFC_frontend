@@ -605,13 +605,13 @@ describe('MultiLegEodComponent', () => {
       expect(component.expiries()).toEqual(combined([window.trade_from, window.trade_till], ['2099-12-31']));
     });
 
-    it('when no returned date is inside the range the empty-range message shows and every leg takes the next expiry on or after From (none before it)', async () => {
+    it('when no returned date is inside the range every leg silently takes the next expiry on or after From (none before it)', async () => {
       expiryFor = req => reply(req, [isoDaysAgo(25), isoDaysAgo(1)]);
       component.setLegExpiry(component.legs()[0].id, '2026-09-01');
       await settle();
       await customRange();
       expect(component.expiries()).toEqual([isoDaysAgo(1), UP]);
-      expect(host.textContent).toContain('No expiry falls within the selected date range.');
+      expect(host.textContent).not.toContain('No expiry falls within the selected date range.');   // routine fallback: no explanation on screen
       expect(component.legs().map(l => l.expiry)).toEqual([isoDaysAgo(1), isoDaysAgo(1)]);   // the unlisted pick is replaced too; 25 days ago (before From) is never chosen
     });
 
@@ -676,7 +676,7 @@ describe('MultiLegEodComponent', () => {
       expect(requests).toEqual([]);
     });
 
-    it('the backend\'s 422 "No data available." is an empty result: message shown, no fallback to the standard list, every leg on a listed expiry', async () => {
+    it('the backend\'s 422 "No data available." is an empty result: no message, no fallback to the standard list, every leg on a listed expiry', async () => {
       component.setLegExpiry(component.legs()[0].id, '2026-09-01');
       await settle();
       expiryFor = () => throwError(() => new HttpErrorResponse({ status: 422, error: { success: false, message: 'VALIDATION_FAILED', errors: { expiry_date: ['No data available.'] } } }));
@@ -684,7 +684,8 @@ describe('MultiLegEodComponent', () => {
       expect(component.expiries()).toEqual([UP]);                          // not the standard list, which still holds the expired 2026-10-29
       expect(component.expiriesEmpty()).toBe(true);
       expect(component.expiryError()).toBe('');
-      expect(host.textContent).toContain('No expiry falls within the selected date range.');
+      expect(host.textContent).not.toContain('No expiry falls within the selected date range.');
+      expect(host.querySelector('.inline-error')).toBeNull();               // an empty range is not a failure
       expect(host.textContent).not.toContain('Showing the standard expiry list');
       expect(component.legs().map(l => l.expiry)).toEqual([UP, UP]);       // the unlisted pick is replaced; nothing stays on an unlisted date
     });
@@ -1998,10 +1999,10 @@ describe('MultiLegEodComponent', () => {
     });
   });
 
-  describe('message when no expiry falls within the selected date range', () => {
-    const FULL = 'No expiry falls within the selected date range. The nearest available expiry on or after the To date is selected for the option legs.';
-    const BASE = 'No expiry falls within the selected date range.';
-    const emptyMessages = () => Array.from(host.querySelectorAll('.inline-note')).map(el => el.textContent?.trim() ?? '').filter(m => m.startsWith('No expiry falls'));
+  describe('no expiry inside the selected dates: the default is applied silently', () => {
+    /** Any explanation of the empty range, whatever its wording. */
+    const emptyMessages = () => Array.from(host.querySelectorAll('.inline-note, .inline-error, .input-error')).map(el => el.textContent?.trim() ?? '')
+      .filter(m => /No expiry falls|No expiries are listed|is selected for the option legs/.test(m));
     const toEmptyRange = async () => {
       expiryFor = req => reply(req, ['2026-11-03', '2026-11-26']);             // both after To: nothing inside the dates
       await click('.field .seg button', 'Custom');
@@ -2016,19 +2017,22 @@ describe('MultiLegEodComponent', () => {
       await settle();
     };
 
-    it('uses the new wording in full when the legs follow the default and an eligible expiry exists', async () => {
+    it('untouched legs take the nearest expiry on or after To with no inline message and no toast', async () => {
       await toEmptyRange();
       expect(component.expiriesEmpty()).toBe(true);
-      expect(emptyMessages()).toEqual([FULL]);
-      expect(component.legs().map(l => l.expiry)).toEqual(['2026-11-03', '2026-11-03']);   // what the message says happened
+      expect(component.legs().map(l => l.expiry)).toEqual(['2026-11-03', '2026-11-03']);
+      expect(emptyMessages()).toEqual([]);
+      expect(TestBed.inject(ToastService).messages()).toEqual([]);
     });
 
-    it('never shows the old wording', async () => {
+    it('shows no explanation in either the old or the removed wording', async () => {
       await toEmptyRange();
       expect(host.textContent).not.toContain('No expiries are listed for these dates');
+      expect(host.textContent).not.toContain('No expiry falls within the selected date range');
+      expect(host.textContent).not.toContain('is selected for the option legs');
     });
 
-    it('is not shown when an expiry falls inside the dates', async () => {
+    it('nothing is shown either when an expiry falls inside the dates', async () => {
       expiryFor = req => reply(req, ['2026-10-24', '2026-11-03']);
       await click('.field .seg button', 'Custom');
       component.onCustomFrom('2026-10-23');
@@ -2038,23 +2042,25 @@ describe('MultiLegEodComponent', () => {
       expect(emptyMessages()).toEqual([]);
     });
 
-    it('stays accurate when only some legs follow the default: the second sentence still applies', async () => {
-      await pick(0, '2026-11-26');                                             // a pick the empty range still lists (after To), so it is kept
+    it('a manual pick the empty range still lists is kept, the untouched leg follows the default, and nothing is announced', async () => {
+      await pick(0, '2026-11-26');                                             // listed after To, so it is kept
       await toEmptyRange();
-      expect(component.legs().map(l => !!l.picked?.expiry)).toEqual([true, false]);
-      expect(emptyMessages()).toEqual([FULL]);
+      expect(component.legs().map(l => [l.expiry, !!l.picked?.expiry])).toEqual([['2026-11-26', true], ['2026-11-03', false]]);
+      expect(emptyMessages()).toEqual([]);
+      expect(toasts('info')).toEqual([]);
     });
 
-    it('when every leg was chosen by hand on expiries the dates no longer list, they are replaced too, so the full message applies', async () => {
+    it('manual picks the dates no longer list are replaced and announced once by the info toast, with no inline message', async () => {
       await pick(0, '2026-10-22');
       await pick(1, '2026-10-29');
       await toEmptyRange();
       expect(component.legs().map(l => l.expiry)).toEqual(['2026-11-03', '2026-11-03']);
-      expect(emptyMessages()).toEqual([FULL]);
       expect(component.legs().map(l => !!l.picked?.expiry)).toEqual([false, false]);   // replaced picks follow the default
+      expect(toasts('info')).toEqual(['Expiries 22 Oct 2026, 29 Oct 2026 are not listed for these dates, so they were replaced by a listed expiry.']);
+      expect(emptyMessages()).toEqual([]);
     });
 
-    it('shows only the first sentence when every leg is a hand-picked expiry the dates still list (nothing was selected for them)', async () => {
+    it('manual picks that stay listed raise nothing at all', async () => {
       await pick(0, '2026-10-29');
       await pick(1, '2026-10-29');
       expiryFor = req => reply(req, ['2026-10-29', '2026-11-03']);           // 29 Oct is after To (25 Oct): listed, nothing inside the dates
@@ -2063,11 +2069,11 @@ describe('MultiLegEodComponent', () => {
       component.onCustomTill('2026-10-25');
       await settle();
       expect(component.legs().map(l => l.expiry)).toEqual(['2026-10-29', '2026-10-29']);   // kept
-      expect(emptyMessages()).toEqual([BASE]);
-      expect(host.textContent).not.toContain('is selected for the option legs');
+      expect(emptyMessages()).toEqual([]);
+      expect(TestBed.inject(ToastService).messages()).toEqual([]);
     });
 
-    it('is replaced by the empty state when no expiry exists on or after From', async () => {
+    it('the necessary empty state remains when no expiry exists on or after From', async () => {
       metaFor = symbol => of({ data: { ...details(symbol).data, expiry_date: ['2026-10-22'] } });
       expiryFor = req => reply(req, ['2026-10-14', '2026-10-22']);
       component.selectSymbol('BANKNIFTY');
@@ -2077,8 +2083,9 @@ describe('MultiLegEodComponent', () => {
       component.onCustomTill('2026-10-30');
       await settle();
       expect(component.expiriesEmpty()).toBe(true);
-      expect(emptyMessages()).toEqual([]);                                     // not claiming a selection that did not happen
-      expect(component.noExpiryMessage()).toContain('No expiry is available on or after the From date (23 Oct 2026)');
+      expect(emptyMessages()).toEqual([]);
+      const note = Array.from(host.querySelectorAll('.inline-note')).find(el => el.textContent?.includes('No expiry is available on or after the From date (23 Oct 2026)'));
+      expect(note?.getAttribute('role')).toBe('status');                   // kept: the user has to choose other dates
     });
 
     it('does not change which expiry the legs take, their strikes or the requests', async () => {
@@ -2089,12 +2096,13 @@ describe('MultiLegEodComponent', () => {
       expect(forTheDates.every(r => r.expiry === '2026-11-03')).toBe(true);
     });
 
-    it('disappears again when the dates are changed to include an expiry', async () => {
+    it('stays silent when the dates are changed to include an expiry', async () => {
       await toEmptyRange();
       expiryFor = req => reply(req, ['2026-10-24', '2026-11-03']);
       component.onCustomFrom('2026-10-20');
       await settle();
       expect(emptyMessages()).toEqual([]);
+      expect(TestBed.inject(ToastService).messages()).toEqual([]);
     });
   });
 

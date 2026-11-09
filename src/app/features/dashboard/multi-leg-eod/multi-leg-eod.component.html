@@ -75,7 +75,6 @@
         @if (atmError()) { <p class="inline-error" role="alert">{{ atmError() }} <button type="button" class="inline-retry" (click)="retryAtm()">Retry</button></p> }
         @for (message of strikeIssueErrors(); track message) { <p class="inline-error" role="alert">{{ message }} <button type="button" class="inline-retry" (click)="retryStrikes()">Retry</button></p> }
         @if (metaNote()) { <p class="inline-note" role="status">{{ metaNote() }}</p> }
-        @if (emptyRangeMessage()) { <p class="inline-note" role="status">{{ emptyRangeMessage() }}</p> }
         @if (noExpiryMessage()) { <p class="inline-note" role="status">{{ noExpiryMessage() }}</p> }
         @if (atmNote()) { <p class="inline-note" role="status">{{ atmNote() }}</p> }
         @for (message of strikeIssueNotes(); track message) { <p class="inline-note" role="status">{{ message }}</p> }
