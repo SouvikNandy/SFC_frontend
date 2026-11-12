@@ -12,11 +12,11 @@
         <div class="source-tabs" role="tablist" aria-label="Data source">
             <button type="button" role="tab" [attr.aria-selected]="mode === 'eod'" [class.active]="mode === 'eod'"
                 (click)="selectMode('eod')">
-                <span aria-hidden="true">▤</span><span>EOD data <em>from BhavCopy</em></span>
+                <span>EOD data <em>from BhavCopy</em></span>
             </button>
             <button type="button" role="tab" [attr.aria-selected]="mode === 'live'" [class.active]="mode === 'live'"
                 (click)="selectMode('live')">
-                <span aria-hidden="true">▣</span><span>Live data <em>Premium</em></span>
+                <span>Live data <em>Premium</em></span>
             </button>
         </div>
 
